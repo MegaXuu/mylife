@@ -4,6 +4,6 @@
    ========================================================================== */
 function renderShopping(){
   document.getElementById('s-shopping').innerHTML =
-    '<h1>Courses</h1>'+
-    emptyState('bientôt : ta liste de courses, rangée par rayon.', 'shopping');
+    screenHead('', 'Courses')+
+    emptyState('Bientôt.', 'Ta liste de courses, rangée par rayon.');
 }

@@ -4,5 +4,5 @@
    réelle au Lot 10. Sera une feuille (openSheet), pas un écran propre.
    ========================================================================== */
 function renderReview(){
-  return emptyState('bientôt : la revue hebdomadaire.', 'review');
+  return emptyState('Bientôt.', 'La revue hebdomadaire.');
 }

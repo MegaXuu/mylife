@@ -5,6 +5,6 @@
    ========================================================================== */
 function renderMaison(){
   document.getElementById('s-maison').innerHTML =
-    '<h1>Maison</h1>'+
-    emptyState('bientôt : l\'entretien et les plantes, réunis par pièce.', 'maison');
+    screenHead('', 'Maison')+
+    emptyState('Bientôt.', 'L\'entretien et les plantes, réunis par pièce.');
 }

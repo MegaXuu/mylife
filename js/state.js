@@ -5,7 +5,7 @@
    AUCUN RENDU DOM ICI — voir js/ui.js et les js/<ecran>.js pour l'affichage.
    ========================================================================== */
 
-const APP_VERSION = 'Bêta 1.1'; // à synchroniser avec CACHE (sw.js) à chaque release
+const APP_VERSION = 'Bêta 1.2'; // à synchroniser avec CACHE (sw.js) à chaque release
 
 const IDB_NAME = 'mylife';
 const IDB_VERSION = 1;
@@ -29,7 +29,8 @@ function defaults(){
       coldTo: 2,          // → février
       todayCap: 7,        // plafond visuel de l'écran Aujourd'hui
       reviewDay: 0,        // jour de la revue hebdomadaire (0 = dimanche)
-      hideDone: false
+      hideDone: false,
+      birds: true          // micro-présences d'oiseaux (Lot 2) — jamais en mode sombre
     },
     lastReview: null,
     onboarded: false
@@ -45,7 +46,7 @@ function migrate(r){
   r.frequents = r.frequents || [];
   r.settings = Object.assign({
     userName: null, weekStart: 1, rayonOrder: [], coldFrom: 10, coldTo: 2,
-    todayCap: 7, reviewDay: 0, hideDone: false
+    todayCap: 7, reviewDay: 0, hideDone: false, birds: true
   }, r.settings || {});
   if(r.lastReview === undefined) r.lastReview = null;
   if(r.onboarded === undefined) r.onboarded = false;

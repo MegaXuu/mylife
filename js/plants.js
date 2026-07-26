@@ -4,5 +4,5 @@
    rejoindront l'écran Maison (js/maison.js) — pas d'écran propre ici.
    ========================================================================== */
 function renderPlants(){
-  return emptyState('bientôt : fiches plantes et soins.', 'plants');
+  return emptyState('Bientôt.', 'Fiches plantes et soins.');
 }

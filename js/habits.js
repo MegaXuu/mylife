@@ -6,6 +6,6 @@
    ========================================================================== */
 function renderHabits(){
   document.getElementById('s-habits').innerHTML =
-    '<h1>Habitudes</h1>'+
-    emptyState('bientôt : tes habitudes, séries et quotas.', 'habits');
+    screenHead('', 'Habitudes')+
+    emptyState('Bientôt.', 'Tes habitudes, tes séries et tes quotas.');
 }

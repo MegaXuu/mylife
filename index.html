@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>MyLife</title>
 <meta name="description" content="Qu'est-ce que je dois faire maintenant ? Tâches, entretien, plantes, habitudes, courses — hors-ligne.">
-<meta name="theme-color" content="#F4F4F5">
+<meta name="theme-color" content="#F3EEE5">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="MyLife">
@@ -13,140 +13,325 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <style>
 /* ==========================================================================
-   Squelette provisoire — gris neutres uniquement. Le design réel (tokens,
-   typographie, composants) arrive au Lot 2 : ne pas chercher à faire beau ici.
+   MyLife — design system « Canopée » (Lot V1-2). Tout le CSS de l'app vit ici.
+
+   ┌──────────────────────────────────────────────────────────────────────┐
+   │ DISCIPLINE CHROMATIQUE — engage tous les lots suivants.              │
+   │                                                                      │
+   │ • Le vert (--act) dit « un doigt peut agir ici » : case à cocher,    │
+   │   boutons ±, onglet actif, bouton primaire, anneau de focus.         │
+   │   JAMAIS « réussi », jamais une félicitation.                        │
+   │ • Le rouge pur (--due) dit « une échéance réelle est dépassée ».     │
+   │   En texte, et c'est son seul emploi : aucun fond, aucune pastille.  │
+   │ • Une seule exception calculée : la jauge de fraîcheur glisse du     │
+   │   vert (--g-ok) vers l'argile (--g-low) à mesure qu'elle approche    │
+   │   d'« à faire » — voir gaugeColor() dans js/ui.js. Les barres de     │
+   │   quota d'habitudes, elles, ne rougissent JAMAIS : --g-hab, point.   │
+   │ • Tout le reste est neutre chaud. Les teintes --t-* sont des fonds   │
+   │   de carte qui identifient un domaine, pas des sens.                 │
+   │ • Toute autre couleur est un bug de design.                          │
+   └──────────────────────────────────────────────────────────────────────┘
+
+   Ratios de contraste vérifiés par calcul, clair ET sombre : voir le compte
+   rendu du Lot V1-2. Seul ajustement nécessaire : --ink2 est assombri
+   localement sur la teinte Courses (4,46:1 → 4,74:1).
    ========================================================================== */
+
 :root{
-  --bg:#F4F4F5;
-  --surface:#FFFFFF;
-  --surface2:#EAEAEC;
-  --border:#D6D6DA;
-  --t2:#5B5D63;      /* texte secondaire */
-  --tc:#3A3B40;      /* texte clair */
-  --tp:#1B1C1F;      /* texte principal */
-  --acc:#4B4D53;      /* accent neutre provisoire (Lot 2 : vraie couleur) */
-  --danger:#B3261E;
-  --radius:12px;
-  --dur1:.15s;
-  --dur2:.2s;
-  --easeout:ease;
+  /* — surfaces (clair, défaut) — */
+  --bg:#F3EEE5;      /* fond d'écran : crème chaud */
+  --card:#FFFEFA;    /* carte posée : blocs, tab bar, feuilles, toasts */
+  --sunken:#EBE5D8;  /* en creux : boutons ±, chips inactives, piste de jauge */
+  --line:#E3DCCD;    /* filet séparateur 1 px */
+  --line-in:rgba(60,45,20,.10); /* filet à l'intérieur d'une carte teintée */
+  --elev:0 1px 2px rgba(60,45,20,.04), 0 8px 24px rgba(60,45,20,.07);
+  --scrim:rgba(42,37,30,.25);
+  /* — encres — */
+  --ink:#2A251E;     /* texte principal */
+  --ink2:#6E6558;    /* métadonnées, fait, placeholder */
+  /* — couleurs de sens — */
+  --act:#3E6B4F;     /* agissable : case, ±, onglet actif, bouton primaire, focus */
+  --on:#FFFFFF;      /* texte posé sur --act et --due */
+  --due:#A6402E;     /* échéance réelle dépassée, texte et rien d'autre */
+  /* — jauge de fraîcheur — */
+  --g-ok:#7FA36B;    /* remplissage quand la fraîcheur est bonne */
+  --g-low:#C4604E;   /* pôle « à faire » de la rampe (jamais seul en texte) */
+  --g-hab:#7FA36B;   /* quota d'habitudes : TOUJOURS cette couleur, jamais la rampe */
+  --g-track:var(--sunken);
+  /* — teintes de domaine (fonds de cartes uniquement) — */
+  --t-plantes:#E3EADD; --t-maison:#EFE4D0; --t-habitudes:#F2E7CF; --t-courses:#F0E0D8;
+  /* — typo — */
+  --f:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --fs-title:30px; --fs-sec:18px; --fs-item:17px; --fs-body:16px;
+  --fs-low:15px; --fs-meta:13.5px; --fs-tab:11.5px;
+  /* — espacement (base 4) — */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:18px; --s6:22px;
+  /* — rayons — */
+  --r-card:20px; --r-btn:14px; --r-pill:999px;
+  /* — trait — */
+  --stroke:2px;      /* icônes et cases : trait unique de 2 px, terminaisons rondes */
+  /* — motion — */
+  --d1:120ms; --d2:220ms; --ease:cubic-bezier(.2,.7,.3,1);
 }
+html[data-mode="dark"]{
+  --bg:#17140F; --card:#211D16; --sunken:#2B251B; --line:#332C21;
+  --line-in:rgba(255,250,235,.10);
+  --elev:none;
+  --ink:#F2EDE4;
+  --ink2:#A89D8D;
+  --act:#8FC7A4; --on:#17140F;
+  --due:#E8907E;
+  --g-ok:#8FC7A4; --g-low:#D98274; --g-hab:#8FC7A4;
+  --t-plantes:#222A20; --t-maison:#2C2418; --t-habitudes:#2D2617; --t-courses:#2C201B;
+}
+
+/* ---------- Socle ---------- */
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;}
 body{
-  background:var(--bg); color:var(--tp);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  font-size:16px; line-height:1.4;
+  background:var(--bg); color:var(--ink);
+  font-family:var(--f);
+  font-size:var(--fs-body); line-height:1.4;
+  font-variant-numeric:tabular-nums;
   -webkit-tap-highlight-color:transparent;
+  -webkit-text-size-adjust:100%;
 }
-h1{font-size:24px;font-weight:600;margin:4px 0 16px;}
-p{margin:0 0 8px;}
+p{margin:0 0 var(--s2);}
 button,input{font:inherit;color:inherit;}
 button{cursor:pointer;}
-:focus-visible{outline:2px solid var(--acc);outline-offset:2px;}
+svg{display:block;}
+
+:focus-visible{outline:2px solid var(--act); outline-offset:2px;}
+
 @media (prefers-reduced-motion:reduce){
-  *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;}
+  *,*::before,*::after{
+    animation-duration:.001ms!important; animation-iteration-count:1!important;
+    transition-duration:.001ms!important; scroll-behavior:auto!important;
+  }
 }
 
 .app{
-  padding:max(16px, env(safe-area-inset-top)) 16px calc(84px + env(safe-area-inset-bottom));
+  padding:max(var(--s5), env(safe-area-inset-top)) var(--s5) calc(96px + env(safe-area-inset-bottom));
   min-height:100vh;
 }
 .screen{display:none;}
 .screen.active{display:block;}
 
-/* ---------- Tab bar (4 onglets, zone sûre iOS) ---------- */
-.tabbar{
-  position:fixed; left:0; right:0; bottom:0;
-  display:flex;
-  background:var(--surface);
-  border-top:1px solid var(--border);
-  padding-bottom:env(safe-area-inset-bottom);
-  z-index:40;
+/* ---------- En-tête d'écran (sur-titre + titre + engrenage discret) ---------- */
+.head{display:flex; align-items:flex-end; justify-content:space-between; gap:var(--s3); margin-bottom:var(--s5);}
+.head-over{font-size:14px; font-weight:500; color:var(--ink2);}
+.head-title{font-size:var(--fs-title); font-weight:700; letter-spacing:-.02em; line-height:1.15; margin:2px 0 0;}
+.gear{
+  flex:none; width:44px; height:44px; margin:0 -10px -6px 0;
+  display:flex; align-items:center; justify-content:center;
+  background:none; border:0; border-radius:50%; color:var(--ink2);
 }
-.tab{
-  flex:1;
-  display:flex; flex-direction:column; align-items:center; justify-content:center;
-  min-height:56px; padding:8px 4px;
-  background:none; border:0;
-  color:var(--t2); font-size:12px;
+
+/* ---------- Sur-titre à l'intérieur d'une carte ---------- */
+.overline{font-size:13px; font-weight:700; color:var(--ink2); letter-spacing:.02em; margin-bottom:var(--s2);}
+.overline.due{color:var(--due);}
+
+/* ---------- Carte : un seul niveau d'élévation dans toute l'app ---------- */
+.card{
+  position:relative; /* repère du perchoir d'oiseau (js/ui.js → birdOnCard) */
+  background:var(--card); border-radius:var(--r-card); box-shadow:var(--elev);
+  padding:14px var(--s4); margin-bottom:var(--s3);
 }
-.tab.on{color:var(--tp); font-weight:600;}
+/* Teintes de domaine : à l'intérieur, les filets et la piste de jauge passent
+   en --line-in (le filet clair disparaîtrait sur un fond teinté). */
+.card.t-plantes,.card.t-maison,.card.t-habitudes,.card.t-courses{
+  --line:var(--line-in); --g-track:var(--line-in);
+}
+.card.t-plantes{background:var(--t-plantes);}
+.card.t-maison{background:var(--t-maison);}
+.card.t-habitudes{background:var(--t-habitudes);}
+.card.t-courses{background:var(--t-courses); --ink2:#6A6154;} /* 4,46:1 → 4,74:1 sur cette teinte */
+html[data-mode="dark"] .card.t-courses{--ink2:#A89D8D;}
+
+/* ---------- Boutons ---------- */
+.btn{
+  min-height:52px; padding:0 20px;
+  border:0; border-radius:var(--r-btn);
+  background:var(--sunken); color:var(--ink);
+  font-size:var(--fs-item); font-weight:600;
+}
+.btn.primary{background:var(--act); color:var(--on); font-weight:700;}
+.btn.secondary{background:var(--sunken); color:var(--ink);}
+/* Le rouge plein est réservé à l'échéance : le danger est un contour. */
+.btn.danger{background:none; border:1.5px solid var(--due); color:var(--due);}
+.btn.quiet{background:none; color:var(--ink2); min-height:44px; font-size:var(--fs-low); font-weight:500;}
+.btn-full{width:100%; display:block; margin-top:var(--s1);}
+
+/* ---------- Chips (état, pas action : inversion achromatique, pas de vert) ---------- */
+.chip{
+  height:40px; padding:0 var(--s4);
+  border:1px solid var(--line); border-radius:var(--r-pill);
+  background:var(--sunken); color:var(--ink);
+  font-size:14.5px; font-weight:500;
+}
+.chip.on{background:var(--ink); border-color:var(--ink); color:var(--bg); font-weight:600;}
+.chips{display:flex; gap:var(--s2); flex-wrap:wrap;}
+
+/* ---------- Jauge de fraîcheur ---------- */
+.gauge{height:12px; border-radius:var(--r-pill); background:var(--g-track); overflow:hidden;}
+.gauge-fill{height:100%; border-radius:inherit; background:var(--g-ok);}
+/* Quota d'habitude : ne rougit jamais, quelle que soit la valeur. */
+.gauge-fill.hab{background:var(--g-hab);}
+
+/* ---------- Listes ---------- */
+.list{list-style:none; margin:0; padding:0;}
+.row{
+  display:flex; align-items:center; gap:var(--s3);
+  min-height:56px; padding:var(--s3) 0;
+  border-bottom:1px solid var(--line);
+}
+.row:last-child{border-bottom:0;}
+.row-main{flex:1; min-width:0;}
+.row-title{font-size:var(--fs-item); font-weight:600;}
+.row-meta{font-size:var(--fs-meta); color:var(--ink2); margin-top:2px;}
+.row-meta .due{color:var(--due); font-weight:600;}
+.row.done .row-title{color:var(--ink2); font-weight:500; text-decoration:line-through;}
+
+/* Case ronde : cible 44 px, visuel 26 px (marge négative, pas un gros rond).
+   La coche est un masque SVG embarqué (data URI) — aucun fichier, aucun CDN. */
+:root{--ic-check:url('data:image/svg+xml;utf8,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M5 12.5l4.5 4.5L19 7.5"/%3E%3C/svg%3E');}
+.check{
+  flex:none; position:relative; width:44px; height:44px; margin:-9px 0 -9px -9px;
+  padding:0; background:none; border:0; border-radius:50%;
+}
+.check::before{
+  content:''; position:absolute; inset:0; margin:auto;
+  width:26px; height:26px; border-radius:50%;
+  border:var(--stroke) solid var(--act);
+}
+.check.on::before{background:var(--act);}
+.check.on::after{
+  content:''; position:absolute; inset:0; margin:auto; width:14px; height:14px;
+  background:var(--on);
+  -webkit-mask:var(--ic-check) center/contain no-repeat; mask:var(--ic-check) center/contain no-repeat;
+}
+
+/* ---------- Interrupteur (cible 44 px, visuel 52 × 32) ---------- */
+.switch{
+  flex:none; position:relative; width:52px; height:44px; padding:0;
+  background:none; border:0; border-radius:var(--r-pill);
+}
+.switch::before{
+  content:''; position:absolute; inset:0; margin:auto; width:52px; height:32px;
+  border-radius:var(--r-pill); background:var(--sunken);
+  transition:background var(--d1) var(--ease);
+}
+.switch::after{
+  content:''; position:absolute; top:0; bottom:0; left:3px; margin:auto;
+  width:26px; height:26px; border-radius:50%; background:var(--card);
+  box-shadow:0 1px 3px rgba(60,45,20,.25);
+  transition:transform var(--d1) var(--ease);
+}
+.switch.on::before{background:var(--act);}
+.switch.on::after{transform:translateX(20px);}
+
+.row-del{
+  flex:none; width:44px; height:44px; margin-right:-10px;
+  display:flex; align-items:center; justify-content:center;
+  background:none; border:0; border-radius:50%; color:var(--ink2);
+}
+
+/* ---------- Champ et barre d'ajout rapide ---------- */
+.field{
+  flex:1; min-width:0; height:50px; padding:0 14px;
+  background:var(--card); border:1px solid var(--line); border-radius:var(--r-btn);
+  color:var(--ink); font-size:var(--fs-body);
+}
+.field::placeholder{color:var(--ink2); opacity:1;}
+.addbar{display:flex; gap:10px; margin-top:var(--s4);}
+.add-btn{
+  flex:none; width:50px; height:50px;
+  display:flex; align-items:center; justify-content:center;
+  border:0; border-radius:var(--r-btn); background:var(--act); color:var(--on);
+}
 
 /* ---------- Feuilles modales ---------- */
 .sheet-bg{
-  position:fixed; inset:0;
-  background:rgba(0,0,0,.4);
-  display:none; align-items:flex-end; justify-content:center;
-  z-index:50;
+  position:fixed; inset:0; background:var(--scrim);
+  display:none; align-items:flex-end; justify-content:center; z-index:50;
 }
-.sheet-bg.show{display:flex; animation:fadeBg var(--dur2) var(--easeout);}
+.sheet-bg.show{display:flex; animation:fadeBg var(--d2) var(--ease);}
 .sheet{
-  background:var(--surface);
-  width:100%; max-width:560px;
-  border-radius:16px 16px 0 0;
-  padding:6px 20px calc(20px + env(safe-area-inset-bottom));
+  background:var(--card); width:100%; max-width:560px;
+  border-radius:var(--r-card) var(--r-card) 0 0;
+  padding:10px var(--s5) calc(var(--s6) + env(safe-area-inset-bottom));
   max-height:85vh; overflow-y:auto; overflow-x:hidden;
+  box-shadow:0 -10px 40px rgba(42,37,30,.18);
 }
-.sheet-bg.show .sheet{animation:sheetUp .25s var(--easeout);}
+.sheet-bg.show .sheet{animation:sheetUp var(--d2) var(--ease);}
 @keyframes fadeBg{from{opacity:0;}to{opacity:1;}}
 @keyframes sheetUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
 @media (prefers-reduced-motion:reduce){
   .sheet-bg.show,.sheet-bg.show .sheet{animation:none;}
 }
-.handle{width:100%;padding:10px 0;display:flex;justify-content:center;touch-action:none;min-height:44px;align-items:center;}
-.handle::before{content:'';width:36px;height:4px;border-radius:2px;background:var(--border);display:block;}
-.sheet-msg{color:var(--tc);margin:4px 0 16px;}
+.handle{
+  width:100%; min-height:44px; padding:10px 0;
+  display:flex; align-items:center; justify-content:center; touch-action:none;
+}
+.handle::before{content:''; display:block; width:38px; height:5px; border-radius:3px; background:var(--line);}
+.sheet-title{font-size:19px; font-weight:700; margin:0 0 14px;}
+.sheet-msg{color:var(--ink2); margin:0 0 var(--s4);}
 
-/* ---------- Toast ---------- */
+/* ---------- Tab bar (4 onglets, zone sûre iOS) ---------- */
+.tabbar{
+  position:fixed; left:0; right:0; bottom:0; display:flex;
+  background:var(--card); border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom); z-index:40;
+}
+.tab{
+  flex:1; min-width:0; min-height:56px; padding:10px 4px 20px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--s1);
+  background:none; border:0;
+  color:var(--ink2); font-size:var(--fs-tab); font-weight:600;
+  transition:color var(--d1) var(--ease);
+}
+.tab.on{color:var(--act);}
+
+/* ---------- Micro-présences d'oiseaux ----------
+   Purement décoratif : jamais cliquable, jamais annoncé, jamais animé. Le SVG
+   déborde de 18,75 % sous son perchoir pour que les pattes s'y posent — la
+   position verticale est calculée dans birdSvg() (js/ui.js). */
+.bird{position:absolute; pointer-events:none; user-select:none;}
+
+/* ---------- État vide (même structure sur les six écrans) ---------- */
+.empty{text-align:center; padding:96px 20px 40px;}
+.empty-perch{position:relative; width:110px; height:2px; border-radius:1px; background:var(--line); margin:0 auto;}
+.empty-title{font-size:20px; font-weight:700; margin:26px 0 0;}
+.empty-sub{font-size:var(--fs-low); color:var(--ink2); margin:var(--s2) 0 0;}
+
+/* ---------- Toast : carte posée, un filet, une action ---------- */
 .toast{
-  position:fixed; left:50%; bottom:calc(88px + env(safe-area-inset-bottom));
-  transform:translateX(-50%) translateY(20px);
-  background:var(--tp); color:var(--surface);
-  padding:10px 18px; border-radius:10px; font-size:14px;
+  position:fixed; left:50%; bottom:calc(96px + env(safe-area-inset-bottom));
+  transform:translateX(-50%) translateY(12px);
+  display:flex; align-items:center; gap:14px;
+  background:var(--card); color:var(--ink);
+  border:1px solid var(--line); box-shadow:var(--elev);
+  padding:10px var(--s5); border-radius:var(--r-btn);
+  font-size:var(--fs-low);
   opacity:0; pointer-events:none;
-  transition:opacity var(--dur2) var(--easeout), transform var(--dur2) var(--easeout);
-  z-index:60; max-width:90vw; text-align:center;
+  transition:opacity var(--d2) var(--ease), transform var(--d2) var(--ease);
+  /* Fixé et centré par left:50% : sans width:max-content il ne dispose que de
+     la moitié droite de l'écran et le libellé se coupe en deux lignes. */
+  z-index:60; width:max-content; max-width:min(90vw, 480px); text-align:left;
 }
-.toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
-.toast.danger{background:var(--danger);}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto;}
+/* Un toast d'alerte se lit, il ne crie pas : le rouge reste du texte. */
+.toast.danger{color:var(--due); border-color:var(--due);}
+.toast-act{
+  flex:none; min-height:44px; margin:-10px -8px -10px 0; padding:0 var(--s2);
+  background:none; border:0; border-radius:var(--r-btn);
+  color:var(--act); font-size:var(--fs-low); font-weight:600;
+}
 
-/* ---------- Boutons ---------- */
-.btn{
-  min-height:44px; padding:0 18px;
-  border-radius:var(--radius); border:1px solid var(--border);
-  background:var(--surface2); color:var(--tp);
-}
-.btn.primary{background:var(--acc); color:#fff; border-color:var(--acc);}
-.btn.danger{background:var(--danger); color:#fff; border-color:var(--danger);}
-.btn.ghost{background:none;}
-.btn-full{width:100%; display:block; margin-top:10px;}
-
-/* ---------- État vide ---------- */
-.empty{text-align:center; color:var(--t2); padding:56px 20px;}
-.empty-ic{width:40px; height:40px; margin-bottom:12px; opacity:.5;}
-.empty p{margin:0;}
-
-/* ---------- Tâches (Lot 1, minimal) ---------- */
-.task-add{display:flex; gap:8px; margin-bottom:16px;}
-.task-add input{
-  flex:1; min-height:44px; padding:0 14px;
-  border-radius:var(--radius); border:1px solid var(--border); background:var(--surface);
-}
-.task-list{list-style:none; margin:0; padding:0;}
-.task-row{display:flex; align-items:center; gap:10px; min-height:44px; padding:6px 0; border-bottom:1px solid var(--border);}
-.task-title{flex:1;}
-.task-check{
-  flex:none; width:44px; height:44px; padding:0;
-  background:none; border:0; position:relative;
-}
-.task-check::before{
-  content:''; position:absolute; inset:0; margin:auto; width:22px; height:22px;
-  border-radius:50%; border:1.5px solid var(--border); background:var(--surface);
-}
-.task-del{
-  flex:none; width:44px; height:44px; padding:0;
-  background:none; border:0; color:var(--t2); font-size:20px; line-height:1;
+/* ---------- Au-delà de 900 px : colonne centrée plafonnée (desktop en V2) ---------- */
+@media (min-width:900px){
+  .app{max-width:560px; margin:0 auto;}
+  .tabbar{padding-left:calc((100vw - 560px)/2); padding-right:calc((100vw - 560px)/2);}
 }
 </style>
 </head>
@@ -161,10 +346,10 @@ button{cursor:pointer;}
 </div>
 
 <nav class="tabbar" id="tabbar">
-  <button class="tab on" data-s="today" onclick="go('today')">Aujourd'hui</button>
-  <button class="tab" data-s="tasks" onclick="go('tasks')">Tâches</button>
-  <button class="tab" data-s="maison" onclick="go('maison')">Maison</button>
-  <button class="tab" data-s="shopping" onclick="go('shopping')">Courses</button>
+  <button class="tab on" data-s="today" onclick="go('today')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 1.8"></path></svg>Aujourd'hui</button>
+  <button class="tab" data-s="tasks" onclick="go('tasks')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"></path></svg>Tâches</button>
+  <button class="tab" data-s="maison" onclick="go('maison')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"></path></svg>Maison</button>
+  <button class="tab" data-s="shopping" onclick="go('shopping')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11H6.2z"></path><path d="M9 8V6a3 3 0 0 1 6 0v2"></path></svg>Courses</button>
 </nav>
 
 <div class="sheet-bg" id="sheet-bg"><div class="sheet" id="sheet"></div></div>
@@ -177,6 +362,7 @@ button{cursor:pointer;}
 <script src="data/rayons.js"></script>
 <script src="data/plantes.js"></script>
 <script src="data/entretien.js"></script>
+<script src="data/oiseaux.js"></script>
 <script src="js/state.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/recur.js"></script>

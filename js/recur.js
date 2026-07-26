@@ -5,5 +5,5 @@
    renderRecur() renvoie juste un fragment, il n'est appelé par aucun go().
    ========================================================================== */
 function renderRecur(){
-  return emptyState('bientôt : récurrence et jauge de fraîcheur.', 'recur');
+  return emptyState('Bientôt.', 'Récurrence et jauge de fraîcheur.');
 }

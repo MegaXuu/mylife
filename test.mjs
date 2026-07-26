@@ -1,7 +1,8 @@
 /* ==========================================================================
    Test de fumée — charge index.html sous jsdom (fake-indexeddb injecté),
-   exerce go() sur les 6 écrans et le cycle de vie d'une tâche (créer, cocher,
-   supprimer), vérifie la persistance après un rechargement simulé. Échoue à
+   exerce go() sur les 6 écrans, le cycle de vie d'une tâche (créer, cocher,
+   supprimer), les invariants des oiseaux et la règle de casse à la saisie,
+   puis vérifie la persistance après un rechargement simulé. Échoue à
    la moindre erreur runtime. Objectif : attraper les erreurs, pas vérifier
    la logique métier fine (il n'y en a quasiment aucune au Lot 1).
    Lancer :  npm test   (après un premier « npm install »)
@@ -17,14 +18,14 @@ const read = f => readFileSync(root + f, 'utf8');
 // <script> de index.html et du tableau ASSETS de sw.js. Concaténés en un seul
 // <script> pour rester robuste sous jsdom, même portée globale qu'en prod.
 const FILES = [
-  'data/rayons.js', 'data/plantes.js', 'data/entretien.js',
+  'data/rayons.js', 'data/plantes.js', 'data/entretien.js', 'data/oiseaux.js',
   'js/state.js', 'js/ui.js', 'js/recur.js', 'js/nlp.js', 'js/today.js',
   'js/tasks.js', 'js/maison.js', 'js/plants.js', 'js/habits.js',
   'js/shopping.js', 'js/review.js', 'js/settings.js', 'js/boot.js',
 ];
 const bundle = FILES.map(read).join('\n');
 const html = read('index.html')
-  .replace(/<script src="[^"]+"><\/script>\s*/g, '') // retire les 16 balises externes
+  .replace(/<script src="[^"]+"><\/script>\s*/g, '') // retire les 17 balises externes
   .replace('</body>', `<script>${bundle}</script>\n<script>window.__S=function(){return S;};</script>\n</body>`);
 
 const fails = [];
@@ -91,7 +92,32 @@ call('stamp/touch/live', () => {
   if(win.live([o, {deletedAt: Date.now()}]).length !== 1) throw new Error('live() ne filtre pas les tombstones');
 });
 
-// 4) Écriture immédiate puis relecture directe dans IndexedDB — équivalent, pour ce
+// 4) Oiseaux (Lot 2) : décoratifs, un seul par écran, aucun en mode sombre.
+call('oiseaux', () => {
+  win.go('today');
+  const oiseaux = win.document.querySelectorAll('#s-today .bird');
+  if(oiseaux.length !== 1) throw new Error(`${oiseaux.length} oiseau(x) sur Aujourd'hui, attendu 1`);
+  if(oiseaux[0].getAttribute('aria-hidden') !== 'true') throw new Error('oiseau non masqué aux lecteurs d’écran');
+  win.document.documentElement.setAttribute('data-mode', 'dark');
+  win.go('today');
+  if(win.document.querySelectorAll('#s-today .bird').length) throw new Error('oiseau présent en mode sombre');
+  win.document.documentElement.removeAttribute('data-mode');
+  S.settings.birds = false;
+  win.go('today');
+  if(win.document.querySelectorAll('#s-today .bird').length) throw new Error('interrupteur « Oiseaux » sans effet');
+  S.settings.birds = true;
+});
+
+// 5) Règle de casse (CONVENTIONS.md §3) : majuscule initiale posée À LA SAISIE.
+call('cap à la saisie', () => {
+  win.go('tasks');
+  win.document.getElementById('task-input').value = 'trier les papiers';
+  win.addTask();
+  const t = S.tasks.find(t => t.title === 'Trier les papiers');
+  if(!t) throw new Error('le titre stocké n’a pas reçu sa majuscule initiale');
+});
+
+// 6) Écriture immédiate puis relecture directe dans IndexedDB — équivalent, pour ce
 //    test de fumée, à vérifier la persistance après un rechargement de l'app.
 if(typeof win.saveNow === 'function'){
   try{ await win.saveNow(); }catch(e){ onError('saveNow (flush)', e); }
@@ -121,11 +147,11 @@ try{
   fails.push('IndexedDB → lecture directe en échec : ' + (e && e.message ? e.message : e));
 }
 
-// 5) Bilan.
+// 7) Bilan.
 if(fails.length){
   console.error(`\n✗ ${fails.length} échec(s) :`);
   fails.forEach(f => console.error('  - ' + f));
   process.exit(1);
 } else {
-  console.log('✓ Test fumée OK — aucune erreur runtime sur les 6 écrans et le cycle de vie d’une tâche.');
+  console.log('✓ Test fumée OK — 6 écrans, cycle de vie d’une tâche, oiseaux, casse, persistance.');
 }

@@ -110,7 +110,15 @@ Toute lecture de collection passe par `live()`. Toute mutation passe par `touch(
 7. **Zéro dépendance externe.**
 
 ### Ton et vocabulaire
-- Français partout, **minuscules de phrase**, ton sobre et adulte.
+- Français partout, ton sobre et adulte.
+- **Règle de casse (arbitrée au Lot 2, remplace la consigne « minuscules de phrase » d'origine) :
+  majuscule initiale sur toute phrase ET sur toute entrée de liste.** Cela vaut pour les textes
+  d'interface (« À faire », « Il y a 5 jours », « Sauté », « Fruits et légumes ») **comme pour les
+  données saisies** — un titre de tâche, un article de courses, un nom de plante commencent par une
+  majuscule. Elle est posée **à la saisie** par `cap()` (`js/ui.js`), jamais au rendu : la donnée
+  stockée et exportée doit déjà être propre. Toute nouvelle saisie texte passe par `cap()` et porte
+  `autocapitalize="sentences"` pour que le clavier iOS aille dans le même sens.
+  Pas de capitale ailleurs : à l'intérieur d'une phrase, la casse reste normale.
 - **Aucun emoji dans l'interface.**
 - Jamais de ton culpabilisant : « à faire » et non « en retard » pour l'entretien ; « sauté » et non
   « manqué » pour une habitude. Le vocabulaire est un choix de conception, pas de la décoration.
@@ -135,8 +143,10 @@ Toute lecture de collection passe par `live()`. Toute mutation passe par `touch(
 ### Styles
 - **Tout le CSS vit dans le `<style>` de `index.html`.** Pas de fichier `.css` séparé.
 - Les couleurs, espacements, durées passent par des **variables CSS** définies dans `:root`
-  (établies au Lot 2). Les `style="..."` inline ne sont acceptables que pour des valeurs
-  **calculées** (largeur d'une jauge, couleur dérivée d'un pourcentage).
+  (établies au Lot 2, direction « Canopée »). Les `style="..."` inline ne sont acceptables que pour
+  des valeurs **calculées** (largeur d'une jauge, couleur dérivée d'un pourcentage).
+- **La discipline chromatique du Lot 2 (en tête du `<style>` et dans `CLAUDE.md`) est une règle
+  permanente au même titre que ce fichier.** Toute couleur hors palette est un bug de design.
 - Une classe CSS créée dans un lot et devenue inutile dans un lot suivant **doit être retirée**.
 
 ---

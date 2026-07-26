@@ -2,7 +2,7 @@
 
 > Document de référence du cycle V1. Cadrage du 2026-07-26, révisé le même jour après étude
 > comparative du marché. Deviendra la base du `CLAUDE.md` du projet au Lot 1.
-> Nom provisoire : **MyLife** (à confirmer au Lot 2, avec l'identité visuelle).
+> Nom : **MyLife** — confirmé tel quel au Lot 2, avec l'identité visuelle « Canopée ».
 
 ---
 
@@ -43,7 +43,7 @@ demande trop de saisie). La cible : **rapide comme Rappels, structuré comme Not
 | Navigation | **4 onglets** : Aujourd'hui · Tâches · **Maison** · Courses. Maison = vue par pièce réunissant entretien **et** plantes. Habitudes = écran secondaire atteint depuis l'accueil |
 | Tâches | Simple + récurrence. **Pas** de projets, **pas** de sous-tâches, **pas** de contextes GTD |
 | Notifications | **Aucune notification programmée** (impossible gratuitement, cf. §8). Remplacées par la **pastille de l'icône iOS** |
-| Identité visuelle | **Nouvelle**, 2 à 3 pistes proposées et validées au Lot 2 |
+| Identité visuelle | **« Canopée »** — crème chaud, cartes posées, jauges qui rougissent par calcul, teintes par domaine, micro-présences d'oiseaux. Validée et appliquée au Lot 2 |
 | Motivation | **Légère** : séries, régularité visible, célébrations sobres. Pas de points ni de rangs |
 | Plateforme | iPhone d'abord (PWA installée). Desktop en V2 (responsive prévu dès le Lot 2) |
 
@@ -472,7 +472,7 @@ incrémenté. Chaque lot laisse l'app **installée et utilisable**. Ordre impos�
 | Lot | Version | Contenu | Livrable |
 |---|---|---|---|
 | **1** | Bêta 1.1 | **Socle.** Squelette, IndexedDB + `S` + `save`/`saveNow`, boot async, navigation 4 onglets, écran Tâches minimal (ajouter / cocher / supprimer), service worker, manifeste, icônes, `test.mjs`, `CLAUDE.md`, dépôt Git + GitHub Pages | **App installée sur ton iPhone, déjà utilisable** comme liste de tâches |
-| **2** | Bêta 1.2 | **Identité & design system.** 2-3 directions en maquette → **tu valides avant que je code**. Puis tokens CSS, typographie, composants (boutons, cartes, chips, jauges, feuilles modales, états vides), responsive desktop prévu | L'app a son visage définitif |
+| **2** | Bêta 1.2 | **Identité & design system — « Canopée » (fait).** 3 directions en maquette → validée. Puis jeu complet de variables CSS (clair + `data-mode="dark"`), typographie, composants (boutons, cartes, chips, jauges, listes, feuilles modales, tab bar, en-têtes, états vides, toasts, interrupteur), **discipline chromatique** engageant les lots suivants, **micro-présences d'oiseaux** (`data/oiseaux.js` + interrupteur dans Réglages), **règle de casse** (majuscule initiale sur les phrases et les entrées de liste, posée à la saisie par `cap()`), `:focus-visible` + `prefers-reduced-motion`, contrastes vérifiés par calcul, colonne centrée > 900 px | L'app a son visage définitif |
 | **3** | Bêta 1.3 | **Moteur de tâches.** `start` / `due` séparés ①, buckets anytime/someday ③, `effort` ⑪, catégories, priorité, « ce soir » ②, fiche tâche, filtres, recherche | Le modèle Things 3 est en place |
 | **4** | Bêta 1.4 | **Récurrence & Maison v1.** `recur.js` : `from: due` / `from: done`, jauge de fraîcheur ⑩, champ `room`, **écran Maison en vue par pièce**, catalogue `data/entretien.js` (~40 modèles en un tap), historique des réalisations | **Le ménage et l'administratif entrent dans l'app** |
 | **5** | Bêta 1.5 | **« Aujourd'hui » v1.** Agrégation tâches + entretien, algorithme de tri, plafond ⑦, « si tu as 10 minutes », pastille iOS, états vides | L'app commence à décider à ta place |
@@ -481,8 +481,8 @@ incrémenté. Chaque lot laisse l'app **installée et utilisable**. Ordre impos�
 | **8** | Bêta 1.8 | **Habitudes.** Bloc permanent sur l'accueil + écran secondaire `go('habits')`. Définitions, unités et objectifs, jours fixes **ou** quota hebdo ㉒, jour sauté ㉑, progression partielle ㉓, séries, calendrier mensuel | Domaine habitudes couvert |
 | **9** | Bêta 1.9 | **Courses.** Dictionnaire `data/rayons.js` ⑰, ordre des rayons réglable ⑱, mode magasin ⑲, produits fréquents ⑳, vidage des cochés | Domaine courses couvert |
 | **10** | Bêta 1.10 | **« Aujourd'hui » v2 + revue hebdomadaire.** Intégration habitudes et courses, **`review.js`** ⑨ (faire / reporter / abandonner), compteur de reports ⑥, motivation légère (séries, régularité, célébrations sobres) | **L'app est complète et se défend contre sa propre entropie** |
-| **11** | Bêta 1.11 | **Réglages & filet de sécurité.** Profil, préférences, **export/import JSON**, feuille de bienvenue au premier lancement, à propos, réinitialisation | Réinstallable sans perte |
-| **12** | Bêta 1.12 | **Polish, QA, dettes.** Relecture des textes, cibles tactiles ≥ 44 px, `:focus-visible`, `prefers-reduced-motion`, purge des tombstones, code mort, checklist iPhone réel, `CLAUDE.md` final | **V1 close** |
+| **11** | Bêta 1.11 | **Réglages & filet de sécurité.** Profil, préférences, **export/import JSON**, feuille de bienvenue au premier lancement, à propos, réinitialisation, **interrupteur de mode sombre** (les variables existent depuis le Lot 2, rien ne les bascule encore). *L'interrupteur « Oiseaux » y est déjà, posé au Lot 2 avec les oiseaux* | Réinstallable sans perte |
+| **12** | Bêta 1.12 | **Polish, QA, dettes.** Relecture des textes, purge des tombstones, code mort, checklist iPhone réel, `CLAUDE.md` final, **icônes d'app aux couleurs Canopée** (restées grises au Lot 2). *Cibles ≥ 44 px, `:focus-visible` et `prefers-reduced-motion` sont faits depuis le Lot 2 : ici, on vérifie, on ne pose plus* | **V1 close** |
 
 **Rythme** : environ un lot par session. Les lots 3, 4 et 6 sont les plus lourds.
 

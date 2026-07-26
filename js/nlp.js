@@ -4,5 +4,5 @@
    Pas d'écran propre : renderNlp() renvoie juste un fragment.
    ========================================================================== */
 function renderNlp(){
-  return emptyState('bientôt : saisie en langage naturel.', 'nlp');
+  return emptyState('Bientôt.', 'Saisie en langage naturel.');
 }

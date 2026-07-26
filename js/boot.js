@@ -7,6 +7,7 @@
 async function boot(){
   S = await loadState();
   purgeTombstones();
+  pickBirds(); // un tirage d'espèce et de perchoir par écran, à chaque ouverture
   go('today');
 }
 
