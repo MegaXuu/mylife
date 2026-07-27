@@ -11,10 +11,30 @@ const ROOM_ORDER = ['salon','cuisine','chambre','sdb','bureau','exterieur'];
 const PRIO_LABELS = {0:'Normal', 1:'Important', 2:'Urgent'};
 const EFFORT_LABELS = {1:'Court', 2:'Moyen', 3:'Long'};
 const MOIS_ABBR = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+const REPEAT_KIND_LABELS = {day:'Jour', week:'Semaine', month:'Mois', year:'An'};
+const REPEAT_KIND_ORDER = ['day','week','month','year'];
+const DOW_LABELS = {1:'Lun', 2:'Mar', 3:'Mer', 4:'Jeu', 5:'Ven', 6:'Sam', 7:'Dim'};
+const DOW_ORDER = [1,2,3,4,5,6,7];
 
 function fmtDateShort(k){
   const d = new Date(k+'T00:00');
   return d.getDate()+' '+MOIS_ABBR[d.getMonth()];
+}
+
+// Phrase en clair sous les champs de récurrence (ex. « Tous les 7 jours
+// après la dernière fois. »), cf. Lot V1-4.
+function repeatSummary(r){
+  if(!r) return '';
+  const n = r.n || 1;
+  const unitSing = {day:'jour', week:'semaine', month:'mois', year:'an'}[r.kind] || 'jour';
+  const unitPlur = {day:'jours', week:'semaines', month:'mois', year:'ans'}[r.kind] || 'jours';
+  let base;
+  if(r.kind === 'week' && r.days && r.days.length){
+    base = 'Chaque '+r.days.slice().sort((a,b)=>a-b).map(d=>DOW_LABELS[d]).join(', ');
+  } else {
+    base = n === 1 ? 'Tous les '+unitSing : 'Tous les '+n+' '+unitPlur;
+  }
+  return base + (r.from === 'done' ? ' après la dernière fois.' : ', à date fixe.');
 }
 
 /* ---------- Tri : échéance dépassée d'abord (la plus ancienne), puis priorité, puis ancienneté ---------- */
@@ -145,7 +165,8 @@ function addTask(){
   if(!title) return;
   S.tasks.push(stamp({
     title, notes:'', cat:'perso', room:null, bucket:'anytime',
-    start:null, due:null, evening:false, prio:0, effort:2, postponed:0, touchedAt:Date.now()
+    start:null, due:null, evening:false, prio:0, effort:2, repeat:null, history:[],
+    postponed:0, touchedAt:Date.now()
   }));
   save();
   renderTasks();
@@ -156,8 +177,7 @@ function addTask(){
 function doneTask(id){
   const t = S.tasks.find(x=>x.id === id);
   if(!t) return;
-  t.doneAt = Date.now();
-  touch(t);
+  completeTask(t); // recalcule l'échéance et la fraîcheur si récurrente (js/recur.js)
   save();
   renderTasks();
 }
@@ -204,10 +224,11 @@ function taskSheet(id){
   _tSheet = t ? {
     id: t.id, title: t.title || '', notes: t.notes || '', cat: t.cat || 'perso',
     room: t.room || null, bucket: t.bucket || 'anytime', start: t.start || null,
-    due: t.due || null, evening: !!t.evening, prio: t.prio || 0, effort: t.effort || 2
+    due: t.due || null, evening: !!t.evening, prio: t.prio || 0, effort: t.effort || 2,
+    repeat: t.repeat ? {kind:t.repeat.kind, n:t.repeat.n||1, days:(t.repeat.days||[]).slice(), from:t.repeat.from||'done'} : null
   } : {
     id: null, title:'', notes:'', cat:'perso', room:null, bucket:'anytime',
-    start:null, due:null, evening:false, prio:0, effort:2
+    start:null, due:null, evening:false, prio:0, effort:2, repeat:null
   };
   openSheet(taskSheetHtml());
   if(!_tSheet.id){
@@ -226,6 +247,21 @@ function setTsBucket(b){ _tSheet.bucket = b; refreshTaskSheet(); }
 function setTsDate(field, val){ _tSheet[field] = val || null; refreshTaskSheet(); }
 function toggleTsEvening(){ _tSheet.evening = !_tSheet.evening; refreshTaskSheet(); }
 
+// Récurrence (Lot V1-4) : à date fixe (from:'due') ou après réalisation (from:'done').
+function toggleTsRepeat(){
+  _tSheet.repeat = _tSheet.repeat ? null : {kind:'day', n:7, days:[], from:'done'};
+  refreshTaskSheet();
+}
+function setTsRepeatKind(k){ _tSheet.repeat.kind = k; if(k !== 'week') _tSheet.repeat.days = []; refreshTaskSheet(); }
+function setTsRepeatN(v){ _tSheet.repeat.n = Math.max(1, parseInt(v, 10) || 1); refreshTaskSheet(); }
+function setTsRepeatFrom(f){ _tSheet.repeat.from = f; refreshTaskSheet(); }
+function toggleTsRepeatDay(dow){
+  const days = _tSheet.repeat.days || (_tSheet.repeat.days = []);
+  const i = days.indexOf(dow);
+  if(i === -1) days.push(dow); else days.splice(i, 1);
+  refreshTaskSheet();
+}
+
 function taskSheetHtml(){
   const d = _tSheet;
   const catChips = CAT_ORDER.map(c=>
@@ -241,6 +277,25 @@ function taskSheetHtml(){
   const effortChips = [1,2,3].map(e=>
     '<button class="chip'+(d.effort===e?' on':'')+'" onclick="setTsEffort('+e+')">'+esc(EFFORT_LABELS[e])+'</button>'
   ).join('');
+  const rep = d.repeat;
+  const repeatKindChips = REPEAT_KIND_ORDER.map(k=>
+    '<button class="chip'+(rep && rep.kind===k?' on':'')+'" onclick="setTsRepeatKind(\''+k+'\')">'+esc(REPEAT_KIND_LABELS[k])+'</button>'
+  ).join('');
+  const repeatFromChips =
+    '<button class="chip'+(rep && rep.from==='due'?' on':'')+'" onclick="setTsRepeatFrom(\'due\')">À date fixe</button>'+
+    '<button class="chip'+(rep && rep.from==='done'?' on':'')+'" onclick="setTsRepeatFrom(\'done\')">Après réalisation</button>';
+  const repeatDayChips = DOW_ORDER.map(dw=>
+    '<button class="chip'+(rep && (rep.days||[]).indexOf(dw)!==-1?' on':'')+'" onclick="toggleTsRepeatDay('+dw+')">'+DOW_LABELS[dw]+'</button>'
+  ).join('');
+  const repeatBlock = !rep ? '' :
+    '<div class="field-group"><span class="overline">Fréquence</span><div class="chips">'+repeatKindChips+'</div></div>'+
+    '<div class="field-group"><span class="overline">Tous les</span><div class="repeat-n">'+
+      '<input class="field" type="number" min="1" inputmode="numeric" value="'+(rep.n||1)+'" onchange="setTsRepeatN(this.value)">'+
+      '<span>'+esc({day:'jour(s)', week:'semaine(s)', month:'mois', year:'an(s)'}[rep.kind]||'')+'</span>'+
+    '</div></div>'+
+    (rep.kind === 'week' ? '<div class="field-group"><span class="overline">Jours fixes (facultatif)</span><div class="chips">'+repeatDayChips+'</div></div>' : '')+
+    '<div class="field-group"><span class="overline">Depuis</span><div class="chips">'+repeatFromChips+'</div></div>'+
+    '<p class="sheet-msg">'+esc(repeatSummary(rep))+'</p>';
   const hasDate = !!(d.start || d.due);
   const bucketBlock = hasDate
     ? '<p class="sheet-msg">Planifiée automatiquement, grâce à sa date.</p>'
@@ -270,6 +325,12 @@ function taskSheetHtml(){
     '</li></ul></div>'+
     '<div class="field-group"><span class="overline">Priorité</span><div class="chips">'+prioChips+'</div></div>'+
     '<div class="field-group"><span class="overline">Effort</span><div class="chips">'+effortChips+'</div></div>'+
+    '<div class="field-group"><ul class="list"><li class="row">'+
+      '<div class="row-main"><div class="row-title">Récurrente</div></div>'+
+      '<button class="switch'+(rep?' on':'')+'" role="switch" aria-checked="'+!!rep+'" '+
+        'aria-label="Récurrente" onclick="toggleTsRepeat()"></button>'+
+    '</li></ul></div>'+
+    repeatBlock+
     '<div class="field-group"><span class="overline">Bucket</span>'+bucketBlock+'</div>'+
     '<button class="btn primary btn-full" onclick="saveTaskSheet()">Enregistrer</button>'+
     '<button class="btn quiet btn-full" onclick="closeSheet()">Annuler</button>';
@@ -289,12 +350,13 @@ function saveTaskSheet(){
   if(t){
     t.title = title; t.notes = notes; t.cat = d.cat; t.room = d.room;
     t.start = d.start || null; t.due = d.due || null; t.evening = !!d.evening;
-    t.prio = d.prio; t.effort = d.effort; t.bucket = bucket; t.touchedAt = Date.now();
+    t.prio = d.prio; t.effort = d.effort; t.bucket = bucket; t.repeat = d.repeat; t.touchedAt = Date.now();
     touch(t);
   } else {
     t = stamp({
       title, notes, cat:d.cat, room:d.room, start:d.start||null, due:d.due||null,
-      evening:!!d.evening, prio:d.prio, effort:d.effort, bucket, postponed:0, touchedAt:Date.now()
+      evening:!!d.evening, prio:d.prio, effort:d.effort, bucket, repeat:d.repeat, history:[],
+      postponed:0, touchedAt:Date.now()
     });
     S.tasks.push(t);
   }

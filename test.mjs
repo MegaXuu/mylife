@@ -1,10 +1,10 @@
 /* ==========================================================================
    Test de fumée — charge index.html sous jsdom (fake-indexeddb injecté),
    exerce go() sur les 6 écrans, le cycle de vie d'une tâche (créer, cocher,
-   supprimer), les invariants des oiseaux et la règle de casse à la saisie,
-   puis vérifie la persistance après un rechargement simulé. Échoue à
-   la moindre erreur runtime. Objectif : attraper les erreurs, pas vérifier
-   la logique métier fine (il n'y en a quasiment aucune au Lot 1).
+   supprimer), les invariants des oiseaux, la règle de casse à la saisie, le
+   moteur de récurrence (distinction from:'due' / from:'done', jauge de
+   fraîcheur, completeTask()) et l'écran Maison, puis vérifie la persistance
+   après un rechargement simulé. Échoue à la moindre erreur runtime.
    Lancer :  npm test   (après un premier « npm install »)
    ========================================================================== */
 import { readFileSync } from 'node:fs';
@@ -117,7 +117,79 @@ call('cap à la saisie', () => {
   if(!t) throw new Error('le titre stocké n’a pas reçu sa majuscule initiale');
 });
 
-// 6) Écriture immédiate puis relecture directe dans IndexedDB — équivalent, pour ce
+// 6) Moteur de récurrence (Lot V1-4, js/recur.js) : la distinction from:'due' /
+//    from:'done' est le cœur du lot — testée explicitement, pas seulement par
+//    ricochet via l'UI.
+call('intervalDays', () => {
+  if(win.intervalDays(null) !== null) throw new Error('intervalDays(null) devrait être null');
+  if(win.intervalDays({kind:'day', n:5}) !== 5) throw new Error('intervalDays jour incorrect');
+  if(win.intervalDays({kind:'week', n:2}) !== 14) throw new Error('intervalDays semaine incorrect');
+  if(win.intervalDays({kind:'month', n:1}) !== 30) throw new Error('intervalDays mois incorrect');
+  if(win.intervalDays({kind:'year', n:1}) !== 365) throw new Error('intervalDays an incorrect');
+});
+call('nextDue from:due (échéance précédente, indépendante de la réalisation)', () => {
+  const t = {due: '2026-01-05', repeat: {kind: 'month', n: 1, from: 'due'}};
+  if(win.nextDue(t, '2026-01-05') !== '2026-02-05')
+    throw new Error('nextDue from:due devrait repartir de l’échéance précédente, obtenu ' + win.nextDue(t, '2026-01-05'));
+});
+call('nextDue from:done (réalisation effective, pas la date attendue)', () => {
+  const t = {doneAt: new Date('2026-01-01T00:00').getTime(), due: '2025-12-20', repeat: {kind: 'day', n: 7, from: 'done'}};
+  const got = win.nextDue(t, '2026-01-10');
+  if(got !== '2026-01-08')
+    throw new Error('nextDue from:done doit ignorer l’ancienne échéance et repartir de doneAt, obtenu ' + got);
+});
+call('nextDue jours fixes de semaine', () => {
+  const t = {doneAt: new Date('2026-01-05T00:00').getTime(), repeat: {kind: 'week', days: [1, 4], from: 'done'}}; // lundi 2026-01-05
+  if(win.nextDue(t) !== '2026-01-08') // jeudi suivant
+    throw new Error('nextDue jours fixes incorrect, obtenu ' + win.nextDue(t));
+});
+call('freshness bornée [0,1], jamais négative', () => {
+  const now = Date.now();
+  const frais = win.freshness({doneAt: now, repeat: {kind: 'day', n: 6}}, now);
+  if(Math.abs(frais - 1) > 0.01) throw new Error('freshness juste après doneAt devrait être ~1');
+  const demi = win.freshness({doneAt: now - 3*86400000, repeat: {kind: 'day', n: 6}}, now);
+  if(Math.abs(demi - 0.5) > 0.01) throw new Error('freshness à mi-intervalle devrait être ~0,5, obtenu ' + demi);
+  const vieux = win.freshness({doneAt: now - 60*86400000, repeat: {kind: 'day', n: 6}}, now);
+  if(vieux !== 0) throw new Error('freshness très en retard doit rester 0, jamais négative — obtenu ' + vieux);
+  if(win.freshness({doneAt: null, repeat: {kind: 'day', n: 6}}, now) !== 0)
+    throw new Error('freshness sans doneAt devrait être 0 (à faire)');
+});
+call('completeTask from:done — doneAt se pose sur l’instant, la tâche reste visible en Maison', () => {
+  const t = {doneAt: null, due: null, repeat: {kind: 'day', n: 7, from: 'done'}, history: [], postponed: 2};
+  win.completeTask(t);
+  if(!t.doneAt) throw new Error('completeTask from:done devrait poser doneAt');
+  if(t.postponed !== 0) throw new Error('completeTask devrait remettre postponed à 0');
+  if(!t.history.length) throw new Error('completeTask devrait historiser la réalisation');
+});
+call('completeTask from:due — reste actif, l’échéance avance', () => {
+  const t = {doneAt: null, due: '2026-01-05', repeat: {kind: 'month', n: 1, from: 'due'}, history: [], postponed: 1};
+  win.completeTask(t);
+  if(t.doneAt !== null) throw new Error('completeTask from:due ne doit pas laisser doneAt : la tâche n’est pas finie, juste reportée au prochain cycle');
+  if(t.due !== win.nextDue({due: '2026-01-05', repeat: t.repeat}, '2026-01-05'))
+    throw new Error('completeTask from:due devrait avancer l’échéance');
+});
+
+// 6 bis) Écran Maison (Lot V1-4) : un entretien (repeat.from:'done' + room) vit
+// dans la vue par pièce et disparaît de la liste des tâches ouvertes.
+call('Maison — entretien créé, visible en Maison, absent des tâches ouvertes', () => {
+  win.go('maison');
+  S.tasks.push(win.stamp({
+    title: 'Passer l’aspirateur', notes: '', cat: 'entretien', room: 'salon', bucket: 'anytime',
+    start: null, due: null, evening: false, prio: 0, effort: 2,
+    repeat: {kind: 'day', n: 7, days: [], from: 'done'},
+    doneAt: Date.now(), history: [], postponed: 0, touchedAt: Date.now()
+  }));
+  win.go('maison');
+  const t = S.tasks.find(t => t.title === 'Passer l’aspirateur');
+  if(!win.getMaisonItems().some(x => x.id === t.id)) throw new Error('l’entretien devrait apparaître dans getMaisonItems()');
+  win.go('tasks');
+  if(win.getTaskItems().some(x => x.id === t.id)) throw new Error('un entretien déjà fait ne devrait pas polluer la liste des tâches ouvertes');
+  const before = t.doneAt;
+  win.tapMaisonItem(t.id);
+  if(t.doneAt <= before) throw new Error('tapMaisonItem devrait rafraîchir doneAt');
+});
+
+// 7) Écriture immédiate puis relecture directe dans IndexedDB — équivalent, pour ce
 //    test de fumée, à vérifier la persistance après un rechargement de l'app.
 if(typeof win.saveNow === 'function'){
   try{ await win.saveNow(); }catch(e){ onError('saveNow (flush)', e); }
@@ -147,7 +219,7 @@ try{
   fails.push('IndexedDB → lecture directe en échec : ' + (e && e.message ? e.message : e));
 }
 
-// 7) Bilan.
+// 8) Bilan.
 if(fails.length){
   console.error(`\n✗ ${fails.length} échec(s) :`);
   fails.forEach(f => console.error('  - ' + f));

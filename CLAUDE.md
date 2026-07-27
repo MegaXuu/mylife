@@ -86,7 +86,8 @@ uniquement des déclarations.
   `.primary/.secondary/.danger/.quiet/.btn-full`, `.chip/.chips`, `.gauge/.gauge-fill(.hab)`,
   `.list/.row/.row-main/.row-title/.row-meta/.row.done/.check(.on)/.row-del`, `.field/.addbar/
   .add-btn`, `.sheet/.handle/.sheet-title/.sheet-msg`, `.tabbar/.tab`,
-  `.empty/.empty-perch/.empty-title/.empty-sub`, `.toast/.toast-act`, `.switch(.on)`, `.bird`.
+  `.empty/.empty-perch/.empty-title/.empty-sub`, `.toast/.toast-act`, `.switch(.on)`, `.bird`,
+  `.repeat-n` (fiche tâche, Lot 4), `.room-head/.room-tag/.room-gauge/.row-gauge` (Maison, Lot 4).
   Au-delà de **900 px** : colonne centrée plafonnée à 560 px (desktop optimisé en V2).
 - `js/state.js` — **socle**, aucun rendu DOM : `APP_VERSION`, IndexedDB (`openDb`/`idbGet`/`idbSet`,
   + `idbPutPhoto`/`idbGetPhoto`/`idbDelPhoto` pour le store `photos`), `defaults()`/`migrate()`,
@@ -109,20 +110,48 @@ uniquement des déclarations.
   notes, catégorie, pièce, début, échéance, ce soir, priorité, effort, bucket — `bucket` devient
   automatiquement `'scheduled'` dès qu'une date est posée, les chips Un jour/Peut-être disparaissent
   alors au profit d'un message). `postponeTask()` pousse `start` à demain, incrémente `postponed`,
-  affiche « reportée N fois » à partir de 3. La récurrence (`repeat`) reste au Lot 4.
-- `js/today.js`, `js/maison.js`, `js/habits.js`, `js/shopping.js` — placeholders, chacun
-  `renderX()` écrit `screenHead(...) + emptyState('Bientôt.', '…')` dans son `#s-x`. `today.js`
-  porte en plus `longDate()` (sur-titre « Lundi 27 juillet »).
+  affiche « reportée N fois » à partir de 3. **Récurrence posée au Lot 4** : interrupteur
+  « Récurrente » dans la fiche → fréquence (`kind` jour/semaine/mois/an, `n`), jours fixes de semaine
+  facultatifs, `from` (« à date fixe » / « après réalisation »), phrase en clair sous les champs
+  (`repeatSummary()`). `doneTask()` passe désormais par `completeTask()` (`js/recur.js`) : une tâche
+  `from:'due'` reste active et voit son échéance avancer (`doneAt` redevient `null`), une tâche
+  `from:'done'` pose `doneAt` sur l'instant présent.
+- `js/today.js`, `js/habits.js`, `js/shopping.js` — placeholders, chacun `renderX()` écrit
+  `screenHead(...) + emptyState('Bientôt.', '…')` dans son `#s-x`. `today.js` porte en plus
+  `longDate()` (sur-titre « Lundi 27 juillet »).
+- `js/maison.js` — écran Maison, **vue par pièce posée au Lot 4** : `getMaisonItems()` regroupe les
+  tâches d'entretien (`room` posé + `repeat.from:'done'`, glossaire `CONVENTIONS.md` §6) par pièce ;
+  jauge agrégée par pièce (la plus basse de ses éléments, `freshLabel()` pour le texte à côté —
+  jamais « en retard ») + jauge de fraîcheur continue par élément ; tap sur une ligne
+  (`tapMaisonItem()`) appelle `completeTask()`, avec un retour visuel immédiat (largeur de la jauge
+  posée à 100 % avant le rendu complet) que `prefers-reduced-motion` supprime. `entretienSheet()` :
+  feuille d'ajout — on choisit une pièce puis on coche des modèles du catalogue
+  `data/entretien.js`, créés en une fois comme tâches récurrentes `'done'` (`doneAt` posé à
+  l'instant de la création). Les tâches d'entretien ont toujours un `doneAt`, donc elles
+  n'apparaissent plus dans l'écran Tâches (filtré sur `!doneAt`) : elles vivent uniquement ici.
+  Structure de ligne prévue pour accueillir les soins de plantes au Lot 7 (même moteur, §6 bis de
+  la roadmap), pas codée.
 - `js/settings.js` — deux vraies cartes et **un seul réglage** : l'interrupteur « Oiseaux »
   (`toggleBirds()` → `S.settings.birds`), posé au Lot 2 avec les oiseaux. Le reste (profil, export,
   import, mode sombre) arrive au Lot 11. Seul écran en `screenHead(..., {noGear:true})` :
   l'engrenage y mène, il n'y apparaît pas.
-- `js/recur.js`, `js/nlp.js`, `js/plants.js`, `js/review.js` — placeholders **sans conteneur DOM
-  propre** (pas de `#s-recur` etc.) : `renderX()` renvoie juste un fragment `emptyState()`, jamais
-  appelée par `go()`. Existent uniquement pour figer l'ordre de chargement et les listes miroir ;
-  logique réelle aux Lots 4 (recur), 6 (nlp), 7 (plants), 10 (review).
-- `data/rayons.js` (`RAYONS`), `data/plantes.js` (`PLANTES`), `data/entretien.js` (`ENTRETIEN`) —
-  structures vides commentées, remplies aux Lots 9, 7, 4.
+- `js/recur.js` — moteur de récurrence, **rempli au Lot 4**, fonctions pures sans DOM, testées
+  isolément dans `test.mjs` : `intervalDays(repeat)` (intervalle en jours tous kinds confondus,
+  approximation pour la jauge), `nextDue(task, ref)` (distinction `repeat.from:'due'` — depuis
+  l'échéance précédente, calendaire exact via `setMonth`/`setFullYear` — / `'done'` — depuis
+  la réalisation effective `doneAt` — c'est le cœur du lot), `freshness(task, ref)` (jauge continue
+  bornée [0,1], jamais négative), `completeTask(task, ref)` (historise, recalcule `due`, remet
+  `postponed` à 0). Partagé entre l'entretien maison (`js/maison.js`) et, au Lot 7, les soins de
+  plantes.
+- `js/nlp.js`, `js/plants.js`, `js/review.js` — placeholders **sans conteneur DOM propre** (pas de
+  `#s-nlp` etc.) : `renderX()` renvoie juste un fragment `emptyState()`, jamais appelée par `go()`.
+  Existent uniquement pour figer l'ordre de chargement et les listes miroir ; logique réelle aux
+  Lots 6 (nlp), 7 (plants), 10 (review).
+- `data/rayons.js` (`RAYONS`), `data/plantes.js` (`PLANTES`) — structures vides commentées, remplies
+  aux Lots 9, 7.
+- `data/entretien.js` (`ENTRETIEN`) — **rempli au Lot 4** : une quarantaine de modèles d'entretien
+  courants (`{title, room, intervalDays, effort}`), proposés en un tap depuis `entretienSheet()`
+  (`js/maison.js`).
 - `data/oiseaux.js` (`OISEAUX`) — **rempli au Lot 2** : 6 espèces, chacune une liste de formes SVG
   plates. Données pures, aucun rendu : redessiner un oiseau = remplacer son tableau, sans toucher à
   `js/ui.js`. Contrat de dessin en tête du fichier (`viewBox 0 0 120 160`, pattes sur **y = 130**,
@@ -148,7 +177,9 @@ uniquement des déclarations.
   chargement, attend `await window.__ready()`, exerce `go()` sur les 6 écrans, le cycle de vie d'une
   tâche (créer/cocher/supprimer), `stamp()`/`touch()`/`live()`, les invariants des oiseaux (un seul
   par écran, `aria-hidden`, aucun en mode sombre, interrupteur effectif), la majuscule initiale
-  posée à la saisie, et vérifie la persistance directe en IndexedDB après `saveNow()`. Échoue à la
+  posée à la saisie, le moteur de récurrence (`intervalDays`/`nextDue`/`freshness`/`completeTask`,
+  distinction `from:'due'`/`from:'done'` testée explicitement) et l'écran Maison (`getMaisonItems()`,
+  `tapMaisonItem()`), et vérifie la persistance directe en IndexedDB après `saveNow()`. Échoue à la
   moindre erreur runtime.
 - **À chaque release** : incrémenter `CACHE` (`sw.js`) **et** `APP_VERSION` (`js/state.js`), même
   numéro (`mylife-b1-N` / `'Bêta 1.N'`).
@@ -159,10 +190,12 @@ S = { v:1, tasks:[], plants:[], habits:[], habitLog:{}, shopping:[], frequents:[
       settings:{userName,weekStart,rayonOrder,coldFrom,coldTo,todayCap,reviewDay,hideDone},
       lastReview:null, onboarded:false }
 ```
-Depuis le Lot 3, `tasks[]` porte `{id,createdAt,updatedAt,deletedAt,title,doneAt,notes,cat,room,
-bucket,start,due,evening,prio,effort,postponed,touchedAt}` — `migrate()` a basculé les tâches du
-Lot 1 en `bucket:'anytime', cat:'perso', prio:0, effort:2`. Les champs `repeat` et `history`
-(récurrence) restent à ajouter au Lot 4. Tout objet persisté suit la discipline synchro-ready :
+Depuis le Lot 4, `tasks[]` porte `{id,createdAt,updatedAt,deletedAt,title,doneAt,notes,cat,room,
+bucket,start,due,evening,prio,effort,postponed,touchedAt,repeat,history}` — `repeat` est `null` ou
+`{kind:'day'|'week'|'month'|'year', n, days:[1..7]=lundi..dimanche, from:'due'|'done'}`, `history`
+est `['YYYY-MM-DD', …]` (réalisations passées). `migrate()` a basculé les tâches du Lot 1 en
+`bucket:'anytime', cat:'perso', prio:0, effort:2` et pose `repeat:null, history:[]` sur toute tâche
+antérieure au Lot 4. Tout objet persisté suit la discipline synchro-ready :
 `id` = `crypto.randomUUID()`, `createdAt`/`updatedAt` (ms), `deletedAt` (tombstone, jamais de
 suppression dure), aucun compteur global stocké, aucun ordre implicite par position.
 
@@ -177,9 +210,15 @@ suppression dure), aucun compteur global stocké, aucun ordre implicite par posi
 - Toujours échapper le texte utilisateur avec `esc()`. Jamais `confirm()`/`alert()`/`prompt()`
   natifs — `confirmSheet()` maison pour toute confirmation destructive.
 - Suppression = tombstone (`deletedAt = Date.now()` + `touch()`), jamais un `splice()`.
-- `js/recur.js`, `js/nlp.js`, `js/plants.js`, `js/review.js` n'ont pas de conteneur DOM : ne pas
-  essayer d'y faire `document.getElementById('s-recur')` etc., ça n'existe pas et n'existera jamais
-  (recur/nlp sont des moteurs, plants rejoindra Maison, review sera une feuille).
+- `js/nlp.js`, `js/plants.js`, `js/review.js` n'ont pas de conteneur DOM : ne pas essayer d'y faire
+  `document.getElementById('s-nlp')` etc., ça n'existe pas et n'existera jamais (nlp est un moteur,
+  plants rejoindra Maison, review sera une feuille). `js/recur.js` non plus, mais pour une autre
+  raison depuis le Lot 4 : c'est un moteur pur (`nextDue`/`freshness`/`intervalDays`/`completeTask`),
+  appelé par `js/tasks.js` et `js/maison.js`, jamais par `go()`.
+- **Une tâche d'entretien (`room` + `repeat.from:'done'`) a toujours un `doneAt`** : elle disparaît
+  donc naturellement de l'écran Tâches (`getTaskItems()` filtre `!t.doneAt`) et ne vit que dans
+  Maison. C'est voulu, pas un bug — ne pas « corriger » ce filtre pour la faire réapparaître dans
+  les deux écrans à la fois (ce serait deux chemins vers la même action).
 - Déploiement : `git push` → GitHub Pages republie (~1 min), Fastly cache ~10 min ensuite — attendre
   avant de soupçonner un vrai bug.
 - **Push : autorisé, mais seulement après l'accord explicite de Florian.** Ne jamais pousser de sa
@@ -200,7 +239,7 @@ suppression dure), aucun compteur global stocké, aucun ordre implicite par posi
 | **1 — Socle** | Bêta 1.1 | ✅ Fait. Squelette, IndexedDB + `S` + `save`/`saveNow`, boot async, navigation 4 onglets, écran Tâches minimal, service worker, manifeste, icônes, `test.mjs`, ce fichier. |
 | **2 — Identité & design system** | Bêta 1.2 | ✅ Fait. Direction « Canopée » validée puis appliquée : jeu complet de variables CSS (clair + `data-mode="dark"`), composants partagés en classes, discipline chromatique écrite ici et en tête du `<style>`, micro-présences d'oiseaux (`data/oiseaux.js` + interrupteur dans Réglages), règle de casse posée à la saisie (`cap()`), Tâches / tab bar / feuilles restylées, `:focus-visible` + `prefers-reduced-motion` partout, colonne centrée > 900 px, contrastes vérifiés par calcul, `maquettes/` retirée. **Dette laissée** : icônes d'app encore grises (Lot 12). |
 | **3 — Moteur de tâches** | Bêta 1.3 | ✅ Fait. Modèle Things 3 (`start`/`due`/`bucket`/`evening`/`prio`/`effort`/`postponed`/`touchedAt`) posé par `migrate()`, écran Tâches en 4 groupes (Aujourd'hui et avant / À venir / Un jour / Peut-être repliable), filtres catégorie + recherche + compteurs, tri échéance dépassée → priorité → ancienneté, fiche tâche unique création/édition, report avec compteur discret dès 3. |
-| 4 — Récurrence & Maison v1 | Bêta 1.4 | À faire |
+| **4 — Récurrence & Maison v1** | Bêta 1.4 | ✅ Fait. Moteur `js/recur.js` pur et testé isolément (`nextDue`/`freshness`/`intervalDays`/`completeTask`, distinction `from:'due'`/`from:'done'` — le cœur du lot), récurrence dans la fiche tâche (fréquence, jours fixes facultatifs, depuis-date-fixe/après-réalisation, phrase en clair), écran Maison en vue par pièce (jauge agrégée + jauge de fraîcheur par élément, tap = fait avec retour visuel), catalogue `data/entretien.js` (~40 modèles) et feuille d'ajout `entretienSheet()`. |
 | 5 — « Aujourd'hui » v1 | Bêta 1.5 | À faire (validation maquette avant code) |
 | 6 — Saisie langage naturel | Bêta 1.6 | À faire |
 | 7 — Maison v2 (plantes) | Bêta 1.7 | À faire |

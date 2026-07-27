@@ -161,6 +161,7 @@ html[data-mode="dark"] .card.t-courses{--ink2:#A89D8D;}
 .btn.danger{background:none; border:1.5px solid var(--due); color:var(--due);}
 .btn.quiet{background:none; color:var(--ink2); min-height:44px; font-size:var(--fs-low); font-weight:500;}
 .btn-full{width:100%; display:block; margin-top:var(--s1);}
+.btn:disabled{opacity:.5; pointer-events:none;}
 
 /* ---------- Chips (état, pas action : inversion achromatique, pas de vert) ---------- */
 .chip{
@@ -174,7 +175,7 @@ html[data-mode="dark"] .card.t-courses{--ink2:#A89D8D;}
 
 /* ---------- Jauge de fraîcheur ---------- */
 .gauge{height:12px; border-radius:var(--r-pill); background:var(--g-track); overflow:hidden;}
-.gauge-fill{height:100%; border-radius:inherit; background:var(--g-ok);}
+.gauge-fill{height:100%; border-radius:inherit; background:var(--g-ok); transition:width var(--d2) var(--ease);}
 /* Quota d'habitude : ne rougit jamais, quelle que soit la valeur. */
 .gauge-fill.hab{background:var(--g-hab);}
 
@@ -260,6 +261,15 @@ html[data-mode="dark"] .card.t-courses{--ink2:#A89D8D;}
   background:none; border:0; color:var(--ink2); font-size:var(--fs-meta); font-weight:600;
 }
 .list.group-someday{opacity:.65;}
+
+/* ---------- Lot V1-4 : récurrence (fiche tâche) et vue par pièce (Maison) ---------- */
+.repeat-n{display:flex; align-items:center; gap:var(--s2);}
+.repeat-n .field{width:76px; flex:none; text-align:center;}
+.room-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:var(--s2);}
+.room-head .overline{margin-bottom:0;}
+.room-tag{font-size:var(--fs-meta); font-weight:600; color:var(--ink2);}
+.room-gauge{margin:2px 0 var(--s4);}
+.row-gauge .row-main .gauge{margin-top:6px;}
 .add-btn{
   flex:none; width:50px; height:50px;
   display:flex; align-items:center; justify-content:center;

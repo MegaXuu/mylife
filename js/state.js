@@ -5,7 +5,7 @@
    AUCUN RENDU DOM ICI — voir js/ui.js et les js/<ecran>.js pour l'affichage.
    ========================================================================== */
 
-const APP_VERSION = 'Bêta 1.3'; // à synchroniser avec CACHE (sw.js) à chaque release
+const APP_VERSION = 'Bêta 1.4'; // à synchroniser avec CACHE (sw.js) à chaque release
 
 const IDB_NAME = 'mylife';
 const IDB_VERSION = 1;
@@ -52,6 +52,9 @@ function migrate(r){
     if(t.effort === undefined) t.effort = 2;
     if(t.postponed === undefined) t.postponed = 0;
     if(t.touchedAt === undefined) t.touchedAt = t.updatedAt || t.createdAt || Date.now();
+    // Lot V1-4 : moteur de récurrence (js/recur.js).
+    if(t.repeat === undefined) t.repeat = null;
+    if(t.history === undefined) t.history = [];
     return t;
   });
   r.plants = r.plants || [];
