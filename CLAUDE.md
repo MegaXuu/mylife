@@ -101,9 +101,15 @@ uniquement des déclarations.
   `emptyState(titre, sousTitre)`, `gaugeColor(f)`, `CURRENT_SCREEN` (posé par `go()`), et les
   oiseaux : `pickBirds()` (appelé une fois au boot), `birdsOn()`, `birdSvg(nom, w, pos)`,
   `birdOnCard(i, n)`, `birdOnPerch()`.
-- `js/tasks.js` — écran Tâches, **périmètre Lot 1 strict** : ajouter / cocher (`doneAt`) / supprimer
-  (tombstone `deletedAt`, annulable par le toast). Aucune date, catégorie, priorité ni récurrence
-  (Lots 3/4). Habillé au Lot 2 : `screenHead` + `.list`/`.row`/`.check` + `.addbar` en bas d'écran.
+- `js/tasks.js` — écran Tâches, **moteur Things 3 posé au Lot 3** : groupes « Aujourd'hui et avant »
+  (`bucket:'scheduled'` avec `start` ou `due` ≤ aujourd'hui) / « À venir » (le reste du `scheduled`) /
+  « Un jour » (`anytime`) / « Peut-être » (`someday`, replié par défaut, visuellement en retrait),
+  filtres par catégorie (`.chips`), recherche titre+notes, tri échéance dépassée → priorité →
+  ancienneté (`taskCompare()`). Fiche tâche unique `taskSheet(id|null)` pour créer et éditer (titre,
+  notes, catégorie, pièce, début, échéance, ce soir, priorité, effort, bucket — `bucket` devient
+  automatiquement `'scheduled'` dès qu'une date est posée, les chips Un jour/Peut-être disparaissent
+  alors au profit d'un message). `postponeTask()` pousse `start` à demain, incrémente `postponed`,
+  affiche « reportée N fois » à partir de 3. La récurrence (`repeat`) reste au Lot 4.
 - `js/today.js`, `js/maison.js`, `js/habits.js`, `js/shopping.js` — placeholders, chacun
   `renderX()` écrit `screenHead(...) + emptyState('Bientôt.', '…')` dans son `#s-x`. `today.js`
   porte en plus `longDate()` (sur-titre « Lundi 27 juillet »).
@@ -153,9 +159,10 @@ S = { v:1, tasks:[], plants:[], habits:[], habitLog:{}, shopping:[], frequents:[
       settings:{userName,weekStart,rayonOrder,coldFrom,coldTo,todayCap,reviewDay,hideDone},
       lastReview:null, onboarded:false }
 ```
-Au Lot 1, `tasks[]` n'a que `{id,createdAt,updatedAt,deletedAt,title,doneAt}` — les champs `notes,
-cat, room, bucket, start, due, evening, prio, effort, repeat, history, postponed, touchedAt`
-arrivent aux Lots 3/4 via `migrate()`. Tout objet persisté suit la discipline synchro-ready :
+Depuis le Lot 3, `tasks[]` porte `{id,createdAt,updatedAt,deletedAt,title,doneAt,notes,cat,room,
+bucket,start,due,evening,prio,effort,postponed,touchedAt}` — `migrate()` a basculé les tâches du
+Lot 1 en `bucket:'anytime', cat:'perso', prio:0, effort:2`. Les champs `repeat` et `history`
+(récurrence) restent à ajouter au Lot 4. Tout objet persisté suit la discipline synchro-ready :
 `id` = `crypto.randomUUID()`, `createdAt`/`updatedAt` (ms), `deletedAt` (tombstone, jamais de
 suppression dure), aucun compteur global stocké, aucun ordre implicite par position.
 
@@ -192,7 +199,7 @@ suppression dure), aucun compteur global stocké, aucun ordre implicite par posi
 |---|---|---|
 | **1 — Socle** | Bêta 1.1 | ✅ Fait. Squelette, IndexedDB + `S` + `save`/`saveNow`, boot async, navigation 4 onglets, écran Tâches minimal, service worker, manifeste, icônes, `test.mjs`, ce fichier. |
 | **2 — Identité & design system** | Bêta 1.2 | ✅ Fait. Direction « Canopée » validée puis appliquée : jeu complet de variables CSS (clair + `data-mode="dark"`), composants partagés en classes, discipline chromatique écrite ici et en tête du `<style>`, micro-présences d'oiseaux (`data/oiseaux.js` + interrupteur dans Réglages), règle de casse posée à la saisie (`cap()`), Tâches / tab bar / feuilles restylées, `:focus-visible` + `prefers-reduced-motion` partout, colonne centrée > 900 px, contrastes vérifiés par calcul, `maquettes/` retirée. **Dette laissée** : icônes d'app encore grises (Lot 12). |
-| 3 — Moteur de tâches | Bêta 1.3 | À faire |
+| **3 — Moteur de tâches** | Bêta 1.3 | ✅ Fait. Modèle Things 3 (`start`/`due`/`bucket`/`evening`/`prio`/`effort`/`postponed`/`touchedAt`) posé par `migrate()`, écran Tâches en 4 groupes (Aujourd'hui et avant / À venir / Un jour / Peut-être repliable), filtres catégorie + recherche + compteurs, tri échéance dépassée → priorité → ancienneté, fiche tâche unique création/édition, report avec compteur discret dès 3. |
 | 4 — Récurrence & Maison v1 | Bêta 1.4 | À faire |
 | 5 — « Aujourd'hui » v1 | Bêta 1.5 | À faire (validation maquette avant code) |
 | 6 — Saisie langage naturel | Bêta 1.6 | À faire |

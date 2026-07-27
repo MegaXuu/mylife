@@ -230,7 +230,7 @@ html[data-mode="dark"] .card.t-courses{--ink2:#A89D8D;}
 .switch.on::before{background:var(--act);}
 .switch.on::after{transform:translateX(20px);}
 
-.row-del{
+.row-del,.row-postpone{
   flex:none; width:44px; height:44px; margin-right:-10px;
   display:flex; align-items:center; justify-content:center;
   background:none; border:0; border-radius:50%; color:var(--ink2);
@@ -243,7 +243,23 @@ html[data-mode="dark"] .card.t-courses{--ink2:#A89D8D;}
   color:var(--ink); font-size:var(--fs-body);
 }
 .field::placeholder{color:var(--ink2); opacity:1;}
+.field-full{width:100%;}
+.field.area{height:auto; min-height:88px; padding:12px 14px; line-height:1.4; resize:vertical;}
 .addbar{display:flex; gap:10px; margin-top:var(--s4);}
+
+/* ---------- Lot V1-3 : recherche, filtres et groupes de l'écran Tâches ---------- */
+.search-field{margin-bottom:var(--s4);}
+.filter-chips{margin-bottom:var(--s4);}
+.field-group{margin-top:var(--s4);}
+.field-group:first-child{margin-top:0;}
+.group-head{display:flex; align-items:center; justify-content:space-between; margin:var(--s5) 0 var(--s2);}
+.group-head:first-child{margin-top:0;}
+.group-head .overline{margin-bottom:0;}
+.group-toggle{
+  flex:none; min-height:44px; padding:0 var(--s2); margin:-10px -8px -10px 0;
+  background:none; border:0; color:var(--ink2); font-size:var(--fs-meta); font-weight:600;
+}
+.list.group-someday{opacity:.65;}
 .add-btn{
   flex:none; width:50px; height:50px;
   display:flex; align-items:center; justify-content:center;

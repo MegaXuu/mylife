@@ -5,7 +5,7 @@
    AUCUN RENDU DOM ICI — voir js/ui.js et les js/<ecran>.js pour l'affichage.
    ========================================================================== */
 
-const APP_VERSION = 'Bêta 1.2'; // à synchroniser avec CACHE (sw.js) à chaque release
+const APP_VERSION = 'Bêta 1.3'; // à synchroniser avec CACHE (sw.js) à chaque release
 
 const IDB_NAME = 'mylife';
 const IDB_VERSION = 1;
@@ -38,7 +38,22 @@ function defaults(){
 }
 function migrate(r){
   r.v = r.v || 1;
-  r.tasks = r.tasks || [];
+  r.tasks = (r.tasks || []).map(t=>{
+    // Lot V1-3 : modèle Things 3 (start/due/bucket/effort/prio…). Les tâches
+    // du Lot 1 n'avaient ni date ni catégorie : elles deviennent 'anytime'.
+    if(t.notes === undefined) t.notes = '';
+    if(t.cat === undefined) t.cat = 'perso';
+    if(t.room === undefined) t.room = null;
+    if(t.bucket === undefined) t.bucket = 'anytime';
+    if(t.start === undefined) t.start = null;
+    if(t.due === undefined) t.due = null;
+    if(t.evening === undefined) t.evening = false;
+    if(t.prio === undefined) t.prio = 0;
+    if(t.effort === undefined) t.effort = 2;
+    if(t.postponed === undefined) t.postponed = 0;
+    if(t.touchedAt === undefined) t.touchedAt = t.updatedAt || t.createdAt || Date.now();
+    return t;
+  });
   r.plants = r.plants || [];
   r.habits = r.habits || [];
   r.habitLog = r.habitLog || {};
