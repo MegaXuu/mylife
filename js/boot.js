@@ -32,14 +32,26 @@ if('serviceWorker' in navigator){
   });
 }
 
+// Pastille de l'icône iOS (ROADMAP-V1.md §6 et §8) : posée à la fermeture,
+// elle porte ce qu'il reste à faire aujourd'hui. C'est le seul substitut
+// honnête aux notifications — gratuit, sans serveur, iOS 16.4+. Silencieux
+// partout où l'API n'existe pas (Safari onglet, navigateur de bureau).
+function updateBadge(){
+  try{
+    if(!navigator.setAppBadge) return;
+    navigator.setAppBadge(todayBadgeCount()); // 0 efface la pastille
+  }catch(e){}
+}
+
 // iOS peut tuer une PWA en arrière-plan sans avertir : on force le disque avant.
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState === 'hidden'){
     saveNow();
+    updateBadge();
   } else if(document.visibilityState === 'visible'){
     // Vérifie une nouvelle version à chaque retour au premier plan (iOS ne le
     // fait pas de lui-même) — évite de rester bloqué sur une ancienne Bêta.
     if(_swReg) try{ _swReg.update(); }catch(e){}
   }
 });
-window.addEventListener('pagehide', ()=>{ saveNow(); });
+window.addEventListener('pagehide', ()=>{ saveNow(); updateBadge(); });

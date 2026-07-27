@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MyLife — maquette « Aujourd'hui » (Lot V1-5)</title>
+<meta name="theme-color" content="#F3EEE5">
+<!-- ==========================================================================
+     MAQUETTE STATIQUE — Lot V1-5, étape 1. Aucun script, aucune donnée réelle.
+     Le CSS ci-dessous est celui d'index.html (design system « Canopée »,
+     Lot V1-2) recopié à l'identique, suivi du seul bloc que ce lot propose
+     d'ajouter, puis d'un cadre de maquette qui ne partira pas dans l'app.
+     Ce fichier ne sert qu'à valider la hiérarchie visuelle avant de coder.
+     ========================================================================== -->
+<style>
+/* ==========================================================================
+   MyLife — design system « Canopée » (Lot V1-2). Tout le CSS de l'app vit ici.
+
+   ┌──────────────────────────────────────────────────────────────────────┐
+   │ DISCIPLINE CHROMATIQUE — engage tous les lots suivants.              │
+   │                                                                      │
+   │ • Le vert (--act) dit « un doigt peut agir ici » : case à cocher,    │
+   │   boutons ±, onglet actif, bouton primaire, anneau de focus.         │
+   │   JAMAIS « réussi », jamais une félicitation.                        │
+   │ • Le rouge pur (--due) dit « une échéance réelle est dépassée ».     │
+   │   En texte, et c'est son seul emploi : aucun fond, aucune pastille.  │
+   │ • Une seule exception calculée : la jauge de fraîcheur glisse du     │
+   │   vert (--g-ok) vers l'argile (--g-low) à mesure qu'elle approche    │
+   │   d'« à faire » — voir gaugeColor() dans js/ui.js. Les barres de     │
+   │   quota d'habitudes, elles, ne rougissent JAMAIS : --g-hab, point.   │
+   │ • Tout le reste est neutre chaud. Les teintes --t-* sont des fonds   │
+   │   de carte qui identifient un domaine, pas des sens.                 │
+   │ • Toute autre couleur est un bug de design.                          │
+   └──────────────────────────────────────────────────────────────────────┘
+
+   Ratios de contraste vérifiés par calcul, clair ET sombre : voir le compte
+   rendu du Lot V1-2. Seul ajustement nécessaire : --ink2 est assombri
+   localement sur la teinte Courses (4,46:1 → 4,74:1).
+   ========================================================================== */
+
+:root{
+  /* — surfaces (clair, défaut) — */
+  --bg:#F3EEE5;      /* fond d'écran : crème chaud */
+  --card:#FFFEFA;    /* carte posée : blocs, tab bar, feuilles, toasts */
+  --sunken:#EBE5D8;  /* en creux : boutons ±, chips inactives, piste de jauge */
+  --line:#E3DCCD;    /* filet séparateur 1 px */
+  --line-in:rgba(60,45,20,.10); /* filet à l'intérieur d'une carte teintée */
+  --elev:0 1px 2px rgba(60,45,20,.04), 0 8px 24px rgba(60,45,20,.07);
+  --scrim:rgba(42,37,30,.25);
+  /* — encres — */
+  --ink:#2A251E;     /* texte principal */
+  --ink2:#6E6558;    /* métadonnées, fait, placeholder */
+  /* — couleurs de sens — */
+  --act:#3E6B4F;     /* agissable : case, ±, onglet actif, bouton primaire, focus */
+  --on:#FFFFFF;      /* texte posé sur --act et --due */
+  --due:#A6402E;     /* échéance réelle dépassée, texte et rien d'autre */
+  /* — jauge de fraîcheur — */
+  --g-ok:#7FA36B;    /* remplissage quand la fraîcheur est bonne */
+  --g-low:#C4604E;   /* pôle « à faire » de la rampe (jamais seul en texte) */
+  --g-hab:#7FA36B;   /* quota d'habitudes : TOUJOURS cette couleur, jamais la rampe */
+  --g-track:var(--sunken);
+  /* — teintes de domaine (fonds de cartes uniquement) — */
+  --t-plantes:#E3EADD; --t-maison:#EFE4D0; --t-habitudes:#F2E7CF; --t-courses:#F0E0D8;
+  /* — typo — */
+  --f:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --fs-title:30px; --fs-sec:18px; --fs-item:17px; --fs-body:16px;
+  --fs-low:15px; --fs-meta:13.5px; --fs-tab:11.5px;
+  /* — espacement (base 4) — */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:18px; --s6:22px;
+  /* — rayons — */
+  --r-card:20px; --r-btn:14px; --r-pill:999px;
+  /* — trait — */
+  --stroke:2px;      /* icônes et cases : trait unique de 2 px, terminaisons rondes */
+  /* — motion — */
+  --d1:120ms; --d2:220ms; --ease:cubic-bezier(.2,.7,.3,1);
+}
+html[data-mode="dark"]{
+  --bg:#17140F; --card:#211D16; --sunken:#2B251B; --line:#332C21;
+  --line-in:rgba(255,250,235,.10);
+  --elev:none;
+  --ink:#F2EDE4;
+  --ink2:#A89D8D;
+  --act:#8FC7A4; --on:#17140F;
+  --due:#E8907E;
+  --g-ok:#8FC7A4; --g-low:#D98274; --g-hab:#8FC7A4;
+  --t-plantes:#222A20; --t-maison:#2C2418; --t-habitudes:#2D2617; --t-courses:#2C201B;
+}
+
+/* ---------- Socle ---------- */
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:var(--f);
+  font-size:var(--fs-body); line-height:1.4;
+  font-variant-numeric:tabular-nums;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-text-size-adjust:100%;
+}
+p{margin:0 0 var(--s2);}
+button,input{font:inherit;color:inherit;}
+button{cursor:pointer;}
+svg{display:block;}
+
+:focus-visible{outline:2px solid var(--act); outline-offset:2px;}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.001ms!important; animation-iteration-count:1!important;
+    transition-duration:.001ms!important; scroll-behavior:auto!important;
+  }
+}
+
+.app{
+  padding:max(var(--s5), env(safe-area-inset-top)) var(--s5) calc(96px + env(safe-area-inset-bottom));
+  min-height:100vh;
+}
+.screen{display:none;}
+.screen.active{display:block;}
+
+/* ---------- En-tête d'écran (sur-titre + titre + engrenage discret) ---------- */
+.head{display:flex; align-items:flex-end; justify-content:space-between; gap:var(--s3); margin-bottom:var(--s5);}
+.head-over{font-size:14px; font-weight:500; color:var(--ink2);}
+.head-title{font-size:var(--fs-title); font-weight:700; letter-spacing:-.02em; line-height:1.15; margin:2px 0 0;}
+.gear{
+  flex:none; width:44px; height:44px; margin:0 -10px -6px 0;
+  display:flex; align-items:center; justify-content:center;
+  background:none; border:0; border-radius:50%; color:var(--ink2);
+}
+
+/* ---------- Sur-titre à l'intérieur d'une carte ---------- */
+.overline{font-size:13px; font-weight:700; color:var(--ink2); letter-spacing:.02em; margin-bottom:var(--s2);}
+.overline.due{color:var(--due);}
+
+/* ---------- Carte : un seul niveau d'élévation dans toute l'app ---------- */
+.card{
+  position:relative; /* repère du perchoir d'oiseau (js/ui.js → birdOnCard) */
+  background:var(--card); border-radius:var(--r-card); box-shadow:var(--elev);
+  padding:14px var(--s4); margin-bottom:var(--s3);
+}
+/* Teintes de domaine : à l'intérieur, les filets et la piste de jauge passent
+   en --line-in (le filet clair disparaîtrait sur un fond teinté). */
+.card.t-plantes,.card.t-maison,.card.t-habitudes,.card.t-courses{
+  --line:var(--line-in); --g-track:var(--line-in);
+}
+.card.t-plantes{background:var(--t-plantes);}
+.card.t-maison{background:var(--t-maison);}
+.card.t-habitudes{background:var(--t-habitudes);}
+.card.t-courses{background:var(--t-courses); --ink2:#6A6154;} /* 4,46:1 → 4,74:1 sur cette teinte */
+html[data-mode="dark"] .card.t-courses{--ink2:#A89D8D;}
+
+/* ---------- Boutons ---------- */
+.btn{
+  min-height:52px; padding:0 20px;
+  border:0; border-radius:var(--r-btn);
+  background:var(--sunken); color:var(--ink);
+  font-size:var(--fs-item); font-weight:600;
+}
+.btn.primary{background:var(--act); color:var(--on); font-weight:700;}
+.btn.secondary{background:var(--sunken); color:var(--ink);}
+/* Le rouge plein est réservé à l'échéance : le danger est un contour. */
+.btn.danger{background:none; border:1.5px solid var(--due); color:var(--due);}
+.btn.quiet{background:none; color:var(--ink2); min-height:44px; font-size:var(--fs-low); font-weight:500;}
+.btn-full{width:100%; display:block; margin-top:var(--s1);}
+.btn:disabled{opacity:.5; pointer-events:none;}
+
+/* ---------- Chips (état, pas action : inversion achromatique, pas de vert) ---------- */
+.chip{
+  height:40px; padding:0 var(--s4);
+  border:1px solid var(--line); border-radius:var(--r-pill);
+  background:var(--sunken); color:var(--ink);
+  font-size:14.5px; font-weight:500;
+}
+.chip.on{background:var(--ink); border-color:var(--ink); color:var(--bg); font-weight:600;}
+.chips{display:flex; gap:var(--s2); flex-wrap:wrap;}
+
+/* ---------- Jauge de fraîcheur ---------- */
+.gauge{height:12px; border-radius:var(--r-pill); background:var(--g-track); overflow:hidden;}
+.gauge-fill{height:100%; border-radius:inherit; background:var(--g-ok); transition:width var(--d2) var(--ease);}
+/* Quota d'habitude : ne rougit jamais, quelle que soit la valeur. */
+.gauge-fill.hab{background:var(--g-hab);}
+
+/* ---------- Listes ---------- */
+.list{list-style:none; margin:0; padding:0;}
+.row{
+  display:flex; align-items:center; gap:var(--s3);
+  min-height:56px; padding:var(--s3) 0;
+  border-bottom:1px solid var(--line);
+}
+.row:last-child{border-bottom:0;}
+.row-main{flex:1; min-width:0;}
+.row-title{font-size:var(--fs-item); font-weight:600;}
+.row-meta{font-size:var(--fs-meta); color:var(--ink2); margin-top:2px;}
+.row-meta .due{color:var(--due); font-weight:600;}
+.row.done .row-title{color:var(--ink2); font-weight:500; text-decoration:line-through;}
+
+/* Case ronde : cible 44 px, visuel 26 px (marge négative, pas un gros rond).
+   La coche est un masque SVG embarqué (data URI) — aucun fichier, aucun CDN. */
+:root{--ic-check:url('data:image/svg+xml;utf8,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpath d="M5 12.5l4.5 4.5L19 7.5"/%3E%3C/svg%3E');}
+.check{
+  flex:none; position:relative; width:44px; height:44px; margin:-9px 0 -9px -9px;
+  padding:0; background:none; border:0; border-radius:50%;
+}
+.check::before{
+  content:''; position:absolute; inset:0; margin:auto;
+  width:26px; height:26px; border-radius:50%;
+  border:var(--stroke) solid var(--act);
+}
+.check.on::before{background:var(--act);}
+.check.on::after{
+  content:''; position:absolute; inset:0; margin:auto; width:14px; height:14px;
+  background:var(--on);
+  -webkit-mask:var(--ic-check) center/contain no-repeat; mask:var(--ic-check) center/contain no-repeat;
+}
+
+/* ---------- Interrupteur (cible 44 px, visuel 52 × 32) ---------- */
+.switch{
+  flex:none; position:relative; width:52px; height:44px; padding:0;
+  background:none; border:0; border-radius:var(--r-pill);
+}
+.switch::before{
+  content:''; position:absolute; inset:0; margin:auto; width:52px; height:32px;
+  border-radius:var(--r-pill); background:var(--sunken);
+  transition:background var(--d1) var(--ease);
+}
+.switch::after{
+  content:''; position:absolute; top:0; bottom:0; left:3px; margin:auto;
+  width:26px; height:26px; border-radius:50%; background:var(--card);
+  box-shadow:0 1px 3px rgba(60,45,20,.25);
+  transition:transform var(--d1) var(--ease);
+}
+.switch.on::before{background:var(--act);}
+.switch.on::after{transform:translateX(20px);}
+
+.row-del,.row-postpone{
+  flex:none; width:44px; height:44px; margin-right:-10px;
+  display:flex; align-items:center; justify-content:center;
+  background:none; border:0; border-radius:50%; color:var(--ink2);
+}
+
+/* ---------- Champ et barre d'ajout rapide ---------- */
+.field{
+  flex:1; min-width:0; height:50px; padding:0 14px;
+  background:var(--card); border:1px solid var(--line); border-radius:var(--r-btn);
+  color:var(--ink); font-size:var(--fs-body);
+}
+.field::placeholder{color:var(--ink2); opacity:1;}
+.field-full{width:100%;}
+.field.area{height:auto; min-height:88px; padding:12px 14px; line-height:1.4; resize:vertical;}
+.addbar{display:flex; gap:10px; margin-top:var(--s4);}
+
+/* ---------- Lot V1-3 : recherche, filtres et groupes de l'écran Tâches ---------- */
+.search-field{margin-bottom:var(--s4);}
+.filter-chips{margin-bottom:var(--s4);}
+.field-group{margin-top:var(--s4);}
+.field-group:first-child{margin-top:0;}
+.group-head{display:flex; align-items:center; justify-content:space-between; margin:var(--s5) 0 var(--s2);}
+.group-head:first-child{margin-top:0;}
+.group-head .overline{margin-bottom:0;}
+.group-toggle{
+  flex:none; min-height:44px; padding:0 var(--s2); margin:-10px -8px -10px 0;
+  background:none; border:0; color:var(--ink2); font-size:var(--fs-meta); font-weight:600;
+}
+.list.group-someday{opacity:.65;}
+
+/* ---------- Lot V1-4 : récurrence (fiche tâche) et vue par pièce (Maison) ---------- */
+.repeat-n{display:flex; align-items:center; gap:var(--s2);}
+.repeat-n .field{width:76px; flex:none; text-align:center;}
+.room-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:var(--s2);}
+.room-head .overline{margin-bottom:0;}
+.room-tag{font-size:var(--fs-meta); font-weight:600; color:var(--ink2);}
+.room-gauge{margin:2px 0 var(--s4);}
+.row-gauge .row-main .gauge{margin-top:6px;}
+.add-btn{
+  flex:none; width:50px; height:50px;
+  display:flex; align-items:center; justify-content:center;
+  border:0; border-radius:var(--r-btn); background:var(--act); color:var(--on);
+}
+
+/* ---------- Feuilles modales ---------- */
+.sheet-bg{
+  position:fixed; inset:0; background:var(--scrim);
+  display:none; align-items:flex-end; justify-content:center; z-index:50;
+}
+.sheet-bg.show{display:flex; animation:fadeBg var(--d2) var(--ease);}
+.sheet{
+  background:var(--card); width:100%; max-width:560px;
+  border-radius:var(--r-card) var(--r-card) 0 0;
+  padding:10px var(--s5) calc(var(--s6) + env(safe-area-inset-bottom));
+  max-height:85vh; overflow-y:auto; overflow-x:hidden;
+  box-shadow:0 -10px 40px rgba(42,37,30,.18);
+}
+.sheet-bg.show .sheet{animation:sheetUp var(--d2) var(--ease);}
+@keyframes fadeBg{from{opacity:0;}to{opacity:1;}}
+@keyframes sheetUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+@media (prefers-reduced-motion:reduce){
+  .sheet-bg.show,.sheet-bg.show .sheet{animation:none;}
+}
+.handle{
+  width:100%; min-height:44px; padding:10px 0;
+  display:flex; align-items:center; justify-content:center; touch-action:none;
+}
+.handle::before{content:''; display:block; width:38px; height:5px; border-radius:3px; background:var(--line);}
+.sheet-title{font-size:19px; font-weight:700; margin:0 0 14px;}
+.sheet-msg{color:var(--ink2); margin:0 0 var(--s4);}
+
+/* ---------- Tab bar (4 onglets, zone sûre iOS) ---------- */
+.tabbar{
+  position:fixed; left:0; right:0; bottom:0; display:flex;
+  background:var(--card); border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom); z-index:40;
+}
+.tab{
+  flex:1; min-width:0; min-height:56px; padding:10px 4px 20px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--s1);
+  background:none; border:0;
+  color:var(--ink2); font-size:var(--fs-tab); font-weight:600;
+  transition:color var(--d1) var(--ease);
+}
+.tab.on{color:var(--act);}
+
+/* ---------- Micro-présences d'oiseaux ----------
+   Purement décoratif : jamais cliquable, jamais annoncé, jamais animé. Le SVG
+   déborde de 18,75 % sous son perchoir pour que les pattes s'y posent — la
+   position verticale est calculée dans birdSvg() (js/ui.js). */
+.bird{position:absolute; pointer-events:none; user-select:none;}
+
+/* ---------- État vide (même structure sur les six écrans) ---------- */
+.empty{text-align:center; padding:96px 20px 40px;}
+.empty-perch{position:relative; width:110px; height:2px; border-radius:1px; background:var(--line); margin:0 auto;}
+.empty-title{font-size:20px; font-weight:700; margin:26px 0 0;}
+.empty-sub{font-size:var(--fs-low); color:var(--ink2); margin:var(--s2) 0 0;}
+
+/* ---------- Toast : carte posée, un filet, une action ---------- */
+.toast{
+  position:fixed; left:50%; bottom:calc(96px + env(safe-area-inset-bottom));
+  transform:translateX(-50%) translateY(12px);
+  display:flex; align-items:center; gap:14px;
+  background:var(--card); color:var(--ink);
+  border:1px solid var(--line); box-shadow:var(--elev);
+  padding:10px var(--s5); border-radius:var(--r-btn);
+  font-size:var(--fs-low);
+  opacity:0; pointer-events:none;
+  transition:opacity var(--d2) var(--ease), transform var(--d2) var(--ease);
+  /* Fixé et centré par left:50% : sans width:max-content il ne dispose que de
+     la moitié droite de l'écran et le libellé se coupe en deux lignes. */
+  z-index:60; width:max-content; max-width:min(90vw, 480px); text-align:left;
+}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto;}
+/* Un toast d'alerte se lit, il ne crie pas : le rouge reste du texte. */
+.toast.danger{color:var(--due); border-color:var(--due);}
+.toast-act{
+  flex:none; min-height:44px; margin:-10px -8px -10px 0; padding:0 var(--s2);
+  background:none; border:0; border-radius:var(--r-btn);
+  color:var(--act); font-size:var(--fs-low); font-weight:600;
+}
+
+/* ---------- Au-delà de 900 px : colonne centrée plafonnée (desktop en V2) ---------- */
+@media (min-width:900px){
+  .app{max-width:560px; margin:0 auto;}
+  .tabbar{padding-left:calc((100vw - 560px)/2); padding-right:calc((100vw - 560px)/2);}
+}
+
+/* ==========================================================================
+   PROPOSITION Lot V1-5 — « Aujourd'hui », aligné sur la maquette Canopée
+   (maquettes/MyLife Canopée.html, écrans « Aujourd'hui » et « Aujourd'hui —
+   état vide »). Arbitrage du 27/07/2026 : LA MAQUETTE FAIT FOI, y compris
+   contre le code déjà livré aux Lots 3 et 4.
+
+   Conséquence à traiter au moment du code : la référence n'emploie PAS
+   .overline comme titre de groupe. Elle réserve ce style 13 px / --due au
+   seul « Échéance dépassée », et donne aux titres de section un vrai
+   18 px / 700 en --ink (.sec ci-dessous). js/tasks.js (groupes) et
+   js/maison.js (pièces) doivent basculer sur .sec, et les cartes de pièce
+   redevenir blanches avec leur jauge à droite.
+
+   Aucune couleur nouvelle : --act pour ce qu'un doigt actionne, --due pour la
+   seule échéance dépassée, --ink2 pour tout le reste.
+   ========================================================================== */
+
+/* ---------- Titre de section posé sur la page (hors carte) ----------
+   18 px/700 en --ink + compteur discret. C'est le titre de groupe de la
+   référence, sur Aujourd'hui comme sur Tâches (« Cette semaine 4 »). */
+.sec{display:flex; align-items:baseline; gap:var(--s2); margin:var(--s1) var(--s1) 6px;}
+.sec-title{font-size:var(--fs-sec); font-weight:700; margin:0;}
+.sec-count{font-size:14px; font-weight:600; color:var(--ink2);}
+
+/* Registre bas — « Ce soir », « Si tu as 10 minutes ». Même dégradé que
+   « Un jour » sur l'écran Tâches de la référence : le titre perd sa taille
+   ET sa couleur, il passe en --ink2. */
+.sec.soft{margin:var(--s5) var(--s1) var(--s1);}
+.sec.soft .sec-title{font-size:14px; font-weight:600; color:var(--ink2);}
+
+/* Titre de section à l'intérieur d'une carte teintée : même 18 px/700. */
+.card-title{font-size:var(--fs-sec); font-weight:700; margin:0 0 var(--s1);}
+
+/* Liste posée à même la page. Le bloc du jour n'est PAS une carte : c'est
+   ce qui le rend dominant — il respire pleine largeur pendant que les blocs
+   secondaires sont boîtés. Le retrait de 4 px aligne son texte sur les cartes. */
+.list-page{padding:0 var(--s1);}
+
+/* Ligne du registre bas : plus petite, sans méta, case de 24 px. */
+.row-low{min-height:48px; padding:var(--s2) var(--s1);}
+.row-low .row-title{font-size:var(--fs-low); font-weight:500;}
+.row-low .check::before{width:24px; height:24px;}
+
+/* « + 2 autres » : lien vert aligné à gauche, pas un bouton pleine largeur.
+   La référence en fait un <a> sans cible tactile ; on garde son aspect et on
+   lui rend ses 44 px, qu'exige CONVENTIONS.md §3. */
+.more{
+  display:block; min-height:44px; padding:0 var(--s1);
+  background:none; border:0; color:var(--act);
+  font-size:14.5px; font-weight:600; text-align:left;
+}
+
+/* Jauge de fraîcheur posée À DROITE de la ligne (entretien sur Aujourd'hui).
+   C'est la disposition de la référence, sur Aujourd'hui comme sur Maison. */
+.gauge-side{flex:none; width:110px;}
+/* Jauge posée sous la méta, largeur bridée : un soin de plante dû, qui vit
+   dans le bloc du jour et non dans le bloc Entretien (ROADMAP §6.2). */
+.gauge-in{max-width:170px; margin-top:var(--s2);}
+
+/* ---------- Habitude : nombre, série, et deux boutons posés ----------
+   Aucune barre ici : sur Aujourd'hui la référence ne montre que la valeur et
+   la série. La barre --g-hab existe, mais elle vit sur l'écran Habitudes.
+   Une habitude se mesure en série et en quota (CONVENTIONS.md §6). */
+.hab-val{font-size:var(--fs-body); font-weight:700; color:var(--ink);}
+.step{
+  flex:none; width:44px; height:44px;
+  border:0; border-radius:var(--r-btn);
+  background:var(--card); color:var(--act);
+  font-size:22px; font-weight:700; line-height:1;
+  box-shadow:var(--elev);
+}
+.skip{
+  flex:none; min-height:44px; padding:10px 6px;
+  background:none; border:0; color:var(--ink2);
+  font-size:var(--fs-meta); font-weight:500;
+}
+/* Habitude déjà au quota : elle reste posée là jusqu'à demain, en retrait.
+   Pas de barré — un quota atteint n'est pas une case cochée — et toujours
+   actionnable (on peut boire un septième verre). */
+.row-soft .row-title{color:var(--ink2); font-weight:500;}
+
+/* ---------- Courses : une seule destination, donc un seul bouton ---------- */
+.shop{
+  display:flex; align-items:center; justify-content:space-between; gap:var(--s3);
+  width:100%; min-height:58px; padding:var(--s4); margin-bottom:var(--s3);
+  background:var(--t-courses); border:0; border-radius:var(--r-card);
+  box-shadow:var(--elev); color:var(--ink);
+  font-size:var(--fs-body); font-weight:600; text-align:left;
+}
+.shop-l{display:flex; align-items:center; gap:10px;}
+.shop-go{flex:none; color:var(--act); font-size:14px; font-weight:600;}
+
+/* ---------- État vide ----------
+   La référence pose l'oiseau plus bas que le 96 px du Lot 2. Un seul état
+   vide est dessiné dans la maquette : la valeur vaut donc pour les six écrans. */
+.empty{padding-top:140px;}
+
+/* ==========================================================================
+   CADRE DE MAQUETTE — NE PART PAS DANS index.html.
+   Uniquement là pour regarder l'écran à la taille d'un iPhone sur un grand
+   écran : cadre de 390 × 844, contenu qui défile sous une tab bar épinglée.
+   Rien ici ne décrit l'app. Sous 430 px de large (donc sur l'iPhone), tout ce
+   bloc s'efface et la page redevient exactement l'app.
+   ========================================================================== */
+body{background:#DED7C8;}
+.mock-cap{
+  width:390px; margin:26px auto 10px; padding:0 4px;
+  font-family:var(--f); font-size:12.5px; font-weight:600; color:#6E6558; letter-spacing:.02em;
+}
+.mock-page{
+  position:relative; display:flex; flex-direction:column;
+  width:390px; height:844px; margin:0 auto 44px;
+  background:var(--bg); border-radius:34px; overflow:hidden auto;
+  box-shadow:0 24px 70px rgba(60,45,20,.22);
+}
+.mock-page .app{flex:1 0 auto; min-height:0; padding:22px 18px 24px;}
+.mock-page .tabbar{position:sticky; bottom:0; padding-left:0; padding-right:0;}
+.mock-page .tab{padding-bottom:12px;}
+
+@media (max-width:430px){
+  body{background:var(--bg);}
+  .mock-cap{display:none;}
+  .mock-page{
+    display:block; width:auto; height:auto; min-height:100vh;
+    margin:0; border-radius:0; box-shadow:none; overflow:visible;
+  }
+  .mock-page .app{padding:max(18px, env(safe-area-inset-top)) 18px calc(96px + env(safe-area-inset-bottom));}
+  .mock-page .tabbar{position:fixed;}
+  .mock-page .tab{padding-bottom:20px;}
+}
+</style>
+</head>
+<body>
+
+<p class="mock-cap">Maquette Lot V1-5 — journée chargée</p>
+
+<div class="mock-page">
+<div class="app">
+<section class="screen active">
+
+  <!-- ===== En-tête : screenHead(longDate(), 'Aujourd'hui') ===================
+       Identique à la référence Canopée : sur-titre daté, titre 30 px,
+       engrenage seule porte vers Réglages. ============================ -->
+  <header class="head">
+    <div>
+      <div class="head-over">Lundi 27 juillet</div>
+      <h1 class="head-title">Aujourd'hui</h1>
+    </div>
+    <button class="gear" aria-label="Réglages"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.5 1.5M16.5 16.5L18 18M18 6l-1.5 1.5M7.5 16.5L6 18"></path></svg></button>
+  </header>
+
+  <!-- ===== 1. Échéances dépassées (ROADMAP §6.1) =========================
+       Le seul bloc que la référence enferme dans une carte BLANCHE, et le seul
+       endroit où .overline garde son emploi d'origine : 13 px/700 en --due.
+       Seules les vraies deadlines ; jamais un start passé — c'est ce qui
+       empêche le mur de honte. Le rouge tient en deux textes : ce sur-titre et
+       « Passée de N jours ». Aucun fond, aucune pastille, aucun compteur.
+       Tri : la plus ancienne d'abord. La référence n'en montrait qu'une, d'où
+       son singulier ; à deux, le pluriel s'impose. ====================== -->
+  <div class="card">
+    <div class="overline due">Échéances dépassées</div>
+    <ul class="list">
+      <li class="row">
+        <button class="check" aria-label="Marquer fait"></button>
+        <div class="row-main">
+          <div class="row-title">Déclarer les revenus fonciers</div>
+          <div class="row-meta"><span class="due">Passée de 3 jours</span> · Admin</div>
+        </div>
+      </li>
+      <li class="row">
+        <button class="check" aria-label="Marquer fait"></button>
+        <div class="row-main">
+          <div class="row-title">Renvoyer le contrat d'assurance signé</div>
+          <div class="row-meta"><span class="due">Passée d'un jour</span> · Admin</div>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <!-- ===== 2. Aujourd'hui (ROADMAP §6.2) =================================
+       LE bloc de l'écran. Il est dominant parce qu'il n'est PAS une carte :
+       il respire pleine largeur, avec un vrai titre 18 px et un compteur,
+       pendant que tous les blocs secondaires sont boîtés et teintés.
+       Contenu : start ≤ aujourd'hui, récurrences dues, soins de plantes dus.
+       Le compteur donne ce qu'il RESTE à faire, pas le total.
+       Tri : priorité puis ancienneté — la priorité ne s'affiche pas, elle se
+       lit dans l'ordre.
+       « Arroser le monstera » est un soin de plante dû : il vit ici, avec sa
+       jauge bridée à 170 px, et non dans le bloc Entretien.
+       « Sortir les poubelles » vient d'être cochée : elle reste en place,
+       barrée, jusqu'au prochain démarrage — un item qui s'évapore sous le
+       doigt désoriente et fausse le compteur. ========================== -->
+  <div class="sec">
+    <h2 class="sec-title">Aujourd'hui</h2>
+    <span class="sec-count">4</span>
+  </div>
+  <ul class="list list-page">
+    <li class="row">
+      <button class="check" aria-label="Marquer fait"></button>
+      <div class="row-main">
+        <div class="row-title">Arroser le monstera</div>
+        <div class="row-meta">Salon · <b>À faire</b></div>
+        <div class="gauge gauge-in"><div class="gauge-fill" style="width:8%;background:color-mix(in oklab, var(--g-low) 93%, var(--g-ok))"></div></div>
+      </div>
+    </li>
+    <li class="row">
+      <button class="check" aria-label="Marquer fait"></button>
+      <div class="row-main">
+        <div class="row-title">Appeler le garagiste</div>
+        <div class="row-meta">Perso · 5 min</div>
+      </div>
+    </li>
+    <li class="row">
+      <button class="check" aria-label="Marquer fait"></button>
+      <div class="row-main">
+        <div class="row-title">Préparer la réunion de jeudi</div>
+        <div class="row-meta">Perso · Reportée 3 fois</div>
+      </div>
+    </li>
+    <li class="row">
+      <button class="check" aria-label="Marquer fait"></button>
+      <div class="row-main">
+        <div class="row-title">Répondre à Marc</div>
+        <div class="row-meta">Perso</div>
+      </div>
+    </li>
+    <li class="row done">
+      <button class="check on" aria-label="Marquer non fait"></button>
+      <div class="row-main">
+        <div class="row-title">Sortir les poubelles</div>
+      </div>
+    </li>
+  </ul>
+  <button class="more">+ 2 autres</button>
+
+  <!-- ===== 3. Entretien (ROADMAP §6.3) ===================================
+       Les 3 jauges les plus basses, toutes pièces confondues. Carte teintée,
+       titre 18 px, et la jauge posée À DROITE de la ligne sur 110 px — c'est
+       la disposition de la référence, ici comme sur l'écran Maison.
+       Jamais un retard : la méta dit « Il y a 29 jours », et quand la jauge
+       touche le fond elle dit « À faire » en gras, pas « en retard ».
+       Le rouge n'entre pas — la rampe calculée de gaugeColor() glisse du vert
+       à l'argile, seule exception admise à la discipline chromatique.
+       Pas de case à cocher : un tap sur la ligne suffit, comme dans Maison.
+       L'oiseau de l'écran est posé sur le bord supérieur de cette carte. == -->
+  <div class="card t-maison">
+    <svg class="bird" viewBox="0 0 120 160" aria-hidden="true" focusable="false" style="width:30px;height:40px;bottom:calc(100% - 8px);right:22px;">
+      <path d="M66 104 L80 146 L68 149 L56 112 Z" fill="#9AA0AA"/>
+      <path d="M52 120 L52 130 M62 120 L62 130" fill="none" stroke="#8A7A62" stroke-width="3" stroke-linecap="round"/>
+      <path d="M46 20 C44 8 54 2 62 6 C56 7 52 11 52 16 Z" fill="#F4CDD3"/>
+      <path d="M52 18 C52 5 64 1 70 7 C64 7 58 11 58 17 Z" fill="#F4CDD3"/>
+      <path d="M58 18 C60 7 72 6 75 13 C69 12 63 15 62 20 Z" fill="#F4CDD3"/>
+      <path d="M56 16 C74 16 85 32 85 54 C85 80 76 104 62 116 C51 123 40 117 38 103 C35 82 37 48 43 32 C47 21 50 16 56 16 Z" fill="#E77E8E"/>
+      <path d="M62 44 C77 42 84 56 80 77 C76 95 62 103 55 94 C49 83 51 52 62 44 Z" fill="#B9BEC6"/>
+      <path d="M41 19 C30 20 26 31 35 37 C37 38.5 39.5 38.5 41 37 C36.5 32 37 24 42 21.5 Z" fill="#D8CFC3"/>
+      <path d="M35 36 C37 41 43 42 46 38.5 L41 33.5 Z" fill="#C4B8A8"/>
+      <circle cx="51" cy="26" r="4" fill="#FFFFFF"/><circle cx="50.4" cy="26" r="2" fill="#2A251E"/>
+    </svg>
+    <h2 class="card-title">Entretien</h2>
+    <ul class="list">
+      <li class="row">
+        <div class="row-main">
+          <div class="row-title">Douche</div>
+          <div class="row-meta">Salle de bain · <b>À faire</b></div>
+        </div>
+        <div class="gauge gauge-side"><div class="gauge-fill" style="width:6%;background:color-mix(in oklab, var(--g-low) 96%, var(--g-ok))"></div></div>
+      </li>
+      <li class="row">
+        <div class="row-main">
+          <div class="row-title">Vitres</div>
+          <div class="row-meta">Salon · Il y a 29 jours</div>
+        </div>
+        <div class="gauge gauge-side"><div class="gauge-fill" style="width:12%;background:color-mix(in oklab, var(--g-low) 87%, var(--g-ok))"></div></div>
+      </li>
+      <li class="row">
+        <div class="row-main">
+          <div class="row-title">Changer les draps</div>
+          <div class="row-meta">Chambre · Il y a 11 jours</div>
+        </div>
+        <div class="gauge gauge-side"><div class="gauge-fill" style="width:22%;background:color-mix(in oklab, var(--g-low) 72%, var(--g-ok))"></div></div>
+      </li>
+    </ul>
+  </div>
+
+  <!-- ===== 4. Habitudes du jour (ROADMAP §6.4) ===========================
+       Saisie en ligne, jamais un écran de plus. AUCUNE BARRE ici : la
+       référence ne montre sur Aujourd'hui que la valeur en gras, le quota et
+       la série. La barre --g-hab existe bien, mais elle vit sur l'écran
+       Habitudes, avec les séries et les jours sautés. Une habitude se mesure
+       en série et en quota, jamais en jauge (CONVENTIONS.md §6).
+       Les ± sont des boutons blancs posés sur la teinte, glyphe 22 px, verts
+       parce qu'un doigt agit dessus — pas parce que c'est bien. « Sauter »
+       reste en --ink2 : c'est une sortie, pas une action qu'on encourage.
+       Règle de la référence, reprise telle quelle : jamais « Sauter » et deux
+       boutons sur la même ligne. À zéro, on peut encore sauter la journée
+       (« Sauter » + « + ») ; dès qu'une valeur est saisie, sauter n'a plus de
+       sens et le « − » prend sa place.
+       « Verres d'eau » est déjà au quota : en retrait, sans barré, et toujours
+       actionnable. Le titre du bloc mène à l'écran Habitudes — c'est leur
+       seule porte, elles n'ont pas d'onglet (ROADMAP §6 bis). ========== -->
+  <div class="card t-habitudes">
+    <h2 class="card-title">Habitudes du jour</h2>
+    <ul class="list">
+      <li class="row">
+        <div class="row-main">
+          <div class="row-title">Lecture</div>
+          <div class="row-meta"><b class="hab-val">0</b> / 20 pages · Série 12 j</div>
+        </div>
+        <button class="skip">Sauter</button>
+        <button class="step" aria-label="Ajouter une page">+</button>
+      </li>
+      <li class="row row-soft">
+        <div class="row-main">
+          <div class="row-title">Verres d'eau</div>
+          <div class="row-meta"><b class="hab-val">6</b> / 6 verres · Série 4 j</div>
+        </div>
+        <button class="step" aria-label="Retirer un verre">−</button>
+        <button class="step" aria-label="Ajouter un verre">+</button>
+      </li>
+    </ul>
+  </div>
+
+  <!-- ===== 5. Courses (ROADMAP §6.5) =====================================
+       Une seule ligne, jamais la liste. Ce n'est pas une tâche : rien à
+       cocher, un bouton entier qui mène à l'onglet Courses, et le mot
+       « Voir » en vert plutôt qu'un chevron gris — c'est la seule action de
+       ce bloc, elle se nomme. ========================================== -->
+  <button class="shop">
+    <span class="shop-l"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11H6.2z"></path><path d="M9 8V6a3 3 0 0 1 6 0v2"></path></svg>7 articles à acheter</span>
+    <span class="shop-go">Voir</span>
+  </button>
+
+  <!-- ===== 6. Ce soir (ROADMAP §6.6) =====================================
+       Sous-section discrète en bas, hors carte : titre 14 px en --ink2, ligne
+       de 48 px, case de 24 px, titre de tâche en 15 px. C'est l'élément le
+       plus léger de l'écran, et c'est voulu — la soirée n'a pas à peser sur
+       la matinée. ===================================================== -->
+  <div class="sec soft"><h2 class="sec-title">Ce soir</h2></div>
+  <ul class="list list-page">
+    <li class="row row-low">
+      <button class="check" aria-label="Marquer fait"></button>
+      <div class="row-main"><div class="row-title">Lancer le lave-vaisselle</div></div>
+    </li>
+  </ul>
+
+  <!-- ===== 7. Si tu as 10 minutes (ROADMAP §6.7) =========================
+       1 à 3 tâches du bucket anytime (jamais someday) à effort 1. C'est le
+       mécanisme qui empêche le « un jour » de pourrir silencieusement.
+       ABSENT de la maquette Canopée : ce bloc est ajouté ici parce que la
+       roadmap l'exige. Il n'invente rien pour autant — il reprend mot pour
+       mot la grammaire du groupe « Un jour » de l'écran Tâches de la
+       référence : titre en --ink2, lignes de 15 px, hors carte. ======= -->
+  <div class="sec soft"><h2 class="sec-title">Si tu as 10 minutes</h2></div>
+  <ul class="list list-page">
+    <li class="row row-low">
+      <button class="check" aria-label="Marquer fait"></button>
+      <div class="row-main"><div class="row-title">Trier la boîte à courrier</div></div>
+    </li>
+    <li class="row row-low">
+      <button class="check" aria-label="Marquer fait"></button>
+      <div class="row-main"><div class="row-title">Changer l'ampoule du couloir</div></div>
+    </li>
+  </ul>
+
+</section>
+</div>
+
+<nav class="tabbar">
+  <button class="tab on"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 1.8"></path></svg>Aujourd'hui</button>
+  <button class="tab"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"></path></svg>Tâches</button>
+  <button class="tab"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"></path></svg>Maison</button>
+  <button class="tab"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11H6.2z"></path><path d="M9 8V6a3 3 0 0 1 6 0v2"></path></svg>Courses</button>
+</nav>
+</div>
+
+</body>
+</html>

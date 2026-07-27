@@ -3,14 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>MyLife</title>
-<meta name="description" content="Qu'est-ce que je dois faire maintenant ? Tâches, entretien, plantes, habitudes, courses — hors-ligne.">
+<title>MyLife — maquette « Aujourd'hui », tout est fait (Lot V1-5)</title>
 <meta name="theme-color" content="#F3EEE5">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="MyLife">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png">
+<!-- ==========================================================================
+     MAQUETTE STATIQUE — Lot V1-5, étape 1. La même journée que today.html,
+     mais tout a été fait. C'est le principe 6 de CONVENTIONS.md §3 :
+     « L'app doit savoir dire c'est bon pour aujourd'hui — et alors ne rien
+     proposer d'autre. » Cet écran ne contient donc AUCUNE cible tactile hors
+     la navigation : ni entretien, ni habitude, ni courses, ni « si tu as 10
+     minutes ». Le silence est le message.
+     ========================================================================== -->
 <style>
 /* ==========================================================================
    MyLife — design system « Canopée » (Lot V1-2). Tout le CSS de l'app vit ici.
@@ -248,92 +250,33 @@ html[data-mode="dark"] .card.t-courses{--ink2:#A89D8D;}
 .field.area{height:auto; min-height:88px; padding:12px 14px; line-height:1.4; resize:vertical;}
 .addbar{display:flex; gap:10px; margin-top:var(--s4);}
 
-/* ---------- Lot V1-3 : recherche, filtres et champs de feuille ---------- */
+/* ---------- Lot V1-3 : recherche, filtres et groupes de l'écran Tâches ---------- */
 .search-field{margin-bottom:var(--s4);}
 .filter-chips{margin-bottom:var(--s4);}
 .field-group{margin-top:var(--s4);}
 .field-group:first-child{margin-top:0;}
+.group-head{display:flex; align-items:center; justify-content:space-between; margin:var(--s5) 0 var(--s2);}
+.group-head:first-child{margin-top:0;}
+.group-head .overline{margin-bottom:0;}
+.group-toggle{
+  flex:none; min-height:44px; padding:0 var(--s2); margin:-10px -8px -10px 0;
+  background:none; border:0; color:var(--ink2); font-size:var(--fs-meta); font-weight:600;
+}
+.list.group-someday{opacity:.65;}
 
-/* ---------- Lot V1-4 : récurrence (fiche tâche) ---------- */
+/* ---------- Lot V1-4 : récurrence (fiche tâche) et vue par pièce (Maison) ---------- */
 .repeat-n{display:flex; align-items:center; gap:var(--s2);}
 .repeat-n .field{width:76px; flex:none; text-align:center;}
+.room-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:var(--s2);}
+.room-head .overline{margin-bottom:0;}
+.room-tag{font-size:var(--fs-meta); font-weight:600; color:var(--ink2);}
+.room-gauge{margin:2px 0 var(--s4);}
+.row-gauge .row-main .gauge{margin-top:6px;}
 .add-btn{
   flex:none; width:50px; height:50px;
   display:flex; align-items:center; justify-content:center;
   border:0; border-radius:var(--r-btn); background:var(--act); color:var(--on);
 }
-
-/* ==========================================================================
-   Lot V1-5 — « Aujourd'hui », et mise en conformité de Tâches et Maison.
-
-   Arbitrage du 27/07/2026 : la maquette (maquettes/MyLife Canopée.html) fait
-   foi, y compris contre le code des Lots 3 et 4. Ce bloc corrige la dérive
-   qui y avait été constatée : .overline avait été généralisé comme titre de
-   groupe à partir du seul « Échéance dépassée » de la maquette — qui est en
-   13 px parce qu'il est en --due, pas parce que c'est le style des titres.
-   .overline reprend donc son emploi d'origine (ce seul sur-titre), et les
-   titres de section passent en 18 px/700 --ink : .sec et .card-title.
-   ========================================================================== */
-
-/* ---------- Titre de section posé sur la page (hors carte) ----------
-   18 px/700 + compteur discret. Sur Aujourd'hui comme sur Tâches. */
-.sec{display:flex; align-items:baseline; gap:var(--s2); margin:var(--s5) var(--s1) 6px;}
-.sec:first-child{margin-top:var(--s1);}
-.sec-title{font-size:var(--fs-sec); font-weight:700; margin:0;}
-.sec-count{font-size:14px; font-weight:600; color:var(--ink2);}
-.sec .group-toggle{margin-left:auto;}
-/* Registre bas — « Ce soir », « Si tu as 10 minutes », « Un jour », « Peut-être ».
-   Le titre perd sa taille ET sa couleur : ce n'est plus une section, c'est une marge. */
-.sec.soft{margin:var(--s5) var(--s1) var(--s1);}
-.sec.soft .sec-title{font-size:14px; font-weight:600; color:var(--ink2);}
-.group-toggle{
-  flex:none; min-height:44px; padding:0 var(--s2); margin:-10px -8px -10px 0;
-  background:none; border:0; color:var(--ink2); font-size:var(--fs-meta); font-weight:600;
-}
-
-/* Titre de section à l'intérieur d'une carte : même 18 px/700. */
-.card-title{font-size:var(--fs-sec); font-weight:700; margin:0 0 var(--s1);}
-
-/* Liste posée à même la page. Le bloc du jour n'est PAS une carte : c'est ce
-   qui le rend dominant — il respire pleine largeur pendant que les blocs
-   secondaires sont boîtés. Le retrait de 4 px aligne son texte sur les cartes. */
-.list-page{padding:0 var(--s1);}
-
-/* Ligne du registre bas : plus petite, case de 24 px. */
-.row-low{min-height:48px; padding:var(--s2) var(--s1);}
-.row-low .row-title{font-size:var(--fs-low); font-weight:500;}
-.row-low .check::before{width:24px; height:24px;}
-
-/* « + N autres » : lien aligné à gauche, pas un bouton pleine largeur. La
-   maquette en fait un <a> sans cible tactile ; on garde son aspect et on lui
-   rend ses 44 px, qu'exige CONVENTIONS.md §3. */
-.more{
-  display:block; min-height:44px; padding:0 var(--s1);
-  background:none; border:0; color:var(--act);
-  font-size:14.5px; font-weight:600; text-align:left;
-}
-
-/* ---------- Ligne d'entretien : jauge de fraîcheur posée À DROITE ----------
-   Disposition de la maquette, sur Aujourd'hui comme sur Maison. Remplace les
-   jauges pleine largeur sous le titre posées au Lot 4. */
-.row-care{min-height:52px;}
-.row-care .row-title{font-size:var(--fs-body); font-weight:600;}
-.row-care .row-meta{font-size:13px;}
-/* Sur Maison, tout l'écran est de l'entretien : le titre n'a plus à tenir tête
-   à des tâches de 17 px, il s'allège. */
-.room-list .row-care .row-title{font-weight:500;}
-
-.gauge-side{flex:none; width:110px;}                   /* jauge seule (Aujourd'hui) */
-.gauge-cell{flex:none; width:110px; text-align:right;} /* jauge + légende (Maison) */
-.gauge-cell .gauge{width:100%;}
-.gauge-cap{font-size:12px; color:var(--ink2); margin-top:4px;}
-
-/* En-tête de pièce (Maison) : nom à gauche, jauge agrégée à droite, un filet
-   dessous. La jauge agrégée est plus large que celles des lignes — c'est la
-   seule différence de largeur qui porte un sens. */
-.room-head{display:flex; align-items:center; gap:var(--s3); padding-bottom:10px; border-bottom:1px solid var(--line);}
-.room-head .card-title{flex:1; margin:0;}
-.room-head .gauge-cell{width:120px;}
 
 /* ---------- Feuilles modales ---------- */
 .sheet-bg{
@@ -383,10 +326,8 @@ html[data-mode="dark"] .card.t-courses{--ink2:#A89D8D;}
    position verticale est calculée dans birdSvg() (js/ui.js). */
 .bird{position:absolute; pointer-events:none; user-select:none;}
 
-/* ---------- État vide (même structure sur les six écrans) ----------
-   140 px de haut : c'est la valeur de la maquette (Lot V1-5). Un seul état
-   vide y est dessiné, celui d'« Aujourd'hui » — il vaut pour les six écrans. */
-.empty{text-align:center; padding:140px 20px 40px;}
+/* ---------- État vide (même structure sur les six écrans) ---------- */
+.empty{text-align:center; padding:96px 20px 40px;}
 .empty-perch{position:relative; width:110px; height:2px; border-radius:1px; background:var(--line); margin:0 auto;}
 .empty-title{font-size:20px; font-weight:700; margin:26px 0 0;}
 .empty-sub{font-size:var(--fs-low); color:var(--ink2); margin:var(--s2) 0 0;}
@@ -420,48 +361,207 @@ html[data-mode="dark"] .card.t-courses{--ink2:#A89D8D;}
   .app{max-width:560px; margin:0 auto;}
   .tabbar{padding-left:calc((100vw - 560px)/2); padding-right:calc((100vw - 560px)/2);}
 }
+
+/* ==========================================================================
+   PROPOSITION Lot V1-5 — « Aujourd'hui », aligné sur la maquette Canopée
+   (maquettes/MyLife Canopée.html, écrans « Aujourd'hui » et « Aujourd'hui —
+   état vide »). Arbitrage du 27/07/2026 : LA MAQUETTE FAIT FOI, y compris
+   contre le code déjà livré aux Lots 3 et 4.
+
+   Conséquence à traiter au moment du code : la référence n'emploie PAS
+   .overline comme titre de groupe. Elle réserve ce style 13 px / --due au
+   seul « Échéance dépassée », et donne aux titres de section un vrai
+   18 px / 700 en --ink (.sec ci-dessous). js/tasks.js (groupes) et
+   js/maison.js (pièces) doivent basculer sur .sec, et les cartes de pièce
+   redevenir blanches avec leur jauge à droite.
+
+   Aucune couleur nouvelle : --act pour ce qu'un doigt actionne, --due pour la
+   seule échéance dépassée, --ink2 pour tout le reste.
+   ========================================================================== */
+
+/* ---------- Titre de section posé sur la page (hors carte) ----------
+   18 px/700 en --ink + compteur discret. C'est le titre de groupe de la
+   référence, sur Aujourd'hui comme sur Tâches (« Cette semaine 4 »). */
+.sec{display:flex; align-items:baseline; gap:var(--s2); margin:var(--s1) var(--s1) 6px;}
+.sec-title{font-size:var(--fs-sec); font-weight:700; margin:0;}
+.sec-count{font-size:14px; font-weight:600; color:var(--ink2);}
+
+/* Registre bas — « Ce soir », « Si tu as 10 minutes ». Même dégradé que
+   « Un jour » sur l'écran Tâches de la référence : le titre perd sa taille
+   ET sa couleur, il passe en --ink2. */
+.sec.soft{margin:var(--s5) var(--s1) var(--s1);}
+.sec.soft .sec-title{font-size:14px; font-weight:600; color:var(--ink2);}
+
+/* Titre de section à l'intérieur d'une carte teintée : même 18 px/700. */
+.card-title{font-size:var(--fs-sec); font-weight:700; margin:0 0 var(--s1);}
+
+/* Liste posée à même la page. Le bloc du jour n'est PAS une carte : c'est
+   ce qui le rend dominant — il respire pleine largeur pendant que les blocs
+   secondaires sont boîtés. Le retrait de 4 px aligne son texte sur les cartes. */
+.list-page{padding:0 var(--s1);}
+
+/* Ligne du registre bas : plus petite, sans méta, case de 24 px. */
+.row-low{min-height:48px; padding:var(--s2) var(--s1);}
+.row-low .row-title{font-size:var(--fs-low); font-weight:500;}
+.row-low .check::before{width:24px; height:24px;}
+
+/* « + 2 autres » : lien vert aligné à gauche, pas un bouton pleine largeur.
+   La référence en fait un <a> sans cible tactile ; on garde son aspect et on
+   lui rend ses 44 px, qu'exige CONVENTIONS.md §3. */
+.more{
+  display:block; min-height:44px; padding:0 var(--s1);
+  background:none; border:0; color:var(--act);
+  font-size:14.5px; font-weight:600; text-align:left;
+}
+
+/* Jauge de fraîcheur posée À DROITE de la ligne (entretien sur Aujourd'hui).
+   C'est la disposition de la référence, sur Aujourd'hui comme sur Maison. */
+.gauge-side{flex:none; width:110px;}
+/* Jauge posée sous la méta, largeur bridée : un soin de plante dû, qui vit
+   dans le bloc du jour et non dans le bloc Entretien (ROADMAP §6.2). */
+.gauge-in{max-width:170px; margin-top:var(--s2);}
+
+/* ---------- Habitude : nombre, série, et deux boutons posés ----------
+   Aucune barre ici : sur Aujourd'hui la référence ne montre que la valeur et
+   la série. La barre --g-hab existe, mais elle vit sur l'écran Habitudes.
+   Une habitude se mesure en série et en quota (CONVENTIONS.md §6). */
+.hab-val{font-size:var(--fs-body); font-weight:700; color:var(--ink);}
+.step{
+  flex:none; width:44px; height:44px;
+  border:0; border-radius:var(--r-btn);
+  background:var(--card); color:var(--act);
+  font-size:22px; font-weight:700; line-height:1;
+  box-shadow:var(--elev);
+}
+.skip{
+  flex:none; min-height:44px; padding:10px 6px;
+  background:none; border:0; color:var(--ink2);
+  font-size:var(--fs-meta); font-weight:500;
+}
+/* Habitude déjà au quota : elle reste posée là jusqu'à demain, en retrait.
+   Pas de barré — un quota atteint n'est pas une case cochée — et toujours
+   actionnable (on peut boire un septième verre). */
+.row-soft .row-title{color:var(--ink2); font-weight:500;}
+
+/* ---------- Courses : une seule destination, donc un seul bouton ---------- */
+.shop{
+  display:flex; align-items:center; justify-content:space-between; gap:var(--s3);
+  width:100%; min-height:58px; padding:var(--s4); margin-bottom:var(--s3);
+  background:var(--t-courses); border:0; border-radius:var(--r-card);
+  box-shadow:var(--elev); color:var(--ink);
+  font-size:var(--fs-body); font-weight:600; text-align:left;
+}
+.shop-l{display:flex; align-items:center; gap:10px;}
+.shop-go{flex:none; color:var(--act); font-size:14px; font-weight:600;}
+
+/* ---------- État vide ----------
+   La référence pose l'oiseau plus bas que le 96 px du Lot 2. Un seul état
+   vide est dessiné dans la maquette : la valeur vaut donc pour les six écrans. */
+.empty{padding-top:140px;}
+
+/* ==========================================================================
+   CADRE DE MAQUETTE — NE PART PAS DANS index.html.
+   Uniquement là pour regarder l'écran à la taille d'un iPhone sur un grand
+   écran : cadre de 390 × 844, contenu qui défile sous une tab bar épinglée.
+   Rien ici ne décrit l'app. Sous 430 px de large (donc sur l'iPhone), tout ce
+   bloc s'efface et la page redevient exactement l'app.
+   ========================================================================== */
+body{background:#DED7C8;}
+.mock-cap{
+  width:390px; margin:26px auto 10px; padding:0 4px;
+  font-family:var(--f); font-size:12.5px; font-weight:600; color:#6E6558; letter-spacing:.02em;
+}
+.mock-page{
+  position:relative; display:flex; flex-direction:column;
+  width:390px; height:844px; margin:0 auto 44px;
+  background:var(--bg); border-radius:34px; overflow:hidden auto;
+  box-shadow:0 24px 70px rgba(60,45,20,.22);
+}
+.mock-page .app{flex:1 0 auto; min-height:0; padding:22px 18px 24px;}
+.mock-page .tabbar{position:sticky; bottom:0; padding-left:0; padding-right:0;}
+.mock-page .tab{padding-bottom:12px;}
+
+@media (max-width:430px){
+  body{background:var(--bg);}
+  .mock-cap{display:none;}
+  .mock-page{
+    display:block; width:auto; height:auto; min-height:100vh;
+    margin:0; border-radius:0; box-shadow:none; overflow:visible;
+  }
+  .mock-page .app{padding:max(18px, env(safe-area-inset-top)) 18px calc(96px + env(safe-area-inset-bottom));}
+  .mock-page .tabbar{position:fixed;}
+  .mock-page .tab{padding-bottom:20px;}
+}
 </style>
 </head>
 <body>
+
+<p class="mock-cap">Maquette Lot V1-5 — tout est fait</p>
+
+<div class="mock-page">
 <div class="app">
-  <section id="s-today" class="screen active"></section>
-  <section id="s-tasks" class="screen"></section>
-  <section id="s-maison" class="screen"></section>
-  <section id="s-shopping" class="screen"></section>
-  <section id="s-habits" class="screen"></section>
-  <section id="s-settings" class="screen"></section>
+<section class="screen active">
+
+  <!-- ===== Même en-tête, exactement. ======================================
+       L'écran ne change pas de nom parce qu'il est vide : c'est toujours
+       « Aujourd'hui », lundi 27 juillet. Rien ne signale un état dégradé. == -->
+  <header class="head">
+    <div>
+      <div class="head-over">Lundi 27 juillet</div>
+      <h1 class="head-title">Aujourd'hui</h1>
+    </div>
+    <button class="gear" aria-label="Réglages"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.5 1.5M16.5 16.5L18 18M18 6l-1.5 1.5M7.5 16.5L6 18"></path></svg></button>
+  </header>
+
+  <!-- ===== L'état vide, repris trait pour trait de la référence ===========
+       emptyState() du Lot V1-2 : perchoir, oiseau, phrase, sous-ligne. La même
+       structure que les cinq autres écrans — le « c'est bon » n'est pas un
+       écran spécial, c'est l'état vide de celui-ci. Seul ajustement venu de la
+       maquette : l'oiseau descend à 140 px du haut au lieu de 96.
+
+       Ce qu'il n'y a PAS ici, et c'est tout le sujet :
+         · aucun entretien à proposer, même si une jauge descend encore ;
+         · aucune habitude, même non atteinte ;
+         · aucune ligne de courses ;
+         · aucun « si tu as 10 minutes » — c'est le moment où il serait le plus
+           tentant de le montrer, donc précisément celui où il ne faut pas ;
+         · aucun récapitulatif de la journée : la référence ne remplit pas son
+           propre silence, et j'avais eu tort d'en ajouter un.
+       Hors navigation, l'écran n'a aucune cible tactile.
+
+       RÉSERVE À TRANCHER : la phrase ci-dessous est celle de la maquette
+       Canopée, mot pour mot. Elle suppose une tâche du soir encore en attente.
+       Dans ce scénario-ci — tout est fait, lave-vaisselle compris — elle
+       devient fausse. Soit on accepte, soit il faut une seconde variante. == -->
+  <div class="empty">
+    <div class="empty-perch">
+      <svg class="bird" viewBox="0 0 120 160" aria-hidden="true" focusable="false" style="width:64px;height:85px;bottom:calc(100% - 16px);left:50%;margin-left:-32px;">
+        <path d="M66 104 L80 146 L68 149 L56 112 Z" fill="#9AA0AA"/>
+        <path d="M52 120 L52 130 M62 120 L62 130" fill="none" stroke="#8A7A62" stroke-width="3" stroke-linecap="round"/>
+        <path d="M46 20 C44 8 54 2 62 6 C56 7 52 11 52 16 Z" fill="#F4CDD3"/>
+        <path d="M52 18 C52 5 64 1 70 7 C64 7 58 11 58 17 Z" fill="#F4CDD3"/>
+        <path d="M58 18 C60 7 72 6 75 13 C69 12 63 15 62 20 Z" fill="#F4CDD3"/>
+        <path d="M56 16 C74 16 85 32 85 54 C85 80 76 104 62 116 C51 123 40 117 38 103 C35 82 37 48 43 32 C47 21 50 16 56 16 Z" fill="#E77E8E"/>
+        <path d="M62 44 C77 42 84 56 80 77 C76 95 62 103 55 94 C49 83 51 52 62 44 Z" fill="#B9BEC6"/>
+        <path d="M41 19 C30 20 26 31 35 37 C37 38.5 39.5 38.5 41 37 C36.5 32 37 24 42 21.5 Z" fill="#D8CFC3"/>
+        <path d="M35 36 C37 41 43 42 46 38.5 L41 33.5 Z" fill="#C4B8A8"/>
+        <circle cx="51" cy="26" r="4" fill="#FFFFFF"/><circle cx="50.4" cy="26" r="2" fill="#2A251E"/>
+      </svg>
+    </div>
+    <p class="empty-title">C'est bon pour aujourd'hui.</p>
+    <p class="empty-sub">Rien ne demande ton attention avant ce soir.</p>
+  </div>
+
+</section>
 </div>
 
-<nav class="tabbar" id="tabbar">
-  <button class="tab on" data-s="today" onclick="go('today')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 1.8"></path></svg>Aujourd'hui</button>
-  <button class="tab" data-s="tasks" onclick="go('tasks')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"></path></svg>Tâches</button>
-  <button class="tab" data-s="maison" onclick="go('maison')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"></path></svg>Maison</button>
-  <button class="tab" data-s="shopping" onclick="go('shopping')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11H6.2z"></path><path d="M9 8V6a3 3 0 0 1 6 0v2"></path></svg>Courses</button>
+<nav class="tabbar">
+  <button class="tab on"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 1.8"></path></svg>Aujourd'hui</button>
+  <button class="tab"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"></path></svg>Tâches</button>
+  <button class="tab"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"></path></svg>Maison</button>
+  <button class="tab"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11H6.2z"></path><path d="M9 8V6a3 3 0 0 1 6 0v2"></path></svg>Courses</button>
 </nav>
+</div>
 
-<div class="sheet-bg" id="sheet-bg"><div class="sheet" id="sheet"></div></div>
-<div class="toast" id="toast"></div>
-
-<!-- Application en scripts <script> classiques, portée globale unique, aucun
-     bundler. ORDRE DE CHARGEMENT IMPÉRATIF (CONVENTIONS.md §1) : les 3
-     catalogues d'abord, puis state.js (socle), puis boot.js en dernier.
-     Miroir obligatoire dans sw.js (ASSETS) et test.mjs (FILES). -->
-<script src="data/rayons.js"></script>
-<script src="data/plantes.js"></script>
-<script src="data/entretien.js"></script>
-<script src="data/oiseaux.js"></script>
-<script src="js/state.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/recur.js"></script>
-<script src="js/nlp.js"></script>
-<script src="js/today.js"></script>
-<script src="js/tasks.js"></script>
-<script src="js/maison.js"></script>
-<script src="js/plants.js"></script>
-<script src="js/habits.js"></script>
-<script src="js/shopping.js"></script>
-<script src="js/review.js"></script>
-<script src="js/settings.js"></script>
-<script src="js/boot.js"></script>
 </body>
 </html>

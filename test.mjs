@@ -189,6 +189,109 @@ call('Maison — entretien créé, visible en Maison, absent des tâches ouverte
   if(t.doneAt <= before) throw new Error('tapMaisonItem devrait rafraîchir doneAt');
 });
 
+// 6 ter) Écran « Aujourd'hui » (Lot V1-5) : l'algorithme de la roadmap §6. C'est
+// l'écran qu'il est cher de rater, donc la répartition des blocs est testée
+// directement sur todayBuckets(), pas seulement par ricochet via le rendu.
+const DEFAUT_TACHE = {
+  title: 'x', notes: '', cat: 'perso', room: null, bucket: 'anytime',
+  start: null, due: null, evening: false, prio: 0, effort: 2,
+  repeat: null, history: [], doneAt: null, postponed: 0,
+};
+const mk = o => {
+  const t = win.stamp(Object.assign({}, DEFAUT_TACHE, {touchedAt: Date.now()}, o));
+  S.tasks.push(t);
+  return t;
+};
+const has = (list, t) => list.some(x => x.id === t.id);
+// Chaque scénario part d'une ardoise vide puis rend les tâches préexistantes.
+const scenario = (label, build) => call(label, () => {
+  const backup = S.tasks.slice();
+  S.tasks.length = 0;
+  try{ build(); } finally { S.tasks.length = 0; backup.forEach(t => S.tasks.push(t)); }
+});
+
+scenario('Aujourd’hui — répartition des blocs, aucun item dans deux blocs à la fois', () => {
+  const today = win.todayKey();
+  const retard = mk({title: 'Retard', bucket: 'scheduled', due: win.addDays(today, -3)});
+  const debut  = mk({title: 'Début passé', bucket: 'scheduled', start: win.addDays(today, -2)});
+  const soir   = mk({title: 'Soir', bucket: 'scheduled', start: today, evening: true});
+  const court  = mk({title: 'Court', bucket: 'anytime', effort: 1});
+  const peut   = mk({title: 'Peut-être court', bucket: 'someday', effort: 1});
+  const futur  = mk({title: 'Futur', bucket: 'scheduled', start: win.addDays(today, 3)});
+  const b = win.todayBuckets();
+
+  if(!has(b.overdue, retard)) throw new Error('une échéance dépassée doit occuper le bloc 1');
+  if(has(b.scheduled, retard)) throw new Error('une échéance dépassée ne doit pas être AUSSI dans le bloc du jour');
+  // La règle qui empêche le mur de honte (ROADMAP §6.1).
+  if(!has(b.scheduled, debut)) throw new Error('un start passé doit simplement remonter dans le bloc du jour');
+  if(has(b.overdue, debut)) throw new Error('un start passé ne doit JAMAIS produire une échéance dépassée');
+  if(!has(b.evening, soir)) throw new Error('une tâche « ce soir » doit aller dans son bloc');
+  if(has(b.scheduled, soir)) throw new Error('une tâche « ce soir » ne doit pas être aussi dans le bloc du jour');
+  if(!has(b.quick, court)) throw new Error('une tâche anytime à effort court doit être proposée');
+  if(has(b.quick, peut)) throw new Error('« si tu as 10 minutes » ne doit JAMAIS proposer du someday');
+  if(has(b.scheduled, futur)) throw new Error('une tâche à venir n’a rien à faire dans le bloc du jour');
+
+  // Pastille iOS : ce qui reste dû. L'offre « 10 minutes » n'en fait pas partie.
+  if(win.todayBadgeCount() !== 3)
+    throw new Error('pastille attendue à 3 (retard + jour + soir), obtenue ' + win.todayBadgeCount());
+});
+
+scenario('Aujourd’hui — entretien : seules les jauges basses remontent, au plus 3', () => {
+  const rep = {kind: 'day', n: 10, days: [], from: 'done'};
+  const frais = mk({title: 'Frais', room: 'salon', repeat: rep, doneAt: Date.now()});
+  const bas = mk({title: 'Bas', room: 'salon', repeat: rep, doneAt: Date.now() - 9 * 86400000});
+  const b = win.todayBuckets();
+  if(b.soins.some(x => x.t.id === frais.id))
+    throw new Error('un entretien encore frais ne doit pas encombrer Aujourd’hui — sinon l’écran ne sait jamais dire « c’est bon »');
+  if(!b.soins.some(x => x.t.id === bas.id)) throw new Error('un entretien proche d’« à faire » doit remonter');
+  if(b.soins.length > 3) throw new Error('au plus 3 entretiens (ROADMAP §6.3)');
+  // Un entretien vit dans son bloc, jamais dans la liste des tâches du jour.
+  if(has(b.scheduled, bas) || has(b.overdue, bas)) throw new Error('un entretien ne doit pas fuiter dans les blocs de tâches');
+});
+
+scenario('Aujourd’hui — cochée dans la session : elle reste barrée et sort des blocs ouverts', () => {
+  const t = mk({title: 'À cocher', bucket: 'scheduled', start: win.todayKey()});
+  win.go('today');
+  win.todayDone(t.id);
+  const b = win.todayBuckets();
+  if(has(b.scheduled, t)) throw new Error('une tâche cochée ne doit plus compter comme à faire');
+  if(!has(b.done, t)) throw new Error('une tâche cochée doit rester posée, barrée, jusqu’au prochain démarrage');
+  if(win.document.querySelectorAll('#s-today .row.done').length !== 1)
+    throw new Error('la ligne cochée devrait être rendue barrée');
+});
+
+scenario('Aujourd’hui — état vide : il le dit, et ne propose RIEN d’autre (principe 6)', () => {
+  // Un entretien encore frais et une tâche « peut-être » : ni l'un ni l'autre
+  // ne doit servir de prétexte à remplir l'écran.
+  mk({title: 'Frais', room: 'salon', repeat: {kind: 'day', n: 10, days: [], from: 'done'}, doneAt: Date.now()});
+  mk({title: 'Pas mûr', bucket: 'someday', effort: 1});
+  win.go('today');
+  const el = win.document.getElementById('s-today');
+  if(!/C’est bon pour aujourd’hui\./.test(el.textContent)) throw new Error('l’état vide devrait le dire clairement');
+  if(/10 minutes|Entretien|Pas mûr|Frais/.test(el.textContent)) throw new Error('l’état vide ne doit rien proposer d’autre');
+  if(el.querySelectorAll('.check, .more, .row').length)
+    throw new Error('aucune cible tactile hors navigation sur l’état vide');
+  if(el.querySelectorAll('.bird').length !== 1) throw new Error('l’état vide garde son oiseau, un seul');
+  if(win.todayBadgeCount() !== 0) throw new Error('pastille à 0 quand tout est fait');
+});
+
+scenario('Aujourd’hui — plafond todayCap et « + N autres »', () => {
+  const today = win.todayKey();
+  S.settings.todayCap = 2;
+  for(let i = 0; i < 5; i++) mk({title: 'Tâche ' + i, bucket: 'scheduled', start: today});
+  win.go('today');
+  const el = win.document.getElementById('s-today');
+  if(el.querySelectorAll('.list-page .row').length !== 2)
+    throw new Error('le plafond todayCap devrait limiter la liste à 2, obtenu ' + el.querySelectorAll('.list-page .row').length);
+  const more = el.querySelector('.more');
+  if(!more || !/\+ 3 autres/.test(more.textContent)) throw new Error('« + 3 autres » attendu sous la liste plafonnée');
+  win.toggleTodayMore();
+  if(win.document.querySelectorAll('#s-today .list-page .row').length !== 5)
+    throw new Error('déplier devrait montrer les 5 tâches');
+  win.toggleTodayMore();
+  S.settings.todayCap = 7;
+});
+
 // 7) Écriture immédiate puis relecture directe dans IndexedDB — équivalent, pour ce
 //    test de fumée, à vérifier la persistance après un rechargement de l'app.
 if(typeof win.saveNow === 'function'){
@@ -225,5 +328,7 @@ if(fails.length){
   fails.forEach(f => console.error('  - ' + f));
   process.exit(1);
 } else {
-  console.log('✓ Test fumée OK — 6 écrans, cycle de vie d’une tâche, oiseaux, casse, persistance.');
+  console.log('✓ Test fumée OK — 6 écrans, cycle de vie d’une tâche, oiseaux, casse,\n' +
+              '  récurrence, Maison, algorithme d’« Aujourd’hui » (blocs, seuil d’entretien,\n' +
+              '  cochage de session, plafond, état vide, pastille) et persistance.');
 }

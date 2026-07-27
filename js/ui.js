@@ -31,6 +31,14 @@ function go(name){
   if(render) render();
 }
 
+// Re-rend l'écran affiché, quel qu'il soit. Depuis le Lot V1-5, la fiche
+// tâche s'ouvre aussi bien depuis Tâches que depuis Aujourd'hui : enregistrer
+// ou supprimer doit rafraîchir l'écran d'où l'on vient, pas Tâches par défaut.
+function rerender(){
+  const render = RENDERERS[CURRENT_SCREEN];
+  if(render) render();
+}
+
 function reduceMotion(){
   return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 }
@@ -145,6 +153,14 @@ function emptyState(titre, sous){
 function gaugeColor(f){
   const p = f >= 0.7 ? 0 : Math.min(100, Math.round((0.7 - f) * 150));
   return p === 0 ? 'var(--g-ok)' : 'color-mix(in oklab, var(--g-low) '+p+'%, var(--g-ok))';
+}
+
+// Largeur du remplissage. Plancher à 4 % : à zéro, une jauge de fraîcheur doit
+// se lire « au bout », pas « absente » — une pilule entièrement vide passe pour
+// une donnée manquante. Réservé à la fraîcheur : un quota d'habitude à zéro
+// (Lot 10) doit bien afficher zéro.
+function gaugeWidth(f){
+  return Math.max(4, Math.round(f * 100)) + '%';
 }
 
 /* ---------- Toast : carte posée, une seule action facultative ---------- */

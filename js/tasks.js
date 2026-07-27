@@ -75,10 +75,10 @@ function taskMeta(t, today){
   return bits.join(' · ');
 }
 
-function taskRowHtml(t, allowPostpone){
+function taskRowHtml(t, allowPostpone, soft){
   const today = todayKey();
   const meta = taskMeta(t, today);
-  return '<li class="row">'+
+  return '<li class="row'+(soft ? ' row-low' : '')+'">'+
     '<button class="check" aria-label="Marquer fait" onclick="doneTask(\''+t.id+'\')"></button>'+
     '<div class="row-main" onclick="taskSheet(\''+t.id+'\')">'+
       '<div class="row-title">'+esc(t.title)+'</div>'+
@@ -89,17 +89,23 @@ function taskRowHtml(t, allowPostpone){
   '</li>';
 }
 
-function taskGroupHtml(title, list, allowPostpone){
+// Un groupe = un titre 18 px/700 + son compteur, puis la liste posée à même la
+// page. Les deux derniers groupes (« Un jour », « Peut-être ») passent au
+// registre bas : titre 14 px --ink2 et lignes de 15 px. Mise en conformité
+// avec la maquette au Lot V1-5 — c'était `.overline` 13 px auparavant.
+function taskGroupHtml(title, list, opts){
   if(!list.length) return '';
-  return '<div class="group-head"><span class="overline">'+esc(title)+' ('+list.length+')</span></div>'+
-    '<ul class="list">'+list.map(t=>taskRowHtml(t, allowPostpone)).join('')+'</ul>';
-}
-
-function taskGroupSomedayHtml(list){
-  if(!list.length) return '';
-  return '<div class="group-head"><span class="overline">Peut-être ('+list.length+')</span>'+
-    '<button class="group-toggle" onclick="toggleSomeday()">'+(_somedayOpen?'Masquer':'Afficher')+'</button></div>'+
-    (_somedayOpen ? '<ul class="list group-someday">'+list.map(t=>taskRowHtml(t, false)).join('')+'</ul>' : '');
+  opts = opts || {};
+  const soft = !!opts.soft;
+  const toggle = opts.toggle
+    ? '<button class="group-toggle" onclick="toggleSomeday()">'+(_somedayOpen?'Masquer':'Afficher')+'</button>'
+    : '';
+  const body = opts.collapsed ? ''
+    : '<ul class="list list-page">'+list.map(t=>taskRowHtml(t, opts.postpone, soft)).join('')+'</ul>';
+  return '<div class="sec'+(soft ? ' soft' : '')+'">'+
+      '<h2 class="sec-title">'+esc(title)+'</h2>'+
+      '<span class="sec-count">'+list.length+'</span>'+toggle+
+    '</div>'+body;
 }
 
 function renderTaskGroups(){
@@ -118,10 +124,10 @@ function renderTaskGroups(){
   const gAny = items.filter(t=> t.bucket==='anytime');
   const gSome = items.filter(t=> t.bucket==='someday');
 
-  const html = taskGroupHtml('Aujourd’hui et avant', gNow, true)+
-    taskGroupHtml('À venir', gSoon, false)+
-    taskGroupHtml('Un jour', gAny, false)+
-    taskGroupSomedayHtml(gSome);
+  const html = taskGroupHtml('Aujourd’hui et avant', gNow, {postpone:true})+
+    taskGroupHtml('À venir', gSoon)+
+    taskGroupHtml('Un jour', gAny, {soft:true})+
+    taskGroupHtml('Peut-être', gSome, {soft:true, toggle:true, collapsed:!_somedayOpen});
   return html || emptyState('Aucun résultat.', 'Essaie une autre recherche ou retire le filtre.');
 }
 
@@ -179,7 +185,7 @@ function doneTask(id){
   if(!t) return;
   completeTask(t); // recalcule l'échéance et la fraîcheur si récurrente (js/recur.js)
   save();
-  renderTasks();
+  rerender();
 }
 
 function delTask(id){
@@ -189,13 +195,13 @@ function delTask(id){
     t.deletedAt = Date.now();
     touch(t);
     save();
-    renderTasks();
+    rerender();
     // Tombstone, donc annulable tant que le toast est là : on remet deletedAt à null.
     toast('Tâche supprimée', {action:{label:'Annuler', fn:()=>{
       t.deletedAt = null;
       touch(t);
       save();
-      renderTasks();
+      rerender();
     }}});
   });
 }
@@ -362,5 +368,5 @@ function saveTaskSheet(){
   }
   save();
   closeSheet();
-  renderTasks();
+  rerender(); // la fiche s'ouvre aussi depuis Aujourd'hui (Lot V1-5)
 }
