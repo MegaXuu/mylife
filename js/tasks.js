@@ -155,29 +155,7 @@ function renderTasks(){
       '<button class="chip'+(!_taskCat?' on':'')+'" onclick="setTaskCat(null)">Toutes</button>'+catChips+
     '</div>'+
     '<div id="task-groups">'+renderTaskGroups()+'</div>'+
-    '<div class="addbar">'+
-      '<input id="task-input" class="field" type="text" placeholder="Ajouter une tâche…" '+
-        'autocomplete="off" autocapitalize="sentences" enterkeyhint="done" '+
-        'onkeydown="if(event.key===\'Enter\')addTask()">'+
-      '<button class="add-btn" aria-label="Ajouter" onclick="addTask()">'+
-        icon('<path d="M12 5v14M5 12h14"></path>', 24)+
-      '</button>'+
-    '</div>';
-}
-
-function addTask(){
-  const input = document.getElementById('task-input');
-  const title = cap((input && input.value || '').trim()); // majuscule initiale, cf. ui.js
-  if(!title) return;
-  S.tasks.push(stamp({
-    title, notes:'', cat:'perso', room:null, bucket:'anytime',
-    start:null, due:null, evening:false, prio:0, effort:2, repeat:null, history:[],
-    postponed:0, touchedAt:Date.now()
-  }));
-  save();
-  renderTasks();
-  const ni = document.getElementById('task-input');
-  if(ni) ni.focus();
+    captureBarHtml();
 }
 
 function doneTask(id){

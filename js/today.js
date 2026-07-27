@@ -227,7 +227,7 @@ function renderToday(){
   if(!vide && b.quick.length) html += softSection('Si tu as 10 minutes', b.quick);
 
   document.getElementById('s-today').innerHTML =
-    screenHead(longDate(), 'Aujourd\'hui') + html;
+    screenHead(longDate(), 'Aujourd\'hui') + html + captureBarHtml();
 }
 
 /* ---------- Actions ---------- */

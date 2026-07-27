@@ -120,7 +120,9 @@ uniquement des déclarations.
   `.repeat-n` (fiche tâche, Lot 4), et le bloc **Lot 5** : `.sec(.soft)/.sec-title/.sec-count`
   (titre de section 18 px + compteur, remplace l'emploi de `.overline` comme titre de groupe),
   `.card-title`, `.list-page` (liste posée hors carte), `.row-low` (registre bas), `.more`,
-  `.row-care`, `.gauge-side/.gauge-cell/.gauge-cap`, `.room-head`, `.group-toggle`.
+  `.row-care`, `.gauge-side/.gauge-cell/.gauge-cap`, `.room-head`, `.group-toggle`, et le bloc
+  **Lot 6** : `.capture`, `.cap-chips`, `.cap-chip`, `.cap-details` (barre de capture — réutilisent
+  `.addbar/.field/.add-btn/.chip/.btn.quiet` déjà en place).
   Au-delà de **900 px** : colonne centrée plafonnée à 560 px (desktop optimisé en V2).
 - `js/state.js` — **socle**, aucun rendu DOM : `APP_VERSION`, IndexedDB (`openDb`/`idbGet`/`idbSet`,
   + `idbPutPhoto`/`idbGetPhoto`/`idbDelPhoto` pour le store `photos`), `defaults()`/`migrate()`,
@@ -148,7 +150,9 @@ uniquement des déclarations.
   facultatifs, `from` (« à date fixe » / « après réalisation »), phrase en clair sous les champs
   (`repeatSummary()`). `doneTask()` passe désormais par `completeTask()` (`js/recur.js`) : une tâche
   `from:'due'` reste active et voit son échéance avancer (`doneAt` redevient `null`), une tâche
-  `from:'done'` pose `doneAt` sur l'instant présent.
+  `from:'done'` pose `doneAt` sur l'instant présent. **Depuis le Lot 6**, l'ancien champ « Ajouter une
+  tâche » (`addTask()`) a été retiré : `renderTasks()` se termine par `captureBarHtml()`
+  (`js/nlp.js`), un seul chemin de saisie pour tout l'écran (CONVENTIONS.md §3, principe 5).
 - `js/today.js` — écran **« Aujourd'hui », posé au Lot 5**. `todayBuckets()` est le seul endroit où
   se décide ce qui compte : une passe unique qui répartit en `overdue` (échéance réelle dépassée) /
   `evening` / `scheduled` (le bloc du jour) / `quick` (anytime à effort 1) / `soins` (entretien) /
@@ -158,6 +162,7 @@ uniquement des déclarations.
   bloc du jour, « + N autres »). `todayBadgeCount()` alimente la pastille iOS. Les cochages de la
   session (`tickToday`) gardent une ligne barrée à sa place jusqu'au prochain démarrage : rien n'est
   persisté, ce n'est pas un journal. Porte aussi `longDate()` (sur-titre « Lundi 27 juillet »).
+  `renderToday()` se termine par `captureBarHtml()` (`js/nlp.js`), comme Tâches — depuis le Lot 6.
 - `js/habits.js`, `js/shopping.js` — placeholders, chacun `renderX()` écrit
   `screenHead(...) + emptyState('Bientôt.', '…')` dans son `#s-x`.
 - `js/maison.js` — écran Maison, **vue par pièce posée au Lot 4** : `getMaisonItems()` regroupe les
@@ -184,10 +189,29 @@ uniquement des déclarations.
   bornée [0,1], jamais négative), `completeTask(task, ref)` (historise, recalcule `due`, remet
   `postponed` à 0). Partagé entre l'entretien maison (`js/maison.js`) et, au Lot 7, les soins de
   plantes.
-- `js/nlp.js`, `js/plants.js`, `js/review.js` — placeholders **sans conteneur DOM propre** (pas de
-  `#s-nlp` etc.) : `renderX()` renvoie juste un fragment `emptyState()`, jamais appelée par `go()`.
-  Existent uniquement pour figer l'ordre de chargement et les listes miroir ; logique réelle aux
-  Lots 6 (nlp), 7 (plants), 10 (review).
+- `js/nlp.js` — **rempli au Lot 6**, toujours **sans conteneur DOM propre** (pas de `#s-nlp`, jamais
+  appelé par `go()`) mais plus un placeholder. Deux parties : `parseQuick(texte, ref, ignore)`,
+  fonction **pure** (aucun DOM, aucune horloge lue en dehors de `ref`) qui reconnaît dates
+  relatives/absolues, échéance explicite (`avant le`/`pour le`/`deadline` → `due`, une date simple
+  → `start`), récurrence (`tous les N jours/semaines/mois/ans`, `chaque jour`, jours fixes de
+  semaine, suffixe `après`/`après réalisation`/`après la dernière fois` → `repeat.from:'done'`,
+  sinon `'due'`), priorité (`!!`/`urgent`, `!`/`important`), effort (`5 min`/`10 min`/`court`,
+  `1 h`/`long`), catégorie/pièce par dièse (mots reconnus = `CAT_ORDER`/`ROOM_ORDER`, `js/tasks.js`) ;
+  tout le reste reste dans `title`, intégralement — normalise la ponctuation collée à un mot
+  (`avant le 5,`) pour les frontières d'espace des règles, puis la recolle en sortie. Le 3ᵉ argument
+  `ignore` (tableau de clés `date/repeat/prio/effort/cat/room`) désactive une règle sans réinterpréter
+  son fragment, qui revient donc dans le titre. Puis la **barre de capture universelle**
+  (`captureBarHtml()`, montée par `today.js` et `tasks.js`, ids scopés `cap-input-<écran>` /
+  `cap-preview-<écran>` car les deux écrans restent dans le DOM en même temps) : aperçu à puces sous
+  le champ (`capturePreviewHtml()`, une puce par entrée de `matched[]`, chacune supprimable →
+  `removeCaptureChip()`), `commitCapture()` crée la tâche directement, `openCaptureDetails()` ouvre
+  la fiche du Lot 3 préremplie pour ce que le langage naturel n'a pas couvert. Testé isolément dans
+  `test.mjs` (plus de 50 cas sur `parseQuick()`, plus le mécanisme d'ignorance) : c'est le seul
+  module de l'app qui mérite de vrais tests unitaires.
+- `js/plants.js`, `js/review.js` — placeholders **sans conteneur DOM propre** (pas de `#s-plants`
+  etc.) : `renderX()` renvoie juste un fragment `emptyState()`, jamais appelée par `go()`. Existent
+  uniquement pour figer l'ordre de chargement et les listes miroir ; logique réelle aux Lots 7
+  (plants), 10 (review).
 - `data/rayons.js` (`RAYONS`), `data/plantes.js` (`PLANTES`) — structures vides commentées, remplies
   aux Lots 9, 7.
 - `data/entretien.js` (`ENTRETIEN`) — **rempli au Lot 4** : une quarantaine de modèles d'entretien
@@ -212,6 +236,12 @@ uniquement des déclarations.
 ## Lancer / tester
 - Ouvrir `index.html` dans un navigateur (ou servir en local, ex. `python3 -m http.server`). Les
   fonctions PWA (service worker, stockage persistant, IndexedDB) exigent HTTPS ou `localhost`.
+- **Piège de test local, découvert au Lot 6** : sur une origine déjà visitée (ex. `localhost:8765`
+  réutilisé d'une session à l'autre), le service worker sert le cache **stale-while-revalidate** —
+  donc l'ancien code, avant même le premier rendu — malgré un `CACHE` incrémenté côté serveur. Si un
+  écran affiché en local ne reflète pas un changement pourtant fait, désenregistrer le service worker
+  et vider les caches (`navigator.serviceWorker.getRegistrations()` + `caches.keys()`) plutôt que de
+  chercher le bug ailleurs.
 - **Vérif syntaxe** : `node --check <fichier>` sur chaque fichier `js/`/`data/` modifié.
 - **Test de fumée** : `npm test` (après un premier `npm install`) — charge `index.html` sous jsdom
   avec `fake-indexeddb` injecté, inline les 17 fichiers `data/`+`js/` concaténés dans l'ordre de
@@ -224,9 +254,12 @@ uniquement des déclarations.
   sur `todayBuckets()` : répartition des blocs sans doublon, un `start` passé qui ne produit jamais
   d'échéance dépassée, `someday` jamais proposé en « 10 minutes », seuil et plafond d'entretien,
   cochage de session, plafond `todayCap` + « + N autres », état vide sans aucune cible tactile,
-  pastille. Vérifie enfin la persistance directe en IndexedDB après `saveNow()`. Échoue à la moindre
-  erreur runtime. Les scénarios d'« Aujourd'hui » travaillent sur une ardoise vide et **restaurent
-  `S.tasks`** derrière eux (helper `scenario()`) : ne pas y pousser de tâche sans passer par lui.
+  pastille — et, depuis le Lot 6, **`parseQuick()`** attaqué directement (plus de 50 cas
+  d'entrée/sortie sur une date de référence fixe, plus le mécanisme d'ignorance des puces), sans
+  passer par le DOM. Vérifie enfin la persistance directe en IndexedDB après `saveNow()`. Échoue à
+  la moindre erreur runtime. Les scénarios d'« Aujourd'hui » travaillent sur une ardoise vide et
+  **restaurent `S.tasks`** derrière eux (helper `scenario()`) : ne pas y pousser de tâche sans passer
+  par lui.
 - **À chaque release** : incrémenter `CACHE` (`sw.js`) **et** `APP_VERSION` (`js/state.js`), même
   numéro (`mylife-b1-N` / `'Bêta 1.N'`).
 
@@ -262,10 +295,17 @@ suppression dure), aucun compteur global stocké, aucun ordre implicite par posi
   natifs — `confirmSheet()` maison pour toute confirmation destructive.
 - Suppression = tombstone (`deletedAt = Date.now()` + `touch()`), jamais un `splice()`.
 - `js/nlp.js`, `js/plants.js`, `js/review.js` n'ont pas de conteneur DOM : ne pas essayer d'y faire
-  `document.getElementById('s-nlp')` etc., ça n'existe pas et n'existera jamais (nlp est un moteur,
-  plants rejoindra Maison, review sera une feuille). `js/recur.js` non plus, mais pour une autre
-  raison depuis le Lot 4 : c'est un moteur pur (`nextDue`/`freshness`/`intervalDays`/`completeTask`),
-  appelé par `js/tasks.js`, `js/maison.js` et `js/today.js`, jamais par `go()`.
+  `document.getElementById('s-nlp')` etc., ça n'existe pas et n'existera jamais (nlp est un moteur +
+  une barre montée par d'autres écrans, plants rejoindra Maison, review sera une feuille). `js/recur.js`
+  non plus, mais pour une autre raison depuis le Lot 4 : c'est un moteur pur (`nextDue`/`freshness`/
+  `intervalDays`/`completeTask`), appelé par `js/tasks.js`, `js/maison.js` et `js/today.js`, jamais
+  par `go()`.
+- **La barre de capture (`js/nlp.js`, Lot 6) vit dans le DOM d'Aujourd'hui ET de Tâches en même
+  temps** (les deux écrans restent montés, seul `.active` change) : ses ids sont scopés par écran
+  (`cap-input-<écran>`, `cap-preview-<écran>`, lus via `CURRENT_SCREEN`). Ne jamais revenir à un id
+  fixe `cap-input` — collision garantie. Et `commitCapture()` relit `input.value` dans le DOM avant de
+  parser plutôt que de faire confiance à la variable `_capText` : elle n'est mise à jour que par
+  l'évènement `input`, absent quand on modifie `.value` par code (comme le fait `test.mjs`).
 - **Une tâche d'entretien (`room` + `repeat.from:'done'`) a toujours un `doneAt`** : elle disparaît
   donc naturellement de l'écran Tâches (`getTaskItems()` filtre `!t.doneAt`) et ne vit que dans
   Maison — et, si sa jauge est basse, dans le bloc Entretien d'« Aujourd'hui ». C'est voulu, pas un
@@ -299,7 +339,7 @@ suppression dure), aucun compteur global stocké, aucun ordre implicite par posi
 | **3 — Moteur de tâches** | Bêta 1.3 | ✅ Fait. Modèle Things 3 (`start`/`due`/`bucket`/`evening`/`prio`/`effort`/`postponed`/`touchedAt`) posé par `migrate()`, écran Tâches en 4 groupes (Aujourd'hui et avant / À venir / Un jour / Peut-être repliable), filtres catégorie + recherche + compteurs, tri échéance dépassée → priorité → ancienneté, fiche tâche unique création/édition, report avec compteur discret dès 3. |
 | **4 — Récurrence & Maison v1** | Bêta 1.4 | ✅ Fait. Moteur `js/recur.js` pur et testé isolément (`nextDue`/`freshness`/`intervalDays`/`completeTask`, distinction `from:'due'`/`from:'done'` — le cœur du lot), récurrence dans la fiche tâche (fréquence, jours fixes facultatifs, depuis-date-fixe/après-réalisation, phrase en clair), écran Maison en vue par pièce (jauge agrégée + jauge de fraîcheur par élément, tap = fait avec retour visuel), catalogue `data/entretien.js` (~40 modèles) et feuille d'ajout `entretienSheet()`. |
 | **5 — « Aujourd'hui » v1** | Bêta 1.5 | ✅ Fait. Maquettes validées (`maquettes/today.html`, `maquettes/today-vide.html`) puis codées : `js/today.js` (blocs 1, 2, 3, 6, 7 de ROADMAP §6, tri, plafond `todayCap`, seuil d'entretien, cochages de session, état vide), pastille iOS (`updateBadge()` dans `boot.js`), `rerender()` dans `ui.js` (la fiche tâche s'ouvre désormais depuis deux écrans), plancher de jauge `gaugeWidth()`. **Mise en conformité incluse** (arbitrage du 27/07) : titres de groupe en `.sec` 18 px sur Tâches, cartes de pièce blanches + jauge à droite sur Maison, `.empty` à 140 px. **Hors périmètre** : les blocs Habitudes et Courses de la maquette ne sont pas codés — leurs modèles de données n'existent pas encore, et leur CSS n'a donc pas été posé (ce serait du CSS mort). Chaque domaine pose son bloc dans son propre lot : **plantes au 7, habitudes au 8, courses au 9** (contradiction ROADMAP levée le 27/07, cf. §7). |
-| 6 — Saisie langage naturel | Bêta 1.6 | À faire |
+| **6 — Saisie rapide** | Bêta 1.6 | ✅ Fait. `js/nlp.js` : `parseQuick()` pur (dates relatives/absolues, échéance explicite `avant/pour/deadline` → `due`, récurrence à date fixe ou après réalisation, ce soir, priorité, effort, catégorie/pièce par dièse, tout le non-reconnu reste dans le titre) et la **barre de capture universelle** sur Aujourd'hui et Tâches (aperçu à puces supprimables, `commitCapture()`, bouton discret « Détails… » → fiche du Lot 3 préremplie). Remplace l'ancien champ « Ajouter une tâche » (`addTask()` retiré). Plus de 50 cas de test sur `parseQuick()`. |
 | 7 — Maison v2 (plantes) | Bêta 1.7 | À faire |
 | 8 — Habitudes | Bêta 1.8 | À faire |
 | 9 — Courses | Bêta 1.9 | À faire |

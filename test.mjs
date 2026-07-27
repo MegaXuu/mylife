@@ -57,13 +57,14 @@ const call = (label, fn) => { try{ fn(); }catch(e){ onError(label, e); } };
   call(`go('${scr}')`, () => win.go(scr))
 );
 
-// 2) Cycle de vie d'une tâche : créer, cocher, supprimer (tombstone, jamais retirée du tableau).
-call('addTask', () => {
+// 2) Cycle de vie d'une tâche : créer (barre de capture, Lot V1-6), cocher,
+//    supprimer (tombstone, jamais retirée du tableau).
+call('commitCapture', () => {
   win.go('tasks');
-  const input = win.document.getElementById('task-input');
+  const input = win.document.getElementById('cap-input-tasks');
   input.value = 'Sortir les poubelles';
-  win.addTask();
-  if(!S.tasks.some(t => t.title === 'Sortir les poubelles')) throw new Error('tâche non créée');
+  win.commitCapture();
+  if(!S.tasks.some(t => t.title === 'Sortir les poubelles')) throw new Error('tâche non créée via la capture rapide');
 });
 let taskId;
 call('doneTask', () => {
@@ -108,11 +109,12 @@ call('oiseaux', () => {
   S.settings.birds = true;
 });
 
-// 5) Règle de casse (CONVENTIONS.md §3) : majuscule initiale posée À LA SAISIE.
+// 5) Règle de casse (CONVENTIONS.md §3) : majuscule initiale posée À LA SAISIE
+//    (parseQuick() l'applique via cap(), cf. js/nlp.js).
 call('cap à la saisie', () => {
   win.go('tasks');
-  win.document.getElementById('task-input').value = 'trier les papiers';
-  win.addTask();
+  win.document.getElementById('cap-input-tasks').value = 'trier les papiers';
+  win.commitCapture();
   const t = S.tasks.find(t => t.title === 'Trier les papiers');
   if(!t) throw new Error('le titre stocké n’a pas reçu sa majuscule initiale');
 });
@@ -292,6 +294,207 @@ scenario('Aujourd’hui — plafond todayCap et « + N autres »', () => {
   S.settings.todayCap = 7;
 });
 
+// 6 quater) parseQuick() (Lot V1-6, js/nlp.js) : le parseur est une fonction
+// PURE, testée directement sans passer par le DOM ni par S. Date de
+// référence fixe (lundi 27 juillet 2026) pour des attentes reproductibles.
+const NLP_REF = new Date(2026, 6, 27, 9, 0, 0);
+const nlpCases = [
+  ['aujourd’hui — start', "Réunion aujourd'hui", r => {
+    if(r.start !== '2026-07-27') throw new Error('start attendu 2026-07-27, obtenu ' + r.start);
+    if(r.title !== 'Réunion') throw new Error('titre attendu « Réunion », obtenu « ' + r.title + ' »');
+  }],
+  ['ce soir — start + evening', 'Appeler le médecin ce soir', r => {
+    if(r.start !== '2026-07-27' || !r.evening) throw new Error('« ce soir » devrait poser start=aujourd’hui et evening=true');
+  }],
+  ['demain — start', 'Rendre le livre demain', r => {
+    if(r.start !== '2026-07-28') throw new Error('start attendu 2026-07-28, obtenu ' + r.start);
+  }],
+  ['demain soir — start + evening', 'Dîner demain soir', r => {
+    if(r.start !== '2026-07-28' || !r.evening) throw new Error('« demain soir » devrait poser start=demain et evening=true');
+  }],
+  ['après-demain — start', 'Rendez-vous après-demain', r => {
+    if(r.start !== '2026-07-29') throw new Error('start attendu 2026-07-29, obtenu ' + r.start);
+  }],
+  ['lundi (bare, un lundi) — occurrence en cours', 'Sport lundi', r => {
+    if(r.start !== '2026-07-27') throw new Error('« lundi » un lundi devrait rester aujourd’hui, obtenu ' + r.start);
+  }],
+  ['lundi prochain — saute la semaine en cours', 'Sport lundi prochain', r => {
+    if(r.start !== '2026-08-03') throw new Error('start attendu 2026-08-03, obtenu ' + r.start);
+  }],
+  ['vendredi (bare)', 'Pot de départ vendredi', r => {
+    if(r.start !== '2026-07-31') throw new Error('start attendu 2026-07-31, obtenu ' + r.start);
+  }],
+  ['dimanche (bare)', 'Marché dimanche', r => {
+    if(r.start !== '2026-08-02') throw new Error('start attendu 2026-08-02, obtenu ' + r.start);
+  }],
+  ['la semaine prochaine', 'Bilan la semaine prochaine', r => {
+    if(r.start !== '2026-08-03') throw new Error('start attendu 2026-08-03, obtenu ' + r.start);
+  }],
+  ['le mois prochain', 'Révision le mois prochain', r => {
+    if(r.start !== '2026-08-27') throw new Error('start attendu 2026-08-27, obtenu ' + r.start);
+  }],
+  ['dans 3 jours', 'Relancer dans 3 jours', r => {
+    if(r.start !== '2026-07-30') throw new Error('start attendu 2026-07-30, obtenu ' + r.start);
+  }],
+  ['dans 2 semaines', 'Contrôle dans 2 semaines', r => {
+    if(r.start !== '2026-08-10') throw new Error('start attendu 2026-08-10, obtenu ' + r.start);
+  }],
+  ['dans un mois', 'Suivi dans un mois', r => {
+    if(r.start !== '2026-08-27') throw new Error('start attendu 2026-08-27, obtenu ' + r.start);
+  }],
+  ['le 15 (jour déjà passé ce mois-ci → mois suivant)', 'Loyer le 15', r => {
+    if(r.start !== '2026-08-15') throw new Error('start attendu 2026-08-15, obtenu ' + r.start);
+  }],
+  ['le 30 (jour encore à venir ce mois-ci)', 'Anniversaire le 30', r => {
+    if(r.start !== '2026-07-30') throw new Error('start attendu 2026-07-30, obtenu ' + r.start);
+  }],
+  ['le 15 mai (mois déjà passé → année suivante)', 'Impôts le 15 mai', r => {
+    if(r.start !== '2027-05-15') throw new Error('start attendu 2027-05-15, obtenu ' + r.start);
+    if(r.title !== 'Impôts') throw new Error('titre attendu « Impôts », obtenu « ' + r.title + ' »');
+  }],
+  ['15/05 (numérique, sans année)', 'Salon 15/05', r => {
+    if(r.start !== '2027-05-15') throw new Error('start attendu 2027-05-15, obtenu ' + r.start);
+  }],
+  ['15/05/27 (numérique, année à 2 chiffres)', 'Salon 15/05/27', r => {
+    if(r.start !== '2027-05-15') throw new Error('start attendu 2027-05-15, obtenu ' + r.start);
+  }],
+  ['avant le 15 — due, pas start', 'Dossier avant le 15', r => {
+    if(r.due !== '2026-08-15') throw new Error('due attendu 2026-08-15, obtenu ' + r.due);
+    if(r.start !== null) throw new Error('« avant le » ne doit pas poser de start');
+  }],
+  ['pour le 15 — due', 'Rapport pour le 15', r => {
+    if(r.due !== '2026-08-15') throw new Error('due attendu 2026-08-15, obtenu ' + r.due);
+  }],
+  ['deadline 15/05 — due, numérique', 'Facture deadline 15/05', r => {
+    if(r.due !== '2027-05-15') throw new Error('due attendu 2027-05-15, obtenu ' + r.due);
+  }],
+  ['tous les jours', 'Arroser tous les jours', r => {
+    if(!r.repeat || r.repeat.kind !== 'day' || r.repeat.n !== 1 || r.repeat.from !== 'due')
+      throw new Error('repeat attendu {day,1,due}, obtenu ' + JSON.stringify(r.repeat));
+  }],
+  ['chaque jour', 'Arroser chaque jour', r => {
+    if(!r.repeat || r.repeat.kind !== 'day' || r.repeat.n !== 1) throw new Error('repeat attendu {day,1}, obtenu ' + JSON.stringify(r.repeat));
+  }],
+  ['tous les 3 jours — à date fixe par défaut', 'Vérifier tous les 3 jours', r => {
+    if(!r.repeat || r.repeat.kind !== 'day' || r.repeat.n !== 3 || r.repeat.from !== 'due')
+      throw new Error('repeat attendu {day,3,due}, obtenu ' + JSON.stringify(r.repeat));
+  }],
+  ['tous les 3 jours après — from:done', 'Arroser le ficus tous les 3 jours après', r => {
+    if(!r.repeat || r.repeat.from !== 'done' || r.repeat.n !== 3) throw new Error('repeat attendu from:done n:3, obtenu ' + JSON.stringify(r.repeat));
+    if(r.title !== 'Arroser le ficus') throw new Error('titre attendu « Arroser le ficus », obtenu « ' + r.title + ' »');
+  }],
+  ['tous les 7 jours après réalisation', 'Aspirateur tous les 7 jours après réalisation', r => {
+    if(!r.repeat || r.repeat.from !== 'done' || r.repeat.n !== 7) throw new Error('repeat attendu from:done n:7, obtenu ' + JSON.stringify(r.repeat));
+  }],
+  ['tous les 7 jours après la dernière fois', 'Aspirateur tous les 7 jours après la dernière fois', r => {
+    if(!r.repeat || r.repeat.from !== 'done' || r.repeat.n !== 7) throw new Error('repeat attendu from:done n:7, obtenu ' + JSON.stringify(r.repeat));
+  }],
+  ['toutes les semaines', 'Poubelles toutes les semaines', r => {
+    if(!r.repeat || r.repeat.kind !== 'week' || r.repeat.n !== 1 || r.repeat.days.length)
+      throw new Error('repeat attendu {week,1,sans jours}, obtenu ' + JSON.stringify(r.repeat));
+  }],
+  ['tous les lundis — jour fixe', 'Sport tous les lundis', r => {
+    if(!r.repeat || r.repeat.kind !== 'week' || JSON.stringify(r.repeat.days) !== '[1]')
+      throw new Error('repeat attendu {week,days:[1]}, obtenu ' + JSON.stringify(r.repeat));
+  }],
+  ['tous les vendredis après — jour fixe + from:done', 'Vidage tous les vendredis après', r => {
+    if(!r.repeat || JSON.stringify(r.repeat.days) !== '[5]' || r.repeat.from !== 'done')
+      throw new Error('repeat attendu {days:[5],from:done}, obtenu ' + JSON.stringify(r.repeat));
+  }],
+  ['tous les 15 du mois', 'Ménage tous les 15 du mois', r => {
+    if(!r.repeat || r.repeat.kind !== 'month' || r.repeat.n !== 1) throw new Error('repeat attendu {month,1}, obtenu ' + JSON.stringify(r.repeat));
+  }],
+  ['tous les 2 mois', 'Filtre tous les 2 mois', r => {
+    if(!r.repeat || r.repeat.kind !== 'month' || r.repeat.n !== 2) throw new Error('repeat attendu {month,2}, obtenu ' + JSON.stringify(r.repeat));
+  }],
+  ['tous les ans', 'Détartrage tous les ans', r => {
+    if(!r.repeat || r.repeat.kind !== 'year' || r.repeat.n !== 1) throw new Error('repeat attendu {year,1}, obtenu ' + JSON.stringify(r.repeat));
+  }],
+  ['chaque année', 'Révision chaque année', r => {
+    if(!r.repeat || r.repeat.kind !== 'year' || r.repeat.n !== 1) throw new Error('repeat attendu {year,1}, obtenu ' + JSON.stringify(r.repeat));
+  }],
+  ['!! → urgent', 'Payer le loyer !!', r => {
+    if(r.prio !== 2) throw new Error('prio attendue 2, obtenue ' + r.prio);
+    if(/!/.test(r.title)) throw new Error('les « ! » ne doivent pas rester dans le titre, obtenu « ' + r.title + ' »');
+  }],
+  ['urgent (mot) → prio 2', 'Payer le loyer urgent', r => {
+    if(r.prio !== 2) throw new Error('prio attendue 2, obtenue ' + r.prio);
+  }],
+  ['! → important', 'Relire le contrat !', r => {
+    if(r.prio !== 1) throw new Error('prio attendue 1, obtenue ' + r.prio);
+  }],
+  ['important (mot) → prio 1', 'Relire le contrat important', r => {
+    if(r.prio !== 1) throw new Error('prio attendue 1, obtenue ' + r.prio);
+  }],
+  ['5 min → effort court', 'Vider le lave-vaisselle 5 min', r => {
+    if(r.effort !== 1) throw new Error('effort attendu 1, obtenu ' + r.effort);
+  }],
+  ['10 min → effort court', 'Trier le courrier 10 min', r => {
+    if(r.effort !== 1) throw new Error('effort attendu 1, obtenu ' + r.effort);
+  }],
+  ['court (mot) → effort 1', 'Sortir les poubelles court', r => {
+    if(r.effort !== 1) throw new Error('effort attendu 1, obtenu ' + r.effort);
+  }],
+  ['1 h → effort long', 'Ranger le garage 1 h', r => {
+    if(r.effort !== 3) throw new Error('effort attendu 3, obtenu ' + r.effort);
+  }],
+  ['long (mot) → effort 3', 'Faire les comptes long', r => {
+    if(r.effort !== 3) throw new Error('effort attendu 3, obtenu ' + r.effort);
+  }],
+  ['#admin → catégorie', 'Déclaration #admin', r => {
+    if(r.cat !== 'admin') throw new Error('cat attendue admin, obtenue ' + r.cat);
+    if(/#/.test(r.title)) throw new Error('le dièse ne doit pas rester dans le titre, obtenu « ' + r.title + ' »');
+  }],
+  ['#menage → catégorie', 'Corvée #menage', r => {
+    if(r.cat !== 'menage') throw new Error('cat attendue menage, obtenue ' + r.cat);
+  }],
+  ['#cuisine → pièce', 'Nettoyer #cuisine', r => {
+    if(r.room !== 'cuisine') throw new Error('room attendue cuisine, obtenue ' + r.room);
+  }],
+  ['#salon → pièce', 'Ranger #salon', r => {
+    if(r.room !== 'salon') throw new Error('room attendue salon, obtenue ' + r.room);
+  }],
+  ['combinaison — date + soir, titre nettoyé', 'Courses demain soir', r => {
+    if(r.start !== '2026-07-28' || !r.evening) throw new Error('start/evening incorrects : ' + JSON.stringify(r));
+    if(r.title !== 'Courses') throw new Error('titre attendu « Courses », obtenu « ' + r.title + ' »');
+  }],
+  ['combinaison — pièce + priorité + date, titre nettoyé', 'Réunion #cuisine urgent demain', r => {
+    if(r.room !== 'cuisine' || r.prio !== 2 || r.start !== '2026-07-28') throw new Error('combinaison incorrecte : ' + JSON.stringify(r));
+    if(r.title !== 'Réunion') throw new Error('titre attendu « Réunion », obtenu « ' + r.title + ' »');
+  }],
+  ['ponctuation collée — « avant le 5, !! » reste reconnu', 'Payer le loyer avant le 5, !!', r => {
+    if(r.due !== '2026-08-05') throw new Error('due attendu 2026-08-05, obtenu ' + r.due);
+    if(r.prio !== 2) throw new Error('prio attendue 2, obtenue ' + r.prio);
+    if(r.title !== 'Payer le loyer') throw new Error('titre attendu « Payer le loyer », obtenu « ' + r.title + ' »');
+  }],
+  ['ponctuation non liée à une règle — la virgule reste dans le titre', 'Acheter du lait, du pain', r => {
+    if(r.title !== 'Acheter du lait, du pain') throw new Error('titre attendu « Acheter du lait, du pain », obtenu « ' + r.title + ' »');
+  }],
+  ['rien de reconnu — le titre reste intact, casse posée à la saisie', 'acheter du lait', r => {
+    if(r.title !== 'Acheter du lait') throw new Error('titre attendu « Acheter du lait », obtenu « ' + r.title + ' »');
+    if(r.start || r.due || r.repeat || r.cat || r.room || r.prio || r.effort !== 2) throw new Error('aucun champ ne devrait être déduit ici : ' + JSON.stringify(r));
+  }],
+];
+nlpCases.forEach(([label, texte, check]) => {
+  call('parseQuick — ' + label, () => check(win.parseQuick(texte, NLP_REF)));
+});
+
+// Mécanisme d'ignorance (barre de capture, js/nlp.js) : une puce retirée
+// désactive sa règle SANS ré-interpréter le fragment — le mot revient donc
+// tel quel dans le titre.
+call("parseQuick — ignore('date') rend le mot au titre", () => {
+  const avec = win.parseQuick('Réunion demain', NLP_REF);
+  if(avec.start !== '2026-07-28') throw new Error('sans ignore, « demain » devrait poser un start');
+  const sans = win.parseQuick('Réunion demain', NLP_REF, ['date']);
+  if(sans.start !== null) throw new Error("ignore('date') devrait annuler le start");
+  if(sans.title !== 'Réunion demain') throw new Error('le mot « demain » devrait revenir dans le titre, obtenu « ' + sans.title + ' »');
+});
+call("parseQuick — ignore('repeat') rend le fragment au titre", () => {
+  const sans = win.parseQuick('Arroser tous les 3 jours après', NLP_REF, ['repeat']);
+  if(sans.repeat !== null) throw new Error("ignore('repeat') devrait annuler la récurrence");
+  if(!/tous les 3 jours après/i.test(sans.title)) throw new Error('le fragment de récurrence devrait revenir dans le titre, obtenu « ' + sans.title + ' »');
+});
+
 // 7) Écriture immédiate puis relecture directe dans IndexedDB — équivalent, pour ce
 //    test de fumée, à vérifier la persistance après un rechargement de l'app.
 if(typeof win.saveNow === 'function'){
@@ -330,5 +533,6 @@ if(fails.length){
 } else {
   console.log('✓ Test fumée OK — 6 écrans, cycle de vie d’une tâche, oiseaux, casse,\n' +
               '  récurrence, Maison, algorithme d’« Aujourd’hui » (blocs, seuil d’entretien,\n' +
-              '  cochage de session, plafond, état vide, pastille) et persistance.');
+              '  cochage de session, plafond, état vide, pastille), parseQuick (' + nlpCases.length + ' cas\n' +
+              '  + mécanisme d’ignorance) et persistance.');
 }
