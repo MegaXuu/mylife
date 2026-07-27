@@ -6,10 +6,11 @@
      3. Entretien             — au plus 3 jauges, les plus basses
      6. Ce soir               — sous-section discrète
      7. Si tu as 10 minutes   — 1 à 3 tâches anytime à effort court
-   Les blocs 4 (Habitudes) et 5 (Courses) de la maquette arrivent au Lot 10
-   (« Intégration habitudes et courses », ROADMAP §7) : leurs modèles de
-   données n'existent pas encore. Les soins de plantes du bloc 2 arrivent au
-   Lot 7. Rien n'est câblé ici en attendant — un bloc vide est un bloc absent.
+   Les blocs 4 (Habitudes) et 5 (Courses) de la maquette ne sont pas ici :
+   chaque domaine pose son propre bloc dans son lot — plantes au 7 (dans le
+   bloc du jour), habitudes au 8, courses au 9 (ROADMAP §7). Leurs modèles de
+   données n'existent pas encore. Rien n'est câblé en attendant : un bloc vide
+   est un bloc absent, et son CSS serait du CSS mort.
 
    Mise en forme : la maquette fait foi (cf. le bloc Lot V1-5 du <style>).
    Le bloc du jour est le seul à ne pas être une carte : c'est ce qui le rend

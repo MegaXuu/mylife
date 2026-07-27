@@ -419,6 +419,32 @@ honnête aux notifications (cf. §8).
 **État vide** : quand tout est fait, l'écran le dit clairement **et ne propose rien d'autre**
 (principe 6).
 
+### État d'implémentation (Lot 5, Bêta 1.5)
+
+Blocs **1, 2, 3, 6 et 7 codés** dans `js/today.js`. Les blocs **4 (habitudes)** et **5 (courses)**
+arrivent avec leurs domaines, aux Lots 8 et 9 : leurs modèles de données n'existent pas avant.
+
+`todayBuckets()` est le seul endroit où se décide ce qui compte, et il est écrit **en cascade** —
+chaque filtre retire ce que le précédent a pris, dans l'ordre : échéance dépassée → ce soir → bloc
+du jour → « 10 minutes ». **Un item ne peut donc pas apparaître dans deux blocs.** Ajouter un bloc
+au Lot 7, 8 ou 9 = l'insérer dans cette cascade, jamais à côté.
+
+Trois décisions prises à l'implémentation, qui ne sont pas dans le texte ci-dessus :
+
+- **Seuil de fraîcheur à 0,4 sur le bloc entretien** (`TODAY_CARE_SEUIL`). « Jusqu'à 3 jauges les
+  plus basses » sans seuil rendrait le bloc permanent, et l'écran ne pourrait alors **jamais** dire
+  « c'est bon pour aujourd'hui » — l'état vide serait inatteignable et le principe 6 mort. La borne
+  reprend celle de « Bientôt » dans `freshLabel()`, aucune valeur nouvelle n'a été inventée.
+- **Une tâche cochée reste posée, barrée, jusqu'au prochain démarrage** (`tickToday`). Rien n'est
+  persisté : ce n'est pas un journal, c'est le retour qui dit « c'est bien celle-là ». Un item qui
+  s'évapore sous le doigt désoriente et fausse le compteur.
+- **L'état vide cohabite avec « Ce soir ».** Sa phrase — « Rien ne demande ton attention avant ce
+  soir » — le suppose : la tâche du soir reste affichée dessous, donc atteignable. Quand elle est
+  faite aussi, la phrase sous-informe sans devenir fausse. **Point resté ouvert.**
+
+La pastille compte les blocs 1, 2, 3 et 6. **Pas le bloc 7** : « si tu as 10 minutes » est une
+offre, pas un dû, et une pastille qui compte des offres devient un bruit qu'on apprend à ignorer.
+
 ---
 
 ## 6 bis. Navigation — 4 onglets
@@ -471,23 +497,42 @@ incrémenté. Chaque lot laisse l'app **installée et utilisable**. Ordre impos�
 
 | Lot | Version | Contenu | Livrable |
 |---|---|---|---|
-| **1** | Bêta 1.1 | **Socle.** Squelette, IndexedDB + `S` + `save`/`saveNow`, boot async, navigation 4 onglets, écran Tâches minimal (ajouter / cocher / supprimer), service worker, manifeste, icônes, `test.mjs`, `CLAUDE.md`, dépôt Git + GitHub Pages | **App installée sur ton iPhone, déjà utilisable** comme liste de tâches |
+| **1** | Bêta 1.1 | **Socle (fait).** Squelette, IndexedDB + `S` + `save`/`saveNow`, boot async, navigation 4 onglets, écran Tâches minimal (ajouter / cocher / supprimer), service worker, manifeste, icônes, `test.mjs`, `CLAUDE.md`, dépôt Git + GitHub Pages | **App installée sur ton iPhone, déjà utilisable** comme liste de tâches |
 | **2** | Bêta 1.2 | **Identité & design system — « Canopée » (fait).** 3 directions en maquette → validée. Puis jeu complet de variables CSS (clair + `data-mode="dark"`), typographie, composants (boutons, cartes, chips, jauges, listes, feuilles modales, tab bar, en-têtes, états vides, toasts, interrupteur), **discipline chromatique** engageant les lots suivants, **micro-présences d'oiseaux** (`data/oiseaux.js` + interrupteur dans Réglages), **règle de casse** (majuscule initiale sur les phrases et les entrées de liste, posée à la saisie par `cap()`), `:focus-visible` + `prefers-reduced-motion`, contrastes vérifiés par calcul, colonne centrée > 900 px | L'app a son visage définitif |
-| **3** | Bêta 1.3 | **Moteur de tâches.** `start` / `due` séparés ①, buckets anytime/someday ③, `effort` ⑪, catégories, priorité, « ce soir » ②, fiche tâche, filtres, recherche | Le modèle Things 3 est en place |
-| **4** | Bêta 1.4 | **Récurrence & Maison v1.** `recur.js` : `from: due` / `from: done`, jauge de fraîcheur ⑩, champ `room`, **écran Maison en vue par pièce**, catalogue `data/entretien.js` (~40 modèles en un tap), historique des réalisations | **Le ménage et l'administratif entrent dans l'app** |
-| **5** | Bêta 1.5 | **« Aujourd'hui » v1.** Agrégation tâches + entretien, algorithme de tri, plafond ⑦, « si tu as 10 minutes », pastille iOS, états vides | L'app commence à décider à ta place |
+| **3** | Bêta 1.3 | **Moteur de tâches (fait).** `start` / `due` séparés ①, buckets anytime/someday ③, `effort` ⑪, catégories, priorité, « ce soir » ②, fiche tâche, filtres, recherche | Le modèle Things 3 est en place |
+| **4** | Bêta 1.4 | **Récurrence & Maison v1 (fait).** `recur.js` : `from: due` / `from: done`, jauge de fraîcheur ⑩, champ `room`, **écran Maison en vue par pièce**, catalogue `data/entretien.js` (~40 modèles en un tap), historique des réalisations | **Le ménage et l'administratif entrent dans l'app** |
+| **5** | Bêta 1.5 | **« Aujourd'hui » v1 (fait).** Agrégation tâches + entretien, algorithme de tri, plafond ⑦, « si tu as 10 minutes », pastille iOS, états vides. **Plus** la mise en conformité de Tâches et Maison avec la maquette Canopée (arbitrage du 27/07, cf. `CLAUDE.md`) | L'app commence à décider à ta place |
 | **6** | Bêta 1.6 | **Saisie rapide en langage naturel** ⑤. `nlp.js` : « arroser le ficus tous les 3 jours », « impôts le 15 mai », « courses demain soir ». Barre de capture universelle | **La saisie passe à 3 secondes** |
 | **7** | Bêta 1.7 | **Maison v2 — Plantes.** Les plantes rejoignent les pièces de l'écran Maison. Catalogue `data/plantes.js`, intervalles saison chaude/froide ⑬, arrosage + engrais + rempotage ⑭, fiche plante, photos (store IndexedDB `photos`), intégration à « Aujourd'hui » | 🪴 Domaine plantes couvert |
 | **8** | Bêta 1.8 | **Habitudes.** Bloc permanent sur l'accueil + écran secondaire `go('habits')`. Définitions, unités et objectifs, jours fixes **ou** quota hebdo ㉒, jour sauté ㉑, progression partielle ㉓, séries, calendrier mensuel | Domaine habitudes couvert |
 | **9** | Bêta 1.9 | **Courses.** Dictionnaire `data/rayons.js` ⑰, ordre des rayons réglable ⑱, mode magasin ⑲, produits fréquents ⑳, vidage des cochés | Domaine courses couvert |
-| **10** | Bêta 1.10 | **« Aujourd'hui » v2 + revue hebdomadaire.** Intégration habitudes et courses, **`review.js`** ⑨ (faire / reporter / abandonner), compteur de reports ⑥, motivation légère (séries, régularité, célébrations sobres) | **L'app est complète et se défend contre sa propre entropie** |
+| **10** | Bêta 1.10 | **« Aujourd'hui » v2 + revue hebdomadaire.** **`review.js`** ⑨ (faire / reporter / abandonner), compteur de reports ⑥, motivation légère (séries, régularité, célébrations sobres), et **relecture de l'ordre des 7 blocs de §6 une fois tous les domaines présents** | **L'app est complète et se défend contre sa propre entropie** |
 | **11** | Bêta 1.11 | **Réglages & filet de sécurité.** Profil, préférences, **export/import JSON**, feuille de bienvenue au premier lancement, à propos, réinitialisation, **interrupteur de mode sombre** (les variables existent depuis le Lot 2, rien ne les bascule encore). *L'interrupteur « Oiseaux » y est déjà, posé au Lot 2 avec les oiseaux* | Réinstallable sans perte |
 | **12** | Bêta 1.12 | **Polish, QA, dettes.** Relecture des textes, purge des tombstones, code mort, checklist iPhone réel, `CLAUDE.md` final, **icônes d'app aux couleurs Canopée** (restées grises au Lot 2). *Cibles ≥ 44 px, `:focus-visible` et `prefers-reduced-motion` sont faits depuis le Lot 2 : ici, on vérifie, on ne pose plus* | **V1 close** |
+
+**Qui intègre quoi dans « Aujourd'hui »** — contradiction levée le 27/07/2026. Le texte disait à la
+fois « bloc permanent sur l'accueil » au Lot 8 et « intégration habitudes et courses » au Lot 10.
+Règle retenue : **chaque domaine pose lui-même son bloc sur l'accueil, dans son propre lot.**
+
+| Bloc de §6 | Posé au lot |
+|---|---|
+| 1 Échéances · 2 Aujourd'hui · 3 Entretien · 6 Ce soir · 7 10 minutes | **5** (fait) |
+| 2 Aujourd'hui — les soins de plantes dus s'y ajoutent | **7** |
+| 4 Habitudes du jour | **8** |
+| 5 Courses (une ligne) | **9** |
+
+Le Lot 10 n'intègre donc rien de neuf : il **relit** l'ordre des 7 blocs une fois tous les domaines
+présents, et ajoute la revue. C'est une passe de vérification, pas une passe de construction.
 
 **Rythme** : environ un lot par session. Les lots 3, 4 et 6 sont les plus lourds.
 
 **Validation avant code** obligatoire au **Lot 2** (identité visuelle) et au **Lot 5** (maquette de
 l'écran « Aujourd'hui », le seul écran qu'il est cher de rater). Ailleurs, j'avance directement.
+
+**La maquette Canopée fait foi** (`maquettes/MyLife Canopée.html`, arbitrage du 27/07/2026, détail
+dans `CLAUDE.md`). Elle contient **huit écrans, dont Habitudes, Courses et la feuille « Nouvelle
+tâche » qui ne sont pas encore codés** : l'ouvrir avant de coder un lot, et s'y tenir. C'est faute
+de l'avoir fait que les Lots 3 et 4 ont dérivé — dérive corrigée au Lot 5.
 
 **Point de bascule** : à partir du **Lot 6**, l'app doit devenir ton outil quotidien réel. Les lots 7
 à 9 se construisent mieux si tu utilises déjà les lots 1 à 6 pour de vrai.

@@ -9,21 +9,28 @@
 > **avant** que le code soit écrit — ils se font en deux temps.
 >
 > Les prompts supposent que `CLAUDE.md`, `CONVENTIONS.md` et `ROADMAP-V1.md` sont dans le dépôt.
+>
+> **⚠️ À ajouter mentalement à tout prompt de lot qui touche un écran** — leçon du Lot 5 :
+> *« Ouvre d'abord `maquettes/MyLife Canopée.html` et lis l'écran correspondant. Elle contient les
+> huit écrans, y compris ceux qui ne sont pas encore codés. En cas de désaccord entre le code
+> existant et la maquette, c'est la maquette qui fait foi. »*
+> Sans cette phrase, les Lots 3 et 4 ont dérivé sans que personne le voie, et le Lot 5 a commencé
+> par produire deux maquettes à jeter.
 
-| Lot | Titre | Modèle | Validation |
-|---|---|---|---|
-| 1 | Socle | Sonnet | — |
-| 2 | Identité & design system | Opus puis Sonnet | ⚑ |
-| 3 | Moteur de tâches | Sonnet | — |
-| 4 | Récurrence & Maison v1 | Sonnet | — |
-| 5 | « Aujourd'hui » v1 | Opus puis Sonnet | ⚑ |
-| 6 | Saisie en langage naturel | Sonnet | — |
-| 7 | Maison v2 — Plantes | Sonnet | — |
-| 8 | Habitudes | Sonnet | — |
-| 9 | Courses | Sonnet | — |
-| 10 | « Aujourd'hui » v2 + revue hebdomadaire | Sonnet | — |
-| 11 | Réglages & filet de sécurité | Sonnet | — |
-| 12 | Polish, QA, dettes | Sonnet | — |
+| Lot | Titre | Modèle | Validation | Statut |
+|---|---|---|---|---|
+| 1 | Socle | Sonnet | — | ✅ Bêta 1.1 |
+| 2 | Identité & design system | Opus puis Sonnet | ⚑ | ✅ Bêta 1.2 |
+| 3 | Moteur de tâches | Sonnet | — | ✅ Bêta 1.3 |
+| 4 | Récurrence & Maison v1 | Sonnet | — | ✅ Bêta 1.4 |
+| 5 | « Aujourd'hui » v1 | Opus puis Sonnet | ⚑ | ✅ Bêta 1.5 |
+| 6 | Saisie en langage naturel | Sonnet | — | à faire |
+| 7 | Maison v2 — Plantes | Sonnet | — | à faire |
+| 8 | Habitudes | Sonnet | — | à faire |
+| 9 | Courses | Sonnet | — | à faire |
+| 10 | « Aujourd'hui » v2 + revue hebdomadaire | Sonnet | — | à faire |
+| 11 | Réglages & filet de sécurité | Sonnet | — | à faire |
+| 12 | Polish, QA, dettes | Sonnet | — | à faire |
 
 ---
 
@@ -98,7 +105,8 @@ court : ce qui est fait, ce qui est volontairement absent, ce que je dois vérif
 - [ ] Les 4 onglets naviguent, la tab bar respecte la safe-area iOS
 - [ ] Créer, cocher et supprimer une tâche fonctionne ; l'état survit à un rechargement
 - [ ] Une tâche supprimée a un `deletedAt`, elle n'est pas retirée du tableau
-- [ ] Les trois listes miroir (`index.html`, `sw.js`, `test.mjs`) contiennent les 15 mêmes fichiers
+- [ ] Les trois listes miroir (`index.html`, `sw.js`, `test.mjs`) contiennent les mêmes fichiers
+      (16 au Lot 1, 17 depuis que le Lot 2 a ajouté `data/oiseaux.js`)
 - [ ] `CLAUDE.md` existe et décrit fidèlement le projet
 
 ### À faire toi-même après ce lot
@@ -160,10 +168,19 @@ Applique-la pour de vrai :
    animations. Vérifie les contrastes par calcul et donne-moi les ratios obtenus.
 6. Responsive : au-delà de 900 px de large, la mise en page doit rester correcte (colonne
    centrée et plafonnée). On optimisera le desktop en V2, mais rien ne doit casser.
-7. Retire les maquettes/ du dépôt une fois la direction appliquée.
+7. GARDE la maquette retenue dans maquettes/, elle est la référence de design des 10 lots
+   suivants. Écris dans CLAUDE.md qu'elle fait foi en cas de désaccord avec le code.
 
 Termine par la checklist de release et le compte rendu.
 ```
+
+> **Correction apportée le 27/07/2026, à ne pas perdre.** Le point 7 disait à l'origine
+> « **retire** les maquettes/ du dépôt une fois la direction appliquée ». C'est cette instruction
+> qui a coûté le plus cher du cycle : privés de la référence, les Lots 3 et 4 ont dérivé sans le
+> voir (`.overline` 13 px généralisé comme titre de groupe alors que la maquette met 18 px/700 ;
+> cartes de pièce teintées au lieu de blanches ; jauges sous le titre au lieu d'à droite), et le
+> Lot 5 a produit deux maquettes entières avant qu'on s'aperçoive que l'écran existait déjà en
+> référence. Tout a été remis en conformité au Lot 5. **Une maquette validée reste dans le dépôt.**
 
 ### Critères d'acceptation
 - [ ] Aucune couleur en dur hors du `:root` (sauf valeurs calculées)
@@ -171,6 +188,7 @@ Termine par la checklist de release et le compte rendu.
 - [ ] `:focus-visible` visible partout, `prefers-reduced-motion` respecté
 - [ ] Rien ne casse à 900 px et au-delà
 - [ ] La règle de discipline chromatique est écrite dans `CLAUDE.md`
+- [ ] La maquette retenue est **restée** dans `maquettes/` et `CLAUDE.md` y renvoie
 
 ---
 
@@ -316,28 +334,42 @@ Lot V1-5 « Aujourd'hui » de MyLife, étape 2 : implémente la maquette validé
 1. js/today.js — renderToday() suivant exactement l'algorithme de ROADMAP-V1.md section 6 :
    échéances dépassées (due seulement, jamais start) → aujourd'hui (start ≤ ce jour + récurrences
    dues), plafonné à settings.todayCap avec un « + N autres » dépliable → entretien (les 3 jauges
-   les plus basses) → habitudes (placeholder, Lot 8) → courses (une ligne, placeholder, Lot 9) →
-   ce soir → « si tu as 10 minutes » (bucket anytime, effort 1, jamais someday, 1 à 3 items).
+   les plus basses) → ce soir → « si tu as 10 minutes » (bucket anytime, effort 1, jamais someday,
+   1 à 3 items). Les blocs habitudes et courses NE SONT PAS de ce lot : chaque domaine pose son
+   bloc dans son propre lot (8 et 9), leurs modèles n'existent pas encore. Ne laisse pas de
+   placeholder — un bloc vide est un bloc absent.
 
-2. Actions en ligne : cocher, reporter à demain, ouvrir la fiche. Rien qui demande de changer
-   d'écran pour une action courante.
+2. Actions en ligne : cocher et ouvrir la fiche. Pas de bouton « reporter » : l'écran Tâches en a
+   un, le remettre ici ferait deux chemins visibles vers la même action (principe 5).
 
 3. État vide complet quand tout est fait : message clair, aucune suggestion supplémentaire.
 
-4. Pastille iOS — navigator.setAppBadge(n) où n = nombre d'items du jour non faits ; appelée au
-   rendu et sur visibilitychange→hidden ; clearAppBadge() quand n vaut 0 ; entourée d'un garde
-   ('setAppBadge' in navigator) car l'API n'existe pas partout.
-
-5. L'accueil devient l'écran de démarrage par défaut.
+4. Pastille iOS — navigator.setAppBadge(n) où n = nombre d'items du jour non faits ; posée à la
+   fermeture (visibilitychange→hidden et pagehide), pas au rendu ; setAppBadge(0) efface, il n'y a
+   pas besoin de clearAppBadge() ; entourée d'un garde car l'API n'existe pas partout.
 
 Termine par la checklist de release et le compte rendu.
 ```
 
+> **Prompt corrigé le 27/07/2026, après exécution.** Quatre points de la version d'origine étaient
+> faux ou nuisibles, et sont réparés ci-dessus :
+> - il demandait des **placeholders** habitudes et courses ; on ne pose pas un bloc vide, et leur
+>   CSS aurait été du CSS mort (`CONVENTIONS.md` §3) ;
+> - il demandait un bouton **« reporter à demain »** sur l'accueil, ce qui viole le principe 5 ;
+> - il demandait la pastille **« au rendu »**, ce qui la recalculerait à chaque tap pour rien —
+>   `ROADMAP` §6 dit « à la fermeture », et c'est la bonne lecture ;
+> - son point 5 (« l'accueil devient l'écran de démarrage ») était déjà vrai depuis le Lot 1.
+>
+> **Décisions prises à l'implémentation, absentes du prompt** (détaillées dans `ROADMAP` §6) : le
+> seuil de fraîcheur à 0,4 sur le bloc entretien, sans lequel l'état vide serait inatteignable ;
+> les cochages de session, pour qu'une ligne ne s'évapore pas sous le doigt.
+
 ### Critères d'acceptation
 - [ ] Un `start` passé remonte dans « Aujourd'hui », **jamais** dans « échéances dépassées »
+- [ ] Aucun item n'apparaît dans deux blocs à la fois
 - [ ] La liste du jour est plafonnée et le dépliant fonctionne
 - [ ] « Si tu as 10 minutes » ne propose jamais de tâche `someday`
-- [ ] Journée terminée → l'écran le dit et ne propose rien d'autre
+- [ ] Journée terminée → l'écran le dit et ne propose **rien** d'autre, aucune cible tactile
 - [ ] La pastille s'affiche sur l'icône de l'écran d'accueil iOS et se met à jour
 
 ---
@@ -438,7 +470,10 @@ le moteur recur.js du Lot 4 : ne le duplique pas.
    chargement paresseux, URLs objet révoquées à la fermeture de la feuille.
 
 6. Intégration — les soins dus apparaissent dans l'écran Maison à côté de l'entretien de la même
-   pièce, et dans « Aujourd'hui » dans le bloc entretien.
+   pièce, et dans « Aujourd'hui ». Attention : ROADMAP §6.2 les met dans le BLOC DU JOUR (avec
+   leur jauge, largeur bridée), pas dans le bloc entretien qui est réservé aux from:'done'.
+   C'est toi qui poses ce cas dans la cascade de todayBuckets() (js/today.js) : insère-le dedans,
+   jamais à côté, pour qu'un soin ne puisse pas apparaître dans deux blocs.
 
 N'implémente ni reconnaissance par photo, ni météo, ni géolocalisation : elles exigeraient une API
 payante. Termine par la checklist de release et le compte rendu.
@@ -481,9 +516,17 @@ jamais en jauge de fraîcheur. L'entretien fait l'inverse. Ne mélange pas les d
    l'habitude ET les jours sautés. Pour le mode quota, la série se compte en semaines où le quota
    est atteint.
 
-5. Bloc permanent sur l'écran Aujourd'hui — les habitudes du jour non encore atteintes, saisie en
-   ligne (bouton ± pour les petits objectifs, clavier numérique sinon), jamais un écran de plus.
-   Un tap sur l'en-tête du bloc ouvre l'écran de suivi.
+5. Bloc permanent sur l'écran Aujourd'hui — c'est TOI qui le poses, il n'existe pas encore (le
+   Lot 5 ne l'a volontairement pas fait, ton modèle de données n'existait pas). Insère-le dans la
+   cascade de todayBuckets() (js/today.js), en position 4 de ROADMAP §6, jamais à côté. Il montre
+   les habitudes du jour non encore atteintes, saisie en ligne (bouton ± pour les petits
+   objectifs, clavier numérique sinon), jamais un écran de plus. Un tap sur l'en-tête du bloc
+   ouvre l'écran de suivi.
+   La maquette Canopée montre ce bloc, respecte-la : AUCUNE barre de progression sur l'accueil
+   (valeur en gras, quota, série — la barre --g-hab vit sur l'écran Habitudes), ± en boutons
+   blancs 44 px, et jamais « Sauter » et deux boutons sur la même ligne (à zéro : « Sauter » et
+   « + » ; dès qu'une valeur est saisie : « − » et « + »). Le CSS de ce bloc est déjà écrit dans
+   maquettes/today.html, il n'a simplement pas été porté dans index.html — reprends-le.
 
 6. Écran habits (secondaire, go('habits'), pas d'onglet) — liste des habitudes, création et
    édition, série en cours et record, calendrier mensuel de régularité (fait / partiel / sauté /
@@ -535,7 +578,11 @@ Cet écran s'utilise debout, une main sur le caddie. Chaque décision doit servi
 
 6. Vidage — bouton « vider les articles cochés » (tombstones), jamais de vidage automatique.
 
-7. Intégration — une ligne unique dans « Aujourd'hui » (« 7 articles »), jamais la liste entière.
+7. Intégration — une ligne unique dans « Aujourd'hui » (« 7 articles à acheter »), jamais la liste
+   entière. C'est toi qui la poses, elle n'existe pas encore : insère-la dans la cascade de
+   todayBuckets() (js/today.js), en position 5 de ROADMAP §6. La maquette Canopée la montre en
+   bouton pleine largeur teinté courses, icône panier à gauche et le mot « Voir » en vert à
+   droite — pas un chevron gris. Son CSS est déjà écrit dans maquettes/today.html, reprends-le.
 
 Termine par la checklist de release et le compte rendu.
 ```
@@ -559,9 +606,14 @@ Lot V1-10 « Aujourd'hui v2 & revue » de MyLife. Lis CONVENTIONS.md et ROADMAP-
 
 C'est le lot qui décide si l'app est encore utilisée dans un an.
 
-1. Aujourd'hui v2 — remplace les placeholders des Lots 5 par les vraies intégrations habitudes
-   (Lot 8) et courses (Lot 9). Relis l'ordre des blocs de ROADMAP §6 et vérifie qu'il est
-   respecté à la lettre.
+1. Aujourd'hui v2 — il n'y a AUCUN placeholder à remplacer : chaque domaine a posé son propre bloc
+   (Lot 5 pour les tâches et l'entretien, 7 pour les plantes, 8 pour les habitudes, 9 pour les
+   courses). Ce lot est une passe de VÉRIFICATION, pas de construction : relis l'ordre des 7 blocs
+   de ROADMAP §6 une fois tous les domaines présents, vérifie qu'il est respecté à la lettre, et
+   surtout qu'aucun item ne peut apparaître dans deux blocs (la cascade de todayBuckets() est
+   faite pour ça — vérifie que les quatre lots suivants s'y sont bien insérés au lieu d'ajouter
+   des filtres à côté). Vérifie aussi ce que compte la pastille : ce qui est dû, jamais les
+   offres du bloc « si tu as 10 minutes ».
 
 2. js/review.js — LA revue hebdomadaire, le système immunitaire de l'app.
    Déclenchement : au boot, si on est le jour settings.reviewDay (défaut dimanche) et que
@@ -649,9 +701,13 @@ sans exception. Lis CONVENTIONS.md en entier.
    marge négative, sans grossir le visuel), :focus-visible partout, prefers-reduced-motion sur
    toutes les animations, contrastes recalculés et rapportés en chiffres.
 
-2. Audit des textes — relis chaque libellé de l'app. Minuscules de phrase, ton sobre, aucun
-   emoji, aucune formulation culpabilisante. Vérifie qu'aucun écran d'entretien ou de plante ne
-   dit « en retard » ou « manqué ».
+2. Audit des textes — relis chaque libellé de l'app. MAJUSCULE INITIALE sur toute phrase et toute
+   entrée de liste (règle arbitrée au Lot 2, elle remplace la consigne « minuscules de phrase »
+   d'origine — cf. CONVENTIONS.md §3), ton sobre, aucun emoji, aucune formulation culpabilisante.
+   Vérifie qu'aucun écran d'entretien ou de plante ne dit « en retard » ou « manqué ».
+   Tranche aussi le point laissé ouvert au Lot 5 : la phrase de l'état vide d'« Aujourd'hui »
+   (« Rien ne demande ton attention avant ce soir ») sous-informe quand la tâche du soir est faite
+   elle aussi. Soit on l'accepte, soit il faut une seconde variante.
 
 3. Audit de la règle « jamais deux chemins visibles vers la même action ». Liste les redondances
    que tu trouves, propose-moi les suppressions AVANT de les faire.
