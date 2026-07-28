@@ -5,7 +5,7 @@
    AUCUN RENDU DOM ICI — voir js/ui.js et les js/<ecran>.js pour l'affichage.
    ========================================================================== */
 
-const APP_VERSION = 'Bêta 1.8'; // à synchroniser avec CACHE (sw.js) à chaque release
+const APP_VERSION = 'Bêta 1.9'; // à synchroniser avec CACHE (sw.js) à chaque release
 
 const IDB_NAME = 'mylife';
 const IDB_VERSION = 1;
@@ -24,7 +24,8 @@ function defaults(){
     settings: {
       userName: null,   // prénom du salut d'accueil
       weekStart: 1,      // lundi
-      rayonOrder: [],    // ordre des rayons, adapté au plan du magasin
+      rayonOrder: RAYON_ORDER_DEFAULT.slice(), // ordre des rayons, adapté au plan du magasin (Lot 9)
+      rayonOverrides: {}, // {libellé normalisé: rayon} — corrections mémorisées (Lot 9, js/shopping.js)
       coldFrom: 10,       // bornes de la saison froide (plantes) : octobre
       coldTo: 2,          // → février
       todayCap: 7,        // plafond visuel de l'écran Aujourd'hui
@@ -63,9 +64,13 @@ function migrate(r){
   r.shopping = r.shopping || [];
   r.frequents = r.frequents || [];
   r.settings = Object.assign({
-    userName: null, weekStart: 1, rayonOrder: [], coldFrom: 10, coldTo: 2,
+    userName: null, weekStart: 1, rayonOrder: [], rayonOverrides: {}, coldFrom: 10, coldTo: 2,
     todayCap: 7, reviewDay: 0, hideDone: false, birds: true
   }, r.settings || {});
+  // Lot V1-9 : un rayonOrder vide (installs d'avant ce lot, jamais rempli)
+  // retombe sur l'ordre par défaut plutôt que de laisser Courses sans groupes.
+  if(!r.settings.rayonOrder || !r.settings.rayonOrder.length) r.settings.rayonOrder = RAYON_ORDER_DEFAULT.slice();
+  if(!r.settings.rayonOverrides) r.settings.rayonOverrides = {};
   if(r.lastReview === undefined) r.lastReview = null;
   if(r.onboarded === undefined) r.onboarded = false;
   return r;

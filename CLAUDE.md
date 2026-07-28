@@ -128,8 +128,12 @@ uniquement des déclarations.
   `.hab-val/.step/.skip/.row-soft` (bloc du jour, repris tels quels de `maquettes/today.html`),
   `.habits-head` (en-tête du bloc, seule porte vers `go('habits')`), `.hab-num` (clavier numérique
   au-delà de `HAB_STEP_MAX`), `.hab-cal/.hab-day` (calendrier mensuel de l'écran Habitudes — quatre
-  états `.done/.partial/.skip/.inactive`, jamais un cinquième « manqué », cf. `js/habits.js`).
-  Au-delà de **900 px** : colonne centrée plafonnée à 560 px (desktop optimisé en V2).
+  états `.done/.partial/.skip/.inactive`, jamais un cinquième « manqué », cf. `js/habits.js`), et le
+  bloc **Lot 9** : `.shop/.shop-l/.shop-go` (bouton d'Aujourd'hui, repris de `maquettes/today.html`),
+  `.row-qty` (quantité à droite d'un article), `.rayon-left` (compteur restant d'un rayon, mode
+  magasin), `.shop-store` (gros libellés du mode magasin, ne change que la taille des `.row`/`.check`
+  déjà en place), `:disabled` sur `.row-postpone`/`.row-del` (flèches de `rayonOrderSheet()` en haut
+  et en bas de liste). Au-delà de **900 px** : colonne centrée plafonnée à 560 px (desktop V2).
 - `js/state.js` — **socle**, aucun rendu DOM : `APP_VERSION`, IndexedDB (`openDb`/`idbGet`/`idbSet`,
   + `idbPutPhoto`/`idbGetPhoto`/`idbDelPhoto` pour le store `photos`), `defaults()`/`migrate()`,
   `let S`, `save()` (débounce 150 ms) / `saveNow()` (async), `purgeTombstones()` (>90 j, appelée au
@@ -178,6 +182,12 @@ uniquement des déclarations.
   jauge, `CONVENTIONS.md` §6). `todayBadgeCount()` ajoute les habitudes encore actionnables
   (`habitsPendingCount()`) ; l'état vide (`vide` dans `renderToday()`) les prend en compte de la même
   façon : une habitude déjà atteinte ou sautée aujourd'hui ne bloque plus « c'est bon ».
+  Depuis le **Lot V1-9**, `todayBuckets()` porte aussi `shopping` (`shoppingOpenCount()`,
+  `js/shopping.js`) — un compte, jamais la liste. `shoppingButtonHtml()` rend le bouton pleine
+  largeur teinté `--t-courses` (repris de `maquettes/today.html`, jamais posé au Lot 5 faute de
+  modèle de données), toujours affiché si la liste n'est pas vide et rendu **hors** du `if(vide)`,
+  comme « Ce soir » : un rappel ambiant qui ne bloque jamais l'état vide et n'entre pas dans
+  `todayBadgeCount()` (même traitement que le bloc 7, « si tu as 10 minutes »).
 - `js/habits.js` — **rempli au Lot 8**. Domaine Habitudes : moteur de **série et quota**, jamais une
   jauge de fraîcheur (frontière posée par `CONVENTIONS.md` §6 — ne réutilise donc pas `js/recur.js`).
   Deux modes de planification traités séparément : `sched:{kind:'days', days:[1..7]}` (jours fixes)
@@ -194,8 +204,24 @@ uniquement des déclarations.
   **quatre** traitements visuels — fait / partiel / sauté / inactif — et pas un cinquième
   « manqué » : `CONVENTIONS.md` §3 proscrit tout ton culpabilisant, un jour resté sans saisie se lit
   comme « inactif », jamais comme un reproche.
-- `js/shopping.js` — placeholder, `renderShopping()` écrit `screenHead(...) +
-  emptyState('Bientôt.', '…')` dans `#s-shopping`.
+- `js/shopping.js` — écran Courses, **rempli au Lot 9**. Classement automatique par rayon
+  (`guessRayon()`, fonction pure testée isolément comme `parseQuick()` : normalise le libellé
+  (`normalizeLabel()`), cherche par groupes de mots consécutifs — du plus long au plus court, pour
+  qu'une clé à deux mots comme « papier toilette » (`data/rayons.js`) l'emporte sur un mot isolé au
+  milieu d'un libellé plus long — puis retombe sur `'autre'`). Une correction de rayon (fiche
+  `shopItemSheet()`, un tap) est mémorisée dans `S.settings.rayonOverrides` **pour ce libellé
+  précis**, jamais à chaque ajout — sinon le dictionnaire n'aurait plus jamais voix au chapitre sur
+  un produit déjà tapé une fois. Une carte par rayon (`shopRayonCard()`, blanche comme Maison, pas
+  teintée `t-courses` : seul le bouton d'Aujourd'hui l'est), triée selon `S.settings.rayonOrder`
+  (réglable via `rayonOrderSheet()`, flèches haut/bas plutôt qu'un glisser-déposer). Mode magasin
+  (`setShopMode()`, bascule de session) : gros libellés (`.shop-store`), Wake Lock avec garde de
+  disponibilité (`acquireWakeLock()`/`releaseWakeLock()`, redemandé au retour visible), coché =
+  grisé **en bas** de son rayon (jamais retiré : on doit pouvoir décocher une erreur) —
+  `clearCheckedShopping()` vide les cochés en tombstone, jamais automatiquement. `S.frequents[]`
+  (`bumpFrequent()`/`frequentShoppingItems()`) : un produit ajouté ≥ 3 fois est proposé en un tap
+  sous le champ d'ajout, les plus utilisés d'abord — pas un objet synchro-ready comme `tasks[]`,
+  c'est un compteur d'usage recalculable par libellé, pas un objet du domaine. `addShoppingItem()`
+  est le chemin unique de création, qu'il vienne du champ ou d'un fréquent en un tap.
 - `js/maison.js` — écran Maison, **vue par pièce posée au Lot 4** : `getMaisonItems()` regroupe les
   tâches d'entretien (`room` posé + `repeat.from:'done'`, glossaire `CONVENTIONS.md` §6) par pièce ;
   jauge agrégée par pièce (la plus basse de ses éléments, `freshLabel()` pour le texte à côté —
@@ -258,7 +284,13 @@ uniquement des déclarations.
   objet révoquée à la fermeture via le hook `_onSheetClose` posé dans `js/ui.js`.
 - `js/review.js` — placeholder **sans conteneur DOM propre** : `renderReview()` renvoie juste un
   fragment `emptyState()`, jamais appelée par `go()`. Logique réelle au Lot 10.
-- `data/rayons.js` (`RAYONS`) — structure vide commentée, remplie au Lot 9.
+- `data/rayons.js` (`RAYONS`, `RAYON_ORDER_DEFAULT`) — **rempli au Lot 9** : dictionnaire d'environ
+  430 libellés normalisés (minuscules, accents retirés) vers une clé de rayon, y compris des clés à
+  plusieurs mots pour désambiguïser un mot trop générique pour être une clé seule (« papier
+  toilette », « brosse a dents »…). `RAYON_ORDER_DEFAULT` (l'ordre par défaut des 14 rayons) vit ici
+  et pas dans `js/shopping.js` : `defaults()` (`js/state.js`) l'utilise dès son premier appel,
+  synchrone, avant même que `js/shopping.js` n'ait chargé — chargé en premier comme les deux autres
+  catalogues, c'est justement pour ça.
 - `data/plantes.js` (`PLANTES`) — **rempli au Lot 7** : une quarantaine de plantes d'intérieur
   courantes (nom, nom latin, intervalles d'arrosage/engrais saison chaude et froide, rempotage en
   mois). Choisir une espèce dans la fiche plante pré-remplit ces intervalles.
@@ -284,12 +316,17 @@ uniquement des déclarations.
 ## Lancer / tester
 - Ouvrir `index.html` dans un navigateur (ou servir en local, ex. `python3 -m http.server`). Les
   fonctions PWA (service worker, stockage persistant, IndexedDB) exigent HTTPS ou `localhost`.
-- **Piège de test local, découvert au Lot 6** : sur une origine déjà visitée (ex. `localhost:8765`
-  réutilisé d'une session à l'autre), le service worker sert le cache **stale-while-revalidate** —
-  donc l'ancien code, avant même le premier rendu — malgré un `CACHE` incrémenté côté serveur. Si un
-  écran affiché en local ne reflète pas un changement pourtant fait, désenregistrer le service worker
-  et vider les caches (`navigator.serviceWorker.getRegistrations()` + `caches.keys()`) plutôt que de
-  chercher le bug ailleurs.
+- **Piège de test local, découvert au Lot 6, reconfirmé au Lot 9** : sur une origine déjà visitée
+  (ex. `localhost:8765` réutilisé d'une session à l'autre), le service worker sert le cache
+  **stale-while-revalidate** — donc l'ancien code, avant même le premier rendu — malgré un `CACHE`
+  incrémenté côté serveur, et **le cache HTTP du navigateur lui-même peut aussi retenir une vieille
+  réponse** pour un fichier statique servi sans en-têtes de cache par `python3 -m http.server`,
+  indépendamment du service worker. `unregister()` + `caches.keys()`/`delete()` suffit rarement à lui
+  seul si l'origine a déjà beaucoup servi dans la session : un nouveau `boot()` peut encore échouer
+  juste après (ex. `ReferenceError` sur une variable d'un fichier chargé plus tôt — le symptôme d'un
+  script qui a avorté plus haut, pas la vraie cause). **Le plus fiable : servir sur un port jamais
+  visité dans la session** (nouvelle origine = aucun cache HTTP ni service worker à décharger) plutôt
+  que de s'acharner à vider l'ancien.
 - **Vérif syntaxe** : `node --check <fichier>` sur chaque fichier `js/`/`data/` modifié.
 - **Test de fumée** : `npm test` (après un premier `npm install`) — charge `index.html` sous jsdom
   avec `fake-indexeddb` injecté, inline les 17 fichiers `data/`+`js/` concaténés dans l'ordre de
@@ -318,14 +355,22 @@ uniquement des déclarations.
   Ces scénarios (helper `habitScenario()`) restaurent `S.habits`/`S.habitLog` derrière eux, comme
   `scenario()` le fait pour `S.tasks` — le test de l'état vide isole en plus `S.plants` (le Ficus du
   Lot 7 a un engrais/rempotage jamais faits, donc perpétuellement dus, qui polluerait sinon tout
-  état vide calculé après ce point du fichier).
+  état vide calculé après ce point du fichier). Depuis le Lot 9, **les courses** : `guessRayon()`
+  attaqué directement (clé exacte, mot dans un libellé plus long, casse/accents indifférents, clé à
+  deux mots retrouvée au milieu d'un libellé plus long), `addShoppingItem()` (discipline
+  synchro-ready, repli sur `'autre'`), la correction de rayon mémorisée par libellé et pas à chaque
+  ajout, les fréquents (seuil à 3), le cochage/vidage en tombstone, l'ordre des rayons réglable
+  (`rayonOrderSheet()`/`moveRayon()`/`saveRayonOrder()`) et l'intégration au bloc 5 d'« Aujourd'hui »
+  (compte seul, jamais la liste ; ne bloque jamais l'état vide ; absent de la pastille). Ces
+  scénarios (helper `shopScenario()`) restaurent `S.shopping`/`S.frequents`/`settings.rayonOrder`/
+  `settings.rayonOverrides` derrière eux.
 - **À chaque release** : incrémenter `CACHE` (`sw.js`) **et** `APP_VERSION` (`js/state.js`), même
   numéro (`mylife-b1-N` / `'Bêta 1.N'`).
 
 ## Modèle de données (S) — ROADMAP-V1.md §5
 ```
 S = { v:1, tasks:[], plants:[], habits:[], habitLog:{}, shopping:[], frequents:[],
-      settings:{userName,weekStart,rayonOrder,coldFrom,coldTo,todayCap,reviewDay,hideDone},
+      settings:{userName,weekStart,rayonOrder,rayonOverrides,coldFrom,coldTo,todayCap,reviewDay,hideDone},
       lastReview:null, onboarded:false }
 ```
 Depuis le Lot 4, `tasks[]` porte `{id,createdAt,updatedAt,deletedAt,title,doneAt,notes,cat,room,
@@ -353,6 +398,15 @@ particulier de l'autre). `habitLog{}` est `{'YYYY-MM-DD':{habitId: valeur|'skip'
 des définitions pour ne pas perdre l'historique en renommant/supprimant une habitude. Une valeur
 `'skip'` est neutre (ne casse ni n'alimente la série) ; seule `valeur >= target` alimente
 `habitStreak()`.
+
+Depuis le Lot 9, `shopping[]` porte `{id,createdAt,updatedAt,deletedAt,label,rayon,qty,done,sort}` —
+`rayon` est deviné par `guessRayon()` (`js/shopping.js`) à l'ajout, corrigeable d'un tap ; `qty` est
+un texte libre facultatif (« 6 », « 500 g ») ; `sort` fixe l'ordre au sein d'un rayon (aucun ordre
+implicite par position). `S.frequents[]` (`{norm,label,rayon,count}`, sans `id`/tombstone : c'est un
+compteur d'usage recalculable par libellé, pas un objet du domaine) alimente les fréquents proposés
+sous le champ d'ajout dès `count >= 3`. `settings.rayonOrder` (14 clés de `data/rayons.js`, ordre par
+défaut `RAYON_ORDER_DEFAULT`) et `settings.rayonOverrides` (`{libellé normalisé: rayon}`, corrections
+mémorisées) complètent les réglages.
 
 ## Règles et pièges à connaître
 - **Ouvrir `maquettes/MyLife Canopée.html` avant de dessiner ou de coder un écran.** Elle contient
@@ -388,8 +442,9 @@ des définitions pour ne pas perdre l'historique en renommant/supprimant une hab
   bug — ne pas « corriger » ce filtre pour la faire réapparaître dans les listes de tâches.
 - **Un item ne doit jamais apparaître dans deux blocs d'« Aujourd'hui ».** `todayBuckets()` est écrit
   en cascade pour ça : chaque filtre retire ce que le précédent a pris (échéance dépassée, puis « ce
-  soir », puis le bloc du jour). Ajouter un bloc au Lot 7 ou 10 = l'insérer dans cette cascade, pas à
-  côté. Le test de fumée vérifie explicitement l'absence de doublon.
+  soir », puis le bloc du jour). Ajouter un bloc au Lot 7, 8 ou 9 = l'insérer dans cette cascade, pas
+  à côté — même quand, comme les courses (Lot 9), il n'y a rien à filtrer et que le bloc n'est qu'un
+  compte (`todayBuckets().shopping`). Le test de fumée vérifie explicitement l'absence de doublon.
 - **La fiche tâche s'ouvre depuis deux écrans depuis le Lot 5.** Tout ce qui la ferme en modifiant
   l'état doit appeler `rerender()` (ui.js), jamais `renderTasks()` en dur — sinon l'écran d'origine
   reste figé.
@@ -418,7 +473,7 @@ des définitions pour ne pas perdre l'historique en renommant/supprimant une hab
 | **6 — Saisie rapide** | Bêta 1.6 | ✅ Fait. `js/nlp.js` : `parseQuick()` pur (dates relatives/absolues, échéance explicite `avant/pour/deadline` → `due`, récurrence à date fixe ou après réalisation, ce soir, priorité, effort, catégorie/pièce par dièse, tout le non-reconnu reste dans le titre) et la **barre de capture universelle** sur Aujourd'hui et Tâches (aperçu à puces supprimables, `commitCapture()`, bouton discret « Détails… » → fiche du Lot 3 préremplie). Remplace l'ancien champ « Ajouter une tâche » (`addTask()` retiré). Plus de 50 cas de test sur `parseQuick()`. |
 | **7 — Maison v2 (plantes)** | Bêta 1.7 | ✅ Fait. Catalogue `data/plantes.js` (~40 espèces, intervalles chaud/froid + rempotage), modulation saisonnière `plantSeason()` (`js/plants.js`) réutilisant `freshness()`/`completeTask()` de `js/recur.js` sans dupliquer le moteur, fiche plante (`plantSheet()` : identité, pièce, photo redimensionnée/recompressée en JPEG, jauges des trois soins, historique, boutons d'action immédiate), intégration à l'écran Maison (mêlée à l'entretien, par pièce) et au bloc du jour d'« Aujourd'hui » (soins réellement dus, jamais le bloc Entretien). |
 | **8 — Habitudes** | Bêta 1.8 | ✅ Fait. Moteur `js/habits.js` — série et quota, **jamais** une jauge de fraîcheur (frontière `CONVENTIONS.md` §6, ne réutilise donc pas `js/recur.js`) ; deux modes de planification traités séparément (`sched:{kind:'days',days}` / `sched:{kind:'week',perWeek}`) ; jour sauté neutre et progression partielle (seule l'atteinte de `target` alimente `habitStreak()`) ; bloc permanent d'« Aujourd'hui » en position 4 de la cascade (saisie en ligne, ± sous `HAB_STEP_MAX`, clavier numérique au-delà, jamais « Sauter » et deux boutons sur la même ligne — CSS repris de `maquettes/today.html`) ; écran secondaire `go('habits')` (fiche `habitSheet()`, calendrier mensuel à quatre états fait/partiel/sauté/inactif, **pas** un cinquième « manqué » — CONVENTIONS.md §3 proscrit le ton culpabilisant) ; série en cours, record (`habitBestStreak()`) et taux de réussite sur 30 jours (`habitRate30()`). |
-| 9 — Courses | Bêta 1.9 | À faire |
+| **9 — Courses** | Bêta 1.9 | ✅ Fait. Dictionnaire `data/rayons.js` (~430 libellés, `guessRayon()` par groupes de mots consécutifs, du plus long au plus court) ; correction de rayon mémorisée par libellé (`settings.rayonOverrides`), pas à chaque ajout ; cartes par rayon triées selon `settings.rayonOrder` (réglable, flèches haut/bas) ; mode magasin (gros libellés, Wake Lock avec garde de disponibilité, coché grisé en bas du rayon jamais retiré) ; produits fréquents (`S.frequents[]`, ≥ 3 ajouts) ; vidage des cochés en tombstone, jamais automatique ; bouton d'Aujourd'hui en position 5 de la cascade (une ligne, jamais la liste, ne bloque jamais l'état vide, absent de la pastille — même traitement que le bloc 7). |
 | 10 — « Aujourd'hui » v2 & revue | Bêta 1.10 | À faire |
 | 11 — Réglages & filet de sécurité | Bêta 1.11 | À faire |
 | 12 — Polish, QA, dettes | Bêta 1.12 | À faire |

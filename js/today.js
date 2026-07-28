@@ -5,10 +5,9 @@
      2. Aujourd'hui           — start ≤ aujourd'hui et récurrences dues, plafonné
      3. Entretien             — au plus 3 jauges, les plus basses
      4. Habitudes du jour     — actives aujourd'hui, saisie en ligne (js/habits.js)
+     5. Courses               — une ligne, jamais la liste (js/shopping.js)
      6. Ce soir               — sous-section discrète
      7. Si tu as 10 minutes   — 1 à 3 tâches anytime à effort court
-   Le bloc 5 (Courses) n'est pas ici : il arrive avec son domaine au Lot 9
-   (ROADMAP §7). Son modèle de données n'existe pas encore.
 
    Depuis le Lot V1-7 : les soins de plantes réellement dus (jauge à 0,
    js/plants.js) rejoignent le bloc 2 « Aujourd'hui » — jamais le bloc 3
@@ -118,7 +117,12 @@ function todayBuckets(){
   //    mêlé aux tâches : une série ne se compte pas comme une jauge.
   const habits = getTodayHabits(today);
 
-  return {overdue, scheduled, soins, evening, quick, done, habits};
+  // 5. Courses (js/shopping.js) : un compte, jamais la liste. Ce n'est pas un
+  //    dû du jour — comme le bloc 7, il ne gêne jamais l'état vide et n'entre
+  //    pas dans la pastille (voir todayBadgeCount()).
+  const shopping = shoppingOpenCount();
+
+  return {overdue, scheduled, soins, evening, quick, done, habits, shopping};
 }
 
 // Pastille de l'icône iOS (ROADMAP §6) : ce qu'il reste à faire aujourd'hui.
@@ -229,6 +233,19 @@ function careCard(soins, i, n){
   '</div>';
 }
 
+// 5. Courses : un bouton pleine largeur teinté --t-courses, pas une case à
+// cocher — ce n'est pas une tâche, la seule action est « Voir » (en vert),
+// jamais un chevron gris (maquette today.html, jamais posé au Lot 5 faute de
+// modèle de données). Toujours affiché si la liste n'est pas vide, comme
+// « Ce soir » : un rappel ambiant qui ne bloque jamais l'état vide.
+function shoppingButtonHtml(n){
+  return '<button class="shop" onclick="go(\'shopping\')">'+
+    '<span class="shop-l">'+icon('<path d="M5 8h14l-1.2 11H6.2z"></path><path d="M9 8V6a3 3 0 0 1 6 0v2"></path>', 20)+
+      n+(n > 1 ? ' articles' : ' article')+' à acheter</span>'+
+    '<span class="shop-go">Voir</span>'+
+  '</button>';
+}
+
 function softSection(titre, list){
   return '<div class="sec soft"><h2 class="sec-title">'+esc(titre)+'</h2></div>'+
     '<ul class="list list-page">'+list.map(t=>todayRow(t, '', 'row-low')).join('')+'</ul>';
@@ -260,6 +277,7 @@ function renderToday(){
     if(b.soins.length) html += careCard(b.soins, i++, nCards);
     if(b.habits.length) html += todayHabitsCard(b.habits, i++, nCards);
   }
+  if(b.shopping) html += shoppingButtonHtml(b.shopping);
   if(b.evening.length) html += softSection('Ce soir', b.evening);
   if(!vide && b.quick.length) html += softSection('Si tu as 10 minutes', b.quick);
 

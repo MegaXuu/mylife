@@ -488,6 +488,44 @@ html[data-mode="dark"] .card.t-courses{--ink2:#A89D8D;}
 .hab-day.done{background:var(--g-hab);}
 .hab-day.skip{background:none; border:1.5px dashed var(--line);}
 
+/* ==========================================================================
+   Lot V1-9 — courses. Le bouton d'Aujourd'hui reprend telle quelle
+   maquettes/today.html (§ « Courses », déjà validée, jamais posée au Lot 5
+   faute de modèle de données). Le reste (cartes par rayon, mode magasin) est
+   nouveau : la maquette Canopée n'y montre que trois rayons et pas de mode
+   magasin. Les cartes de rayon réutilisent .card/.room-head/.card-title/.row
+   déjà en place — seuls la quantité, le compteur de rayon et le mode magasin
+   sont nouveaux ici.
+   ========================================================================== */
+.shop{
+  display:flex; align-items:center; justify-content:space-between; gap:var(--s3);
+  width:100%; min-height:58px; padding:var(--s4); margin-bottom:var(--s3);
+  background:var(--t-courses); border:0; border-radius:var(--r-card);
+  box-shadow:var(--elev); color:var(--ink);
+  font-size:var(--fs-body); font-weight:600; text-align:left;
+}
+.shop-l{display:flex; align-items:center; gap:10px;}
+.shop-go{flex:none; color:var(--act); font-size:14px; font-weight:600;}
+
+/* Quantité d'un article, à droite du titre (« × 6 » dans la maquette). */
+.row-qty{flex:none; font-size:var(--fs-meta); color:var(--ink2); margin-left:var(--s2);}
+
+/* Compteur d'articles restants dans l'en-tête d'un rayon, mode magasin seul. */
+.room-head .rayon-left{flex:none; font-size:13px; font-weight:600; color:var(--ink2);}
+
+/* Mode magasin : gros libellés, cases larges au pouce — une main sur le
+   caddie. Ne change que la taille, jamais la structure de la liste. */
+.shop-store .row{min-height:64px;}
+.shop-store .row-title{font-size:20px; font-weight:700;}
+.shop-store .row-qty{font-size:15px;}
+.shop-store .check::before{width:32px; height:32px;}
+.shop-store .check::after{width:17px; height:17px;}
+
+/* Réordonner les rayons (feuille) : flèches haut/bas sur les cibles de 44 px
+   déjà posées par .row-postpone — seul l'état désactivé (haut/bas de liste)
+   est nouveau ici. */
+.row-postpone:disabled,.row-del:disabled{opacity:.35; pointer-events:none;}
+
 /* ---------- Au-delà de 900 px : colonne centrée plafonnée (desktop en V2) ---------- */
 @media (min-width:900px){
   .app{max-width:560px; margin:0 auto;}

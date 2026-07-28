@@ -703,6 +703,132 @@ call('Habitudes — fiche : création via l’UI, casse posée par cap(), tombst
   if(!S.habits.some(x => x.id === h.id)) throw new Error('l’habitude supprimée doit rester dans le tableau (tombstone)');
 });
 
+// 6 septies) Courses (Lot V1-9, js/shopping.js) : classement automatique par
+// rayon (guessRayon(), pure), fréquents, correction mémorisée, mode magasin
+// et intégration au bloc 5 d'« Aujourd'hui ». Chaque scénario part d'une
+// ardoise vide (shopping + frequents + réglages rayons) et restaure derrière
+// lui, comme scenario()/habitScenario() le font pour leurs domaines.
+const shopScenario = (label, build) => call(label, () => {
+  const backupS = S.shopping.slice(), backupF = S.frequents.slice();
+  const backupOrder = S.settings.rayonOrder.slice(), backupOv = Object.assign({}, S.settings.rayonOverrides);
+  S.shopping.length = 0; S.frequents.length = 0;
+  try{ build(); } finally {
+    S.shopping.length = 0; backupS.forEach(it => S.shopping.push(it));
+    S.frequents.length = 0; backupF.forEach(f => S.frequents.push(f));
+    S.settings.rayonOrder = backupOrder;
+    S.settings.rayonOverrides = backupOv;
+  }
+});
+
+call('Courses — guessRayon() : clé exacte, mot dans un libellé plus long, casse et accents indifférents', () => {
+  if(win.guessRayon('Lait') !== 'cremerie') throw new Error('« Lait » devrait tomber sur cremerie (clé exacte)');
+  if(win.guessRayon('lait demi-écrémé') !== 'cremerie') throw new Error('« lait demi-écrémé » devrait tomber sur cremerie (mot « lait »)');
+  if(win.guessRayon('LAIT') !== 'cremerie') throw new Error('« LAIT » devrait tomber sur cremerie, la casse ne doit rien changer');
+  if(win.guessRayon('Pommes') !== 'fruits-legumes') throw new Error('le pluriel devrait rester reconnu');
+  if(win.guessRayon('Papier toilette double épaisseur') !== 'hygiene')
+    throw new Error('une clé à deux mots doit être trouvée au milieu d’un libellé plus long, obtenu ' + win.guessRayon('Papier toilette double épaisseur'));
+  if(win.guessRayon('Truc bidule inconnu') !== null) throw new Error('un libellé absent du dictionnaire devrait rendre null (→ "autre" à l’ajout)');
+});
+
+shopScenario('Courses — addShoppingItem() : rayon deviné, discipline synchro-ready, tombe sur "autre" si inconnu', () => {
+  const it = win.addShoppingItem('Yaourt nature');
+  if(it.rayon !== 'cremerie') throw new Error('rayon attendu cremerie, obtenu ' + it.rayon);
+  if(!it.id || !it.createdAt || !it.updatedAt || it.deletedAt !== null)
+    throw new Error('addShoppingItem() devrait respecter la discipline synchro-ready (stamp())');
+  if(it.done !== false) throw new Error('un article ajouté ne devrait pas être coché');
+  const inconnu = win.addShoppingItem('Truc bidule inconnu');
+  if(inconnu.rayon !== 'autre') throw new Error('un libellé non reconnu doit tomber sur "autre", obtenu ' + inconnu.rayon);
+});
+
+shopScenario('Courses — correction de rayon mémorisée pour ce libellé, pas à chaque ajout', () => {
+  const it = win.addShoppingItem('Truc bidule maison');
+  if(it.rayon !== 'autre') throw new Error('« Truc bidule maison » ne devrait pas être reconnu (attendu "autre"), obtenu ' + it.rayon);
+  win.shopItemSheet(it.id);
+  if(!win.document.getElementById('sh-label')) throw new Error('la fiche article devrait afficher un champ libellé');
+  win.setShRayon('boisson');
+  win.saveShopItemSheet();
+  if(it.rayon !== 'boisson') throw new Error('la correction manuelle devrait s’appliquer immédiatement à l’article');
+  const encore = win.addShoppingItem('Truc bidule maison');
+  if(encore.rayon !== 'boisson')
+    throw new Error('un nouvel ajout du même libellé devrait reprendre la correction mémorisée, obtenu ' + encore.rayon);
+});
+
+shopScenario('Courses — produits fréquents : ≥ 3 ajouts, pas avant, proposés en un tap', () => {
+  win.addShoppingItem('Pain'); win.addShoppingItem('Pain');
+  if(win.frequentShoppingItems().some(f => f.label === 'Pain'))
+    throw new Error('2 ajouts ne devraient pas encore faire un fréquent (seuil à 3)');
+  win.addShoppingItem('Pain');
+  if(!win.frequentShoppingItems().some(f => f.label === 'Pain'))
+    throw new Error('3 ajouts devraient faire apparaître « Pain » dans les fréquents');
+  const before = S.shopping.length;
+  const f = win.frequentShoppingItems().find(f => f.label === 'Pain');
+  win.addFrequentShopItem(f.norm);
+  if(S.shopping.length !== before + 1) throw new Error('un tap sur un fréquent devrait ajouter l’article directement');
+});
+
+shopScenario('Courses — cocher/décocher, vidage des cochés en tombstone (jamais automatique)', () => {
+  const it = win.addShoppingItem('Beurre doux');
+  win.toggleShopDone(it.id);
+  if(!it.done) throw new Error('toggleShopDone() devrait cocher l’article');
+  win.toggleShopDone(it.id);
+  if(it.done) throw new Error('un second tap devrait décocher (erreur réversible, point 4)');
+  win.toggleShopDone(it.id);
+  win.clearCheckedShopping();
+  win._runConfirm();
+  if(!it.deletedAt) throw new Error('vider les cochés doit être un tombstone, jamais un splice()');
+  if(!S.shopping.some(x => x.id === it.id)) throw new Error('l’article vidé doit rester dans le tableau (tombstone)');
+});
+
+shopScenario('Courses — ordre des rayons réglable, persiste dans settings.rayonOrder', () => {
+  win.addShoppingItem('Lait'); // cremerie
+  win.addShoppingItem('Pomme'); // fruits-legumes
+  S.settings.rayonOrder = ['cremerie', 'fruits-legumes'];
+  win.go('shopping');
+  let titres = Array.from(win.document.querySelectorAll('#s-shopping .card-title')).map(e => e.textContent);
+  if(titres[0] !== 'Crèmerie' || titres[1] !== 'Fruits et légumes')
+    throw new Error('les cartes devraient suivre settings.rayonOrder, obtenu ' + JSON.stringify(titres));
+  win.rayonOrderSheet();
+  win.moveRayon(0, 1); // fait passer fruits-legumes avant cremerie
+  win.saveRayonOrder();
+  if(S.settings.rayonOrder[0] !== 'fruits-legumes')
+    throw new Error('saveRayonOrder() devrait persister le nouvel ordre, obtenu ' + JSON.stringify(S.settings.rayonOrder));
+  win.go('shopping');
+  titres = Array.from(win.document.querySelectorAll('#s-shopping .card-title')).map(e => e.textContent);
+  if(titres[0] !== 'Fruits et légumes') throw new Error('l’écran devrait refléter le nouvel ordre après enregistrement');
+});
+
+shopScenario('Aujourd’hui — bloc Courses (5) : une ligne, jamais la liste, n’empêche jamais l’état vide, absente de la pastille', () => {
+  win.addShoppingItem('Café moulu');
+  win.addShoppingItem('Riz basmati');
+  const b = win.todayBuckets();
+  if(b.shopping !== 2) throw new Error('todayBuckets().shopping devrait compter les articles non cochés, obtenu ' + b.shopping);
+  const badgeAvant = win.todayBadgeCount();
+  win.go('today');
+  const el = win.document.getElementById('s-today');
+  if(!/2 articles à acheter/.test(el.textContent)) throw new Error('le bouton devrait afficher « 2 articles à acheter »');
+  if(el.querySelectorAll('.shop').length !== 1) throw new Error('un seul bouton Courses, jamais la liste des articles');
+  if(win.todayBadgeCount() !== badgeAvant)
+    throw new Error('les articles de courses ne devraient pas alimenter la pastille (comme le bloc 7)');
+});
+
+shopScenario('Aujourd’hui — le bouton Courses reste visible même quand tout le reste dit "c’est bon" (comme Ce soir)', () => {
+  const backupH = S.habits.slice(), backupLog = S.habitLog, backupP = S.plants.slice();
+  S.habits.length = 0; S.habitLog = {}; S.plants.length = 0;
+  try{
+    win.addShoppingItem('Chocolat noir');
+    win.go('today');
+    const el = win.document.getElementById('s-today');
+    if(!/C’est bon pour aujourd’hui\./.test(el.textContent))
+      throw new Error('un article de courses en attente ne devrait jamais bloquer l’état vide');
+    if(!/1 article à acheter/.test(el.textContent))
+      throw new Error('le bouton Courses devrait rester affiché sous l’état vide, comme « Ce soir »');
+  } finally {
+    S.habits.length = 0; backupH.forEach(h => S.habits.push(h));
+    S.habitLog = backupLog;
+    S.plants.length = 0; backupP.forEach(p => S.plants.push(p));
+  }
+});
+
 // savePlantSheet() est asynchrone (photo éventuelle) : hors du helper call()
 // synchrone, comme le flush saveNow() plus bas.
 try{
@@ -768,5 +894,6 @@ if(fails.length){
               '  + mécanisme d’ignorance), plantes (saison, soins réutilisant recur.js,\n' +
               '  intégration Maison et bloc du jour, fiche), habitudes (série/quota, jour\n' +
               '  sauté neutre, progression partielle, mode quota hebdomadaire, intégration\n' +
-              '  Aujourd’hui, fiche) et persistance.');
+              '  Aujourd’hui, fiche), courses (guessRayon, fréquents, correction mémorisée,\n' +
+              '  vidage en tombstone, ordre des rayons, intégration Aujourd’hui) et persistance.');
 }
