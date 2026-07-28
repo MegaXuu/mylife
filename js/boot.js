@@ -8,8 +8,11 @@ async function boot(){
   S = await loadState();
   purgeTombstones();
   pickBirds(); // un tirage d'espèce et de perchoir par écran, à chaque ouverture
+  applyTheme(); // js/settings.js — avant le premier rendu, pour éviter tout flash
+  watchSystemTheme();
   go('today');
-  maybeStartReview(); // js/review.js — le jour venu, si des tâches dorment
+  maybeWelcome();      // js/settings.js — uniquement au tout premier lancement
+  maybeStartReview();  // js/review.js — le jour venu, si des tâches dorment
 }
 
 try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}

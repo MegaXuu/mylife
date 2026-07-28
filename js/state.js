@@ -5,7 +5,7 @@
    AUCUN RENDU DOM ICI — voir js/ui.js et les js/<ecran>.js pour l'affichage.
    ========================================================================== */
 
-const APP_VERSION = 'Bêta 1.10'; // à synchroniser avec CACHE (sw.js) à chaque release
+const APP_VERSION = 'Bêta 1.11'; // à synchroniser avec CACHE (sw.js) à chaque release
 
 const IDB_NAME = 'mylife';
 const IDB_VERSION = 1;
@@ -31,7 +31,8 @@ function defaults(){
       todayCap: 7,        // plafond visuel de l'écran Aujourd'hui
       reviewDay: 0,        // jour de la revue hebdomadaire (0 = dimanche)
       hideDone: false,
-      birds: true          // micro-présences d'oiseaux (Lot 2) — jamais en mode sombre
+      birds: true,         // micro-présences d'oiseaux (Lot 2) — jamais en mode sombre
+      theme: 'auto'        // 'light' | 'dark' | 'auto' (Lot 11) — auto suit prefers-color-scheme
     },
     lastReview: null,
     onboarded: false
@@ -65,14 +66,20 @@ function migrate(r){
   r.frequents = r.frequents || [];
   r.settings = Object.assign({
     userName: null, weekStart: 1, rayonOrder: [], rayonOverrides: {}, coldFrom: 10, coldTo: 2,
-    todayCap: 7, reviewDay: 0, hideDone: false, birds: true
+    todayCap: 7, reviewDay: 0, hideDone: false, birds: true, theme: 'auto'
   }, r.settings || {});
   // Lot V1-9 : un rayonOrder vide (installs d'avant ce lot, jamais rempli)
   // retombe sur l'ordre par défaut plutôt que de laisser Courses sans groupes.
   if(!r.settings.rayonOrder || !r.settings.rayonOrder.length) r.settings.rayonOrder = RAYON_ORDER_DEFAULT.slice();
   if(!r.settings.rayonOverrides) r.settings.rayonOverrides = {};
   if(r.lastReview === undefined) r.lastReview = null;
-  if(r.onboarded === undefined) r.onboarded = false;
+  // Lot V1-11 : une base déjà peuplée avant l'existence de la bienvenue ne
+  // doit jamais se la voir proposer après coup — seule une base réellement
+  // vierge (aucune tâche, plante, habitude ou article) reste à onboarder.
+  if(r.onboarded === undefined){
+    const hasData = r.tasks.length || r.plants.length || r.habits.length || r.shopping.length;
+    r.onboarded = !!hasData;
+  }
   return r;
 }
 
@@ -142,6 +149,20 @@ function idbDelPhoto(id){
     try{
       const tx = _db.transaction('photos','readwrite');
       tx.objectStore('photos').delete(id);
+      tx.oncomplete = ()=>resolve(true);
+      tx.onerror = ()=>resolve(false);
+    }catch(e){ resolve(false); }
+  });
+}
+// Vide le store 'photos' en une fois — réinitialisation (Lot 11) : S = defaults()
+// n'a plus aucun photoId à supprimer un par un, donc rien d'autre ne purgerait
+// les Blobs orphelins.
+function idbClearPhotos(){
+  return new Promise(resolve=>{
+    if(!_db){ resolve(false); return; }
+    try{
+      const tx = _db.transaction('photos','readwrite');
+      tx.objectStore('photos').clear();
       tx.oncomplete = ()=>resolve(true);
       tx.onerror = ()=>resolve(false);
     }catch(e){ resolve(false); }

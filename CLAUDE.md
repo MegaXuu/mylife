@@ -92,8 +92,11 @@ mode sombre**. Un écran qui pose des cartes appelle `birdOnCard(i, n)` sur chac
 `n` = total) — c'est tout ce qu'il y a à faire. Interrupteur « Oiseaux » dans Réglages
 (`S.settings.birds`, vrai par défaut).
 
-Mode sombre : bloc `html[data-mode="dark"]` prêt dans `:root`, **aucun interrupteur câblé** — il
-arrivera avec Réglages au Lot 11. `prefers-color-scheme` n'est volontairement pas branché.
+Mode sombre : bloc `html[data-mode="dark"]` prêt dans `:root` depuis le Lot 2, **interrupteur câblé
+au Lot 11** — trois états dans Réglages (Clair/Sombre/Auto, `S.settings.theme`), posés sur
+`data-mode` par `applyTheme()` (`js/settings.js`), appelée au boot avant le premier rendu. « Auto »
+suit `prefers-color-scheme` via `watchSystemTheme()` (écouteur posé une fois, réagit à un changement
+de thème système en direct) ; silencieux et replié sur clair si l'API n'existe pas.
 
 ## Fichiers et ordre de chargement
 Ordre impératif (CONVENTIONS.md §1), déclaré dans `index.html`, miroir dans `sw.js` (`ASSETS`) et
@@ -136,10 +139,15 @@ uniquement des déclarations.
   déjà en place), `:disabled` sur `.row-postpone`/`.row-del` (flèches de `rayonOrderSheet()` en haut
   et en bas de liste). Au-delà de **900 px** : colonne centrée plafonnée à 560 px (desktop V2).
 - `js/state.js` — **socle**, aucun rendu DOM : `APP_VERSION`, IndexedDB (`openDb`/`idbGet`/`idbSet`,
-  + `idbPutPhoto`/`idbGetPhoto`/`idbDelPhoto` pour le store `photos`), `defaults()`/`migrate()`,
-  `let S`, `save()` (débounce 150 ms) / `saveNow()` (async), `purgeTombstones()` (>90 j, appelée au
-  boot), helpers synchro-ready `stamp()`/`touch()`/`live()` (CONVENTIONS.md §2), helpers de date
-  `dayKey()`/`todayKey()`/`addDays()`/`daysBetween()`.
+  + `idbPutPhoto`/`idbGetPhoto`/`idbDelPhoto`/`idbClearPhotos` — ce dernier posé au Lot 11 pour la
+  réinitialisation — pour le store `photos`), `defaults()`/`migrate()`, `let S`, `save()` (débounce
+  150 ms) / `saveNow()` (async), `purgeTombstones()` (>90 j, appelée au boot), helpers synchro-ready
+  `stamp()`/`touch()`/`live()` (CONVENTIONS.md §2), helpers de date
+  `dayKey()`/`todayKey()`/`addDays()`/`daysBetween()`. Depuis le Lot 11, `migrate()` pose
+  `onboarded = true` d'office sur une base déjà peuplée qui ne l'avait jamais vu (une tâche, une
+  plante, une habitude ou un article existant) : elle ne doit jamais se voir proposer la bienvenue
+  après coup, seule une base réellement vierge reste à onboarder (`js/settings.js`,
+  `maybeWelcome()`).
 - `js/ui.js` — `go(name)` (écrans `today,tasks,maison,shopping,habits,settings`), `openSheet()`/
   `closeSheet()` (fermeture par tap dehors + glisser la poignée, Pointer Events), `confirmSheet()`
   (+ `_runConfirm()`), `toast(msg, {danger, action:{label,fn}})` (+ `hideToast()`/`_runToastAct()`),
@@ -246,11 +254,27 @@ uniquement des déclarations.
   (`careRowHtml()` unifie les deux types de ligne) : un tap sur une tâche la marque faite
   (`tapMaisonItem()`), un tap sur un soin de plante ouvre sa fiche (`plantSheet()`) — c'est là que
   vit le bouton « arrosé ». Bouton « Ajouter une plante » posé à côté de « Ajouter un entretien ».
-- `js/settings.js` — trois cartes depuis le Lot 10 : l'interrupteur « Oiseaux » (`toggleBirds()` →
-  `S.settings.birds`, posé au Lot 2), la revue hebdomadaire à la demande (`startReview()` sans
-  argument, `js/review.js` — le compte de `reviewCandidates()` affiché en clair, « Rien à trier pour
-  l'instant. » si vide), et un dernier bloc placeholder (profil, export, import, mode sombre :
-  Lot 11). Seul écran en `screenHead(..., {noGear:true})` : l'engrenage y mène, il n'y apparaît pas.
+- `js/settings.js` — écran Réglages, **rempli au Lot 11** : six cartes dans cet ordre, chacune un
+  groupe. **Profil** : prénom (`setUserName()`, `cap()` posé, vide autorisé), apparence
+  (`setTheme('light'|'dark'|'auto')` → `S.settings.theme`, posé sur `data-mode` de `<html>` par
+  `applyTheme()` — 'auto' suit `prefers-color-scheme` via `watchSystemTheme()`, silencieux si l'API
+  n'existe pas), l'interrupteur Oiseaux (`toggleBirds()`, posé au Lot 2). **Aujourd'hui** :
+  `todayCap`, jour de la revue (`reviewDay`, select), et la revue à la demande (`startReview()` sans
+  argument, `js/review.js`). **Maison** : bornes de la saison froide (`coldFrom`/`coldTo`, deux
+  select de mois réutilisant `NLP_MOIS`). **Courses** : `rayonOrderSheet()` (`js/shopping.js`,
+  inchangé, déjà posé au Lot 9). **Données** : export JSON complet de `S` (`exportData()`, dit
+  explicitement que les photos de plantes — des Blobs, store IndexedDB `photos` — n'y sont pas),
+  import (`importDataPrompt()` → `confirmSheet` → `onImportFile()` → `validateImportPayload()` puis
+  `applyImportedData()`, qui **valide intégralement avant d'écrire quoi que ce soit dans `S`** — un
+  import raté ne modifie rien), réinitialisation en deux temps (`resetSheet()` : proposer l'export
+  d'abord, le bouton danger ensuite ; `doReset()` pose `S = defaults()`, vide le store `photos`
+  via `idbClearPhotos()`, puis recharge). **À propos** : version, rappel du filet de sécurité
+  (export régulier), avertissement sur le lien données/hébergement. Porte aussi la **bienvenue**
+  du tout premier lancement (`maybeWelcome()`, appelée par `boot.js` juste après `go('today')`) :
+  trois écrans courts (présentation, prénom, première tâche ou « explorer »),
+  `_onSheetClose` pose `S.onboarded = true` quel que soit le chemin de fermeture — jamais revue une
+  fois fermée. Seul écran en `screenHead(..., {noGear:true})` : l'engrenage y mène, il n'y apparaît
+  pas.
 - `js/recur.js` — moteur de récurrence, **rempli au Lot 4**, fonctions pures sans DOM, testées
   isolément dans `test.mjs` : `intervalDays(repeat)` (intervalle en jours tous kinds confondus,
   approximation pour la jauge), `nextDue(task, ref)` (distinction `repeat.from:'due'` — depuis
@@ -327,10 +351,12 @@ uniquement des déclarations.
   `js/ui.js`. Contrat de dessin en tête du fichier (`viewBox 0 0 120 160`, pattes sur **y = 130**,
   les 30 px du bas débordent sous le perchoir). **Seul endroit du projet où des couleurs en dur sont
   admises** : un oiseau est une image, pas une couleur d'interface.
-- `js/boot.js` — `boot()` async (`S = await loadState()` → `purgeTombstones()` → `go('today')`),
-  `READY` + `window.__ready`, `navigator.storage.persist()`, enregistrement du service worker,
-  `saveNow()` sur `pagehide` et `visibilitychange→hidden`, `reg.update()` + rechargement sur
-  `controllerchange` au retour au premier plan.
+- `js/boot.js` — `boot()` async (`S = await loadState()` → `purgeTombstones()` → `applyTheme()`
+  (mode sombre, avant le premier rendu pour éviter tout flash) → `watchSystemTheme()` →
+  `go('today')` → `maybeWelcome()` (Lot 11, uniquement au tout premier lancement) →
+  `maybeStartReview()`), `READY` + `window.__ready`, `navigator.storage.persist()`, enregistrement
+  du service worker, `saveNow()` sur `pagehide` et `visibilitychange→hidden`, `reg.update()` +
+  rechargement sur `controllerchange` au retour au premier plan.
 - `sw.js` — cache-first avec mise à jour en arrière-plan (stale-while-revalidate) ; **incrémenter
   `CACHE`** (`mylife-b1-N`) à chaque release.
 - `manifest.webmanifest`, `icon-180/192/512.png` (monogramme « M » pixelisé sur aplat gris foncé,
@@ -395,14 +421,25 @@ uniquement des déclarations.
   `S.tasks`/`S.lastReview`/`settings.reviewDay`, comme `scenario()` le fait pour `S.tasks` seul), et
   **les célébrations sobres** : record de série d'habitude (aucun bruit le tout premier jour) et
   première réalisation d'un entretien annuel — les deux en interceptant `win.toast` plutôt qu'en
-  lisant le DOM, pour rester fiables même si un toast précédent est encore affiché.
+  lisant le DOM, pour rester fiables même si un toast précédent est encore affiché. Depuis le
+  Lot 11, **Réglages** : la bienvenue est testée en tout premier (c'est ce qui s'ouvre réellement
+  au tout premier `boot()` sur une base fake-indexeddb vierge — la tester puis la fermer proprement
+  évite de laisser son `_onSheetClose` traîner pour les scénarios suivants), le thème
+  (`applyTheme()` retombe sur clair sans planter quand `matchMedia` n'existe pas, comme sous
+  jsdom), `validateImportPayload()`/`applyImportedData()` (rejet intégral d'un payload invalide
+  **sans aucune écriture dans `S`**, remplacement entier si valide — `applyImportedData()` mute `S`
+  en place plutôt que de réassigner le `let S`, pour que la référence déjà capturée par le test
+  reste valide), `idbClearPhotos()` (réinitialisation) et l'ordre des six groupes de l'écran.
+  L'export réel (téléchargement du fichier) et le rechargement après import/réinitialisation ne
+  sont pas exercés par le test de fumée : `URL.createObjectURL` et `File.prototype.text()`
+  n'existent pas sous jsdom (comme le canvas de `resizePhoto()`, Lot 7, déjà hors test).
 - **À chaque release** : incrémenter `CACHE` (`sw.js`) **et** `APP_VERSION` (`js/state.js`), même
   numéro (`mylife-b1-N` / `'Bêta 1.N'`).
 
 ## Modèle de données (S) — ROADMAP-V1.md §5
 ```
 S = { v:1, tasks:[], plants:[], habits:[], habitLog:{}, shopping:[], frequents:[],
-      settings:{userName,weekStart,rayonOrder,rayonOverrides,coldFrom,coldTo,todayCap,reviewDay,hideDone},
+      settings:{userName,weekStart,rayonOrder,rayonOverrides,coldFrom,coldTo,todayCap,reviewDay,hideDone,birds,theme},
       lastReview:null, onboarded:false }
 ```
 Depuis le Lot 4, `tasks[]` porte `{id,createdAt,updatedAt,deletedAt,title,doneAt,notes,cat,room,
@@ -507,7 +544,7 @@ mémorisées) complètent les réglages.
 | **8 — Habitudes** | Bêta 1.8 | ✅ Fait. Moteur `js/habits.js` — série et quota, **jamais** une jauge de fraîcheur (frontière `CONVENTIONS.md` §6, ne réutilise donc pas `js/recur.js`) ; deux modes de planification traités séparément (`sched:{kind:'days',days}` / `sched:{kind:'week',perWeek}`) ; jour sauté neutre et progression partielle (seule l'atteinte de `target` alimente `habitStreak()`) ; bloc permanent d'« Aujourd'hui » en position 4 de la cascade (saisie en ligne, ± sous `HAB_STEP_MAX`, clavier numérique au-delà, jamais « Sauter » et deux boutons sur la même ligne — CSS repris de `maquettes/today.html`) ; écran secondaire `go('habits')` (fiche `habitSheet()`, calendrier mensuel à quatre états fait/partiel/sauté/inactif, **pas** un cinquième « manqué » — CONVENTIONS.md §3 proscrit le ton culpabilisant) ; série en cours, record (`habitBestStreak()`) et taux de réussite sur 30 jours (`habitRate30()`). |
 | **9 — Courses** | Bêta 1.9 | ✅ Fait. Dictionnaire `data/rayons.js` (~430 libellés, `guessRayon()` par groupes de mots consécutifs, du plus long au plus court) ; correction de rayon mémorisée par libellé (`settings.rayonOverrides`), pas à chaque ajout ; cartes par rayon triées selon `settings.rayonOrder` (réglable, flèches haut/bas) ; mode magasin (gros libellés, Wake Lock avec garde de disponibilité, coché grisé en bas du rayon jamais retiré) ; produits fréquents (`S.frequents[]`, ≥ 3 ajouts) ; vidage des cochés en tombstone, jamais automatique ; bouton d'Aujourd'hui en position 5 de la cascade (une ligne, jamais la liste, ne bloque jamais l'état vide, absent de la pastille — même traitement que le bloc 7). |
 | **10 — « Aujourd'hui » v2 & revue** | Bêta 1.10 | ✅ Fait. Passe de vérification (pas de construction) sur la cascade des 7 blocs de ROADMAP §6 : ordre et absence de doublon confirmés, la pastille ne comptait déjà que les dus. `js/review.js` rempli : la revue hebdomadaire (`reviewCandidates()`, `reviewDue()`, flux une tâche à la fois — faire cette semaine / un jour / abandonner —, écran de fin sobre), déclenchée au boot (`maybeStartReview()`) et accessible à la demande depuis Réglages. Motivation légère sans le moindre score : `celebrateHabitRecord()` (record de série, jamais le premier jour) et un toast à la première réalisation d'un entretien annuel (`tapMaisonItem()`/`tapTodayCare()`). Compteur de reports déjà posé aux Lots 3/5, vérifié conforme. |
-| 11 — Réglages & filet de sécurité | Bêta 1.11 | À faire |
+| **11 — Réglages & filet de sécurité** | Bêta 1.11 | ✅ Fait. Écran Réglages en six groupes (Profil, Aujourd'hui, Maison, Courses, Données, À propos) : prénom, apparence (interrupteur de mode sombre `setTheme('light'\|'dark'\|'auto')`, 'auto' suit `prefers-color-scheme`), Oiseaux (déjà là depuis le Lot 2), plafond du jour, jour de revue, saison froide des plantes, ordre des rayons (réutilise `rayonOrderSheet()` du Lot 9). Export/import JSON complets de `S` (photos exclues, signalé explicitement à l'écran), import validé intégralement avant toute écriture (`validateImportPayload()`/`applyImportedData()`). Réinitialisation en deux temps (proposer l'export, puis seulement le bouton danger) avec purge du store `photos`. Feuille de bienvenue au tout premier lancement (`maybeWelcome()`, trois écrans, jamais revue une fois fermée) ; `migrate()` marque d'office `onboarded=true` sur une base déjà peuplée. Le mode sombre n'était pas dans les six points du prompt de lot mais explicitement promis ici par ce fichier et par ROADMAP-V1.md §7 (« il arrivera avec Réglages au Lot 11 ») : inclus après arbitrage avec Florian. |
 | 12 — Polish, QA, dettes | Bêta 1.12 | À faire |
 
 ## Dépôt et mise en ligne — état réel

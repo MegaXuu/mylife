@@ -52,6 +52,112 @@ if(!S) fails.push('boot → état S inaccessible (le boot n’a pas produit d’
 
 const call = (label, fn) => { try{ fn(); }catch(e){ onError(label, e); } };
 
+// 0) Réglages (Lot V1-11) — bienvenue, thème, export/import, avant tout le
+//    reste : c'est justement ce qui s'ouvre réellement au tout premier boot()
+//    sur une base fake-indexeddb vierge (maybeWelcome(), appelé par boot()).
+//    La tester ici, et la fermer proprement, évite de laisser le hook
+//    _onSheetClose de la bienvenue traîner pour les scénarios suivants.
+call('Bienvenue — trois écrans, prénom retenu, tâche créée, onboarded=true et jamais revue', () => {
+  if(!win.document.getElementById('sheet-bg').classList.contains('show'))
+    throw new Error('la feuille de bienvenue devrait déjà être ouverte au premier boot (S vide, !onboarded)');
+  win.advanceWelcome(); // écran 1 → 2
+  const nameEl = win.document.getElementById('w-name');
+  if(!nameEl) throw new Error('le champ prénom devrait être présent à l’étape 2');
+  nameEl.value = 'ada';
+  nameEl.dispatchEvent(new win.Event('input', {bubbles: true}));
+  win.advanceWelcome(); // écran 2 → 3
+  if(S.settings.userName !== 'Ada') throw new Error('le prénom devrait être retenu avec la casse posée par cap()');
+  const taskEl = win.document.getElementById('w-task');
+  if(!taskEl) throw new Error('le champ tâche devrait être présent à l’étape 3');
+  taskEl.value = 'découvrir mylife';
+  taskEl.dispatchEvent(new win.Event('input', {bubbles: true}));
+  win.finishWelcome();
+  if(!S.onboarded) throw new Error('la bienvenue terminée devrait poser S.onboarded = true');
+  if(win.document.getElementById('sheet-bg').classList.contains('show'))
+    throw new Error('la feuille devrait être fermée après finishWelcome()');
+  const created = S.tasks.find(t => t.title === 'Découvrir mylife');
+  if(!created) throw new Error('la première tâche saisie devrait être créée, avec la casse posée par cap()');
+  // Nettoyage : ne pas polluer les scénarios suivants avec cette tâche/ce prénom.
+  created.deletedAt = Date.now(); win.touch(created);
+  S.settings.userName = null;
+});
+call('Bienvenue — maybeWelcome() ne se redéclenche jamais une fois onboarded', () => {
+  win.maybeWelcome();
+  if(win.document.getElementById('sheet-bg').classList.contains('show'))
+    throw new Error('la bienvenue ne doit jamais se rejouer une fois S.onboarded posé à true');
+});
+
+call('Réglages — thème : clair/sombre explicites, auto retombe sur clair sans planter (jsdom n’a pas matchMedia)', () => {
+  const backup = S.settings.theme;
+  try{
+    win.setTheme('dark');
+    if(win.document.documentElement.getAttribute('data-mode') !== 'dark')
+      throw new Error('« Sombre » devrait poser data-mode="dark"');
+    win.setTheme('light');
+    if(win.document.documentElement.getAttribute('data-mode') === 'dark')
+      throw new Error('« Clair » ne devrait jamais poser data-mode="dark"');
+    win.setTheme('auto');
+    if(win.document.documentElement.getAttribute('data-mode') === 'dark')
+      throw new Error('« Auto » sans matchMedia devrait retomber sur clair, jamais planter ni forcer sombre');
+  } finally {
+    S.settings.theme = backup;
+    win.applyTheme();
+  }
+});
+
+call('Réglages — validateImportPayload() : structure minimale exigée avant tout import', () => {
+  if(win.validateImportPayload(null)) throw new Error('null devrait être rejeté');
+  if(win.validateImportPayload({})) throw new Error('objet vide devrait être rejeté (v manquant)');
+  if(win.validateImportPayload({v: 1, tasks: []})) throw new Error('tableaux/settings/habitLog manquants devraient être rejetés');
+  if(!win.validateImportPayload(win.defaults())) throw new Error('defaults() devrait être une structure valide');
+});
+call('Réglages — applyImportedData() : rejet intégral si invalide, remplacement entier si valide', () => {
+  const backupJson = JSON.stringify(S);
+  try{
+    if(win.applyImportedData({not: 'valid'}))
+      throw new Error('un payload invalide ne devrait jamais être accepté');
+    if(JSON.stringify(S) !== backupJson)
+      throw new Error('un import invalide ne doit rien modifier dans S (pas d’écrasement partiel)');
+
+    const payload = JSON.parse(backupJson);
+    payload.settings.userName = 'Imported Name';
+    payload.tasks = [];
+    if(!win.applyImportedData(payload))
+      throw new Error('un payload valide (structure de S) devrait être accepté');
+    if(S.settings.userName !== 'Imported Name')
+      throw new Error('S devrait refléter les données importées après un import valide');
+  } finally {
+    const restored = JSON.parse(backupJson);
+    Object.keys(S).forEach(k => delete S[k]);
+    Object.assign(S, restored);
+  }
+});
+
+// Asynchrone (IndexedDB) : hors du helper call() synchrone, comme savePlantSheet()
+// et le flush saveNow() plus bas.
+try{
+  await win.idbPutPhoto('photo-test-reset', new win.Blob(['x']));
+  const before = await win.idbGetPhoto('photo-test-reset');
+  if(!before) throw new Error('la photo de test devrait être présente avant idbClearPhotos()');
+  const ok = await win.idbClearPhotos();
+  if(!ok) throw new Error('idbClearPhotos() devrait réussir');
+  const after = await win.idbGetPhoto('photo-test-reset');
+  if(after) throw new Error('idbClearPhotos() devrait vider le store « photos » entièrement');
+}catch(e){ onError('Réglages — Réinitialisation : idbClearPhotos() vide le store sans toucher à state', e); }
+
+call('Réglages — six groupes dans l’ordre attendu', () => {
+  win.go('settings');
+  const html = win.document.getElementById('s-settings').innerHTML;
+  const order = ['Profil', 'Aujourd’hui', 'Maison', 'Courses', 'Données', 'À propos'];
+  let lastIdx = -1;
+  order.forEach(title => {
+    const idx = html.indexOf(title);
+    if(idx === -1) throw new Error('groupe manquant dans Réglages : ' + title);
+    if(idx <= lastIdx) throw new Error('ordre des groupes de Réglages incorrect autour de : ' + title);
+    lastIdx = idx;
+  });
+});
+
 // 1) Les 6 écrans naviguent sans erreur runtime.
 ['today', 'tasks', 'maison', 'shopping', 'habits', 'settings'].forEach(scr =>
   call(`go('${scr}')`, () => win.go(scr))
@@ -1013,5 +1119,7 @@ if(fails.length){
               '  Aujourd’hui, fiche), courses (guessRayon, fréquents, correction mémorisée,\n' +
               '  vidage en tombstone, ordre des rayons, intégration Aujourd’hui), revue\n' +
               '  hebdomadaire (candidats, déclenchement, flux complet, lastReview),\n' +
-              '  célébrations sobres (record de série, entretien annuel) et persistance.');
+              '  célébrations sobres (record de série, entretien annuel), Réglages (bienvenue\n' +
+              '  au premier lancement, thème, export/import validé avant écriture,\n' +
+              '  réinitialisation du store photos, ordre des six groupes) et persistance.');
 }
