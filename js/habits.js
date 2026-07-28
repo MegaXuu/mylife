@@ -242,12 +242,27 @@ function todayHabitsCard(list, i, n){
 }
 
 /* ---------- Actions du bloc du jour ---------- */
+
+// Motivation légère (ROADMAP §2 « Motivation », point 4 du Lot 10) : un seul
+// toast sobre quand la série dépasse son record précédent — jamais sur le
+// tout premier jour d'une habitude (prevBest à 0, ce serait un « record »
+// systématique et donc un bruit). Aucun point, aucun rang, aucune monnaie.
+function celebrateHabitRecord(h, prevBest){
+  if(!prevBest) return;
+  const cur = habitStreak(h, todayKey());
+  if(cur <= prevBest) return;
+  const unit = h.sched.kind === 'week' ? (cur>1?' semaines':' semaine') : (cur>1?' jours':' jour');
+  toast('Record de série pour ' + h.name + ' : ' + cur + unit + '.');
+}
+
 function stepHabit(id, delta){
   const h = S.habits.find(x=>x.id === id);
   if(!h) return;
   const step = h.unit === '' ? (h.target || 1) : 1; // coche simple : le tap atteint l'objectif directement
+  const prevBest = habitBestStreak(h);
   const v = Math.max(0, habitValueOn(h, todayKey()) + delta * step);
   setHabitLogValue(h.id, v);
+  celebrateHabitRecord(h, prevBest);
   rerender();
 }
 function skipHabit(id){
@@ -259,7 +274,9 @@ function skipHabit(id){
 function setHabitValue(id, raw){
   const h = S.habits.find(x=>x.id === id);
   if(!h) return;
+  const prevBest = habitBestStreak(h);
   setHabitLogValue(h.id, Math.max(0, parseInt(raw, 10) || 0));
+  celebrateHabitRecord(h, prevBest);
   rerender();
 }
 

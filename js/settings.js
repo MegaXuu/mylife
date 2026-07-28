@@ -5,10 +5,11 @@
    ========================================================================== */
 function renderSettings(){
   const on = !!S.settings.birds;
+  const n = reviewCandidates().length;
   document.getElementById('s-settings').innerHTML =
     // Pas d'engrenage ici : c'est l'écran vers lequel il mène.
     screenHead(APP_VERSION, 'Réglages', {noGear:true})+
-    '<div class="card">'+birdOnCard(0, 2)+
+    '<div class="card">'+birdOnCard(0, 3)+
       '<ul class="list"><li class="row">'+
         '<div class="row-main">'+
           '<div class="row-title">Oiseaux</div>'+
@@ -18,7 +19,16 @@ function renderSettings(){
           'aria-label="Oiseaux" onclick="toggleBirds()"></button>'+
       '</li></ul>'+
     '</div>'+
-    '<div class="card">'+birdOnCard(1, 2)+
+    '<div class="card">'+birdOnCard(1, 3)+
+      '<ul class="list"><li class="row">'+
+        '<div class="row-main">'+
+          '<div class="row-title">Revue hebdomadaire</div>'+
+          '<div class="row-meta">'+(n ? n+(n>1?' tâches dorment.':' tâche dort.') : 'Rien à trier pour l’instant.')+'</div>'+
+        '</div>'+
+        '<button class="btn secondary" onclick="startReview()">Lancer</button>'+
+      '</li></ul>'+
+    '</div>'+
+    '<div class="card">'+birdOnCard(2, 3)+
       '<div class="row-meta">Profil, préférences, export et import arrivent bientôt.</div>'+
     '</div>';
 }

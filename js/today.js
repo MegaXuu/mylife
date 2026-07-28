@@ -305,7 +305,12 @@ function tapTodayCare(id){
   if(!t) return;
   const fill = document.getElementById('tfill-'+id);
   if(fill) fill.style.width = '100%';
+  // Même célébration sobre qu'en Maison (js/maison.js tapMaisonItem) : les
+  // deux surfaces complètent la même tâche, la fête ne doit avoir lieu que
+  // depuis l'une ou l'autre, jamais deux fois.
+  const firstAnnual = t.repeat && t.repeat.kind === 'year' && !(t.history && t.history.length);
   completeTask(t);
   save();
+  if(firstAnnual) toast('Entretien annuel réalisé pour la première fois : « ' + t.title + ' ».');
   setTimeout(renderToday, reduceMotion() ? 0 : 260);
 }

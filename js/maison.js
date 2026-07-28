@@ -74,8 +74,13 @@ function tapMaisonItem(id){
   if(!t) return;
   const fill = document.getElementById('mfill-'+id);
   if(fill) fill.style.width = '100%'; // retour visuel immédiat : la jauge remonte avant le rendu complet
+  // Motivation légère (Lot 10) : la toute première réalisation d'un entretien
+  // annuel mérite un mot sobre — après ça, history n'est plus vide, ça ne se
+  // reproduit plus jamais pour cette tâche.
+  const firstAnnual = t.repeat && t.repeat.kind === 'year' && !(t.history && t.history.length);
   completeTask(t);
   save();
+  if(firstAnnual) toast('Entretien annuel réalisé pour la première fois : « ' + t.title + ' ».');
   setTimeout(renderMaison, reduceMotion() ? 0 : 260);
 }
 

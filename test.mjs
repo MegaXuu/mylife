@@ -829,6 +829,122 @@ shopScenario('Aujourd’hui — le bouton Courses reste visible même quand tout
   }
 });
 
+// 6 octies) Revue hebdomadaire (Lot V1-10, js/review.js) : le système
+// immunitaire de l'app. Isole aussi S.lastReview et settings.reviewDay, comme
+// scenario()/habitScenario()/shopScenario() le font pour leurs domaines.
+const reviewScenario = (label, build) => call(label, () => {
+  const backupT = S.tasks.slice(), backupReview = S.lastReview, backupDay = S.settings.reviewDay;
+  S.tasks.length = 0;
+  try{ build(); } finally {
+    S.tasks.length = 0; backupT.forEach(t => S.tasks.push(t));
+    S.lastReview = backupReview; S.settings.reviewDay = backupDay;
+  }
+});
+
+reviewScenario('Revue — reviewCandidates() : dormante depuis 30 jours, ou reportée plus de 3 fois', () => {
+  const dormante = mk({title: 'Dormante', touchedAt: Date.now() - 40*86400000});
+  const recente = mk({title: 'Récente', touchedAt: Date.now()});
+  const reportee = mk({title: 'Reportée', touchedAt: Date.now(), postponed: 4});
+  const list = win.reviewCandidates();
+  if(!list.some(t => t.id === dormante.id)) throw new Error('une tâche dormante depuis 30 jours devrait être candidate');
+  if(list.some(t => t.id === recente.id)) throw new Error('une tâche touchée aujourd’hui ne devrait pas être candidate');
+  if(!list.some(t => t.id === reportee.id)) throw new Error('une tâche reportée plus de 3 fois devrait être candidate, même récente');
+});
+
+call('Revue — reviewDue() : le bon jour, jamais deux fois dans la même semaine', () => {
+  const backupDay = S.settings.reviewDay, backupReview = S.lastReview;
+  try{
+    S.settings.reviewDay = 0; // dimanche
+    const dim1 = new Date(2026, 6, 26);  // dimanche 26/07/2026
+    const lundi = new Date(2026, 6, 27); // jamais le jour (reviewDay=dimanche)
+    const dim2 = new Date(2026, 7, 2);   // dimanche suivant, 7 jours après dim1
+
+    S.lastReview = null;
+    if(!win.reviewDue(dim1)) throw new Error('dimanche sans revue précédente devrait déclencher');
+    if(win.reviewDue(lundi)) throw new Error('lundi ne devrait jamais déclencher (reviewDay=dimanche)');
+
+    S.lastReview = dim1.getTime();
+    if(win.reviewDue(dim1)) throw new Error('déjà revu ce jour-là : ne doit pas redéclencher la même semaine');
+    if(!win.reviewDue(dim2)) throw new Error('le dimanche suivant, 7 jours après, la revue doit redevenir due');
+  } finally {
+    S.settings.reviewDay = backupDay; S.lastReview = backupReview;
+  }
+});
+
+reviewScenario('Revue — flux complet : Faire cette semaine / Un jour / Abandonner, puis lastReview posé', () => {
+  S.lastReview = null;
+  const keep = mk({title: 'À reprendre', touchedAt: Date.now() - 40*86400000});
+  const someday = mk({title: 'À reporter un jour', touchedAt: Date.now() - 40*86400000});
+  const drop = mk({title: 'À abandonner', touchedAt: Date.now() - 40*86400000});
+  win.startReview([keep, someday, drop]);
+  win.reviewKeep();
+  if(keep.bucket !== 'scheduled' || keep.start !== win.todayKey() || keep.postponed !== 0)
+    throw new Error('« Faire cette semaine » devrait planifier la tâche aujourd’hui et remettre postponed à 0');
+  win.reviewSomeday();
+  if(someday.bucket !== 'someday' || someday.start !== null)
+    throw new Error('« Un jour » devrait basculer la tâche en someday, sans start');
+  win.reviewDrop();
+  if(!drop.deletedAt) throw new Error('« Abandonner » devrait tombstoner la tâche, jamais un splice()');
+  if(S.lastReview === null) throw new Error('la revue terminée (toutes les tâches triées) devrait poser S.lastReview');
+  const html = win.document.getElementById('sheet').innerHTML;
+  if(!/3 tâches triées/.test(html)) throw new Error('l’écran de fin devrait annoncer le compte, sans score ni félicitations : ' + html);
+});
+
+// Motivation légère (ROADMAP §2, point 4 du Lot 10) : célébrations sobres,
+// jamais un score. Les toasts sont interceptés (plutôt que lus dans le DOM)
+// pour rester fiables même si un toast précédent est encore affiché.
+habitScenario('Habitudes — record de série : toast sobre à l’amélioration, jamais le tout premier jour', () => {
+  const h = win.stamp({name: 'Course à pied', unit: '', target: 1, sched: {kind: 'days', days: [1,2,3,4,5,6,7]}, sort: 0});
+  h.createdAt = Date.now() - 5*86400000; // née il y a 5 jours, pour laisser un peu d’historique
+  S.habits.push(h);
+  const today = win.todayKey();
+  const calls = [];
+  const origToast = win.toast;
+  win.toast = msg => calls.push(msg);
+  try{
+    win.setHabitLogValue(h.id, 1, win.addDays(today, -1)); // hier : une série de 1 déjà posée
+    win.stepHabit(h.id, 1); // aujourd'hui : la série passe à 2, bat le record de 1
+    if(calls.length !== 1 || !/Record de série pour Course à pied/.test(calls[0]))
+      throw new Error('un nouveau record de série devrait déclencher un toast sobre, obtenu : ' + JSON.stringify(calls));
+  } finally { win.toast = origToast; }
+});
+
+habitScenario('Habitudes — record de série : aucun bruit le tout premier jour (prevBest=0)', () => {
+  const h = win.stamp({name: 'Toute nouvelle habitude', unit: '', target: 1, sched: {kind: 'days', days: [1,2,3,4,5,6,7]}, sort: 0});
+  S.habits.push(h);
+  const calls = [];
+  const origToast = win.toast;
+  win.toast = msg => calls.push(msg);
+  try{
+    win.stepHabit(h.id, 1); // premier jour : prevBest=0, ce serait un « record » systématique
+    if(calls.length) throw new Error('le tout premier jour d’une habitude ne doit jamais déclencher de célébration');
+  } finally { win.toast = origToast; }
+});
+
+call('Maison — célébration sobre à la première réalisation d’un entretien annuel, jamais ensuite', () => {
+  const t = win.stamp({
+    title: 'Détartrage ballon d’eau chaude', notes: '', cat: 'entretien', room: 'sdb', bucket: 'anytime',
+    start: null, due: null, evening: false, prio: 0, effort: 2,
+    repeat: {kind: 'year', n: 1, days: [], from: 'done'},
+    doneAt: Date.now(), history: [], postponed: 0, touchedAt: Date.now()
+  });
+  S.tasks.push(t);
+  const calls = [];
+  const origToast = win.toast;
+  win.toast = msg => calls.push(msg);
+  try{
+    win.go('maison');
+    win.tapMaisonItem(t.id);
+    if(calls.length !== 1 || !/Entretien annuel réalisé pour la première fois/.test(calls[0]))
+      throw new Error('la première réalisation d’un entretien annuel devrait fêter l’occasion sobrement, obtenu : ' + JSON.stringify(calls));
+    win.tapMaisonItem(t.id); // deuxième réalisation : ne doit plus jamais se reproduire
+    if(calls.length !== 1) throw new Error('la célébration ne doit avoir lieu qu’une seule fois, pas à chaque réalisation');
+  } finally {
+    win.toast = origToast;
+    t.deletedAt = Date.now(); // tombstone : ne pollue pas les scénarios suivants
+  }
+});
+
 // savePlantSheet() est asynchrone (photo éventuelle) : hors du helper call()
 // synchrone, comme le flush saveNow() plus bas.
 try{
@@ -895,5 +1011,7 @@ if(fails.length){
               '  intégration Maison et bloc du jour, fiche), habitudes (série/quota, jour\n' +
               '  sauté neutre, progression partielle, mode quota hebdomadaire, intégration\n' +
               '  Aujourd’hui, fiche), courses (guessRayon, fréquents, correction mémorisée,\n' +
-              '  vidage en tombstone, ordre des rayons, intégration Aujourd’hui) et persistance.');
+              '  vidage en tombstone, ordre des rayons, intégration Aujourd’hui), revue\n' +
+              '  hebdomadaire (candidats, déclenchement, flux complet, lastReview),\n' +
+              '  célébrations sobres (record de série, entretien annuel) et persistance.');
 }

@@ -9,6 +9,7 @@ async function boot(){
   purgeTombstones();
   pickBirds(); // un tirage d'espèce et de perchoir par écran, à chaque ouverture
   go('today');
+  maybeStartReview(); // js/review.js — le jour venu, si des tâches dorment
 }
 
 try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}

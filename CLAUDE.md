@@ -61,9 +61,10 @@ dans un navigateur.
 > ouvrir avant de coder les Lots 8, 9 et suivants.
 
 Maquettes du Lot 5, **validées et codées** : `maquettes/today.html` (journée chargée) et
-`maquettes/today-vide.html` (tout est fait). Autonomes, sans script. Elles restent la trace de
-l'écran cible **complet** : leurs blocs Habitudes et Courses n'ont pas été codés au Lot 5, ils
-attendent le Lot 10 — leur CSS vit encore dans les maquettes, pas dans `index.html`.
+`maquettes/today-vide.html` (tout est fait). Autonomes, sans script. Au Lot 5, leurs blocs
+Habitudes et Courses n'étaient pas encore codés (modèles de données inexistants) ; **c'est fait
+depuis** — Habitudes au Lot 8, Courses au Lot 9, CSS désormais dans `index.html` comme le reste.
+Les deux maquettes restent la trace de l'écran cible complet, utile pour vérifier un écart.
 
 **Discipline chromatique — engage tous les lots suivants.** Elle est aussi écrite en tête du
 `<style>` d'`index.html` ; les deux doivent rester d'accord.
@@ -203,7 +204,12 @@ uniquement des déclarations.
   `taskSheet()`/`plantSheet()`), calendrier mensuel de régularité (`habitCalendarHtml()`) à
   **quatre** traitements visuels — fait / partiel / sauté / inactif — et pas un cinquième
   « manqué » : `CONVENTIONS.md` §3 proscrit tout ton culpabilisant, un jour resté sans saisie se lit
-  comme « inactif », jamais comme un reproche.
+  comme « inactif », jamais comme un reproche. **Depuis le Lot 10**, motivation légère sans le
+  moindre score : `celebrateHabitRecord()` compare le record (`habitBestStreak()`, capturé *avant*
+  d'écrire le jour) à la série une fois la valeur posée — un toast sobre (« Record de série pour…
+  ») seulement si elle le dépasse, et jamais le tout premier jour d'une habitude (`prevBest` à 0,
+  ce serait un « record » systématique). Appelé depuis `stepHabit()` et `setHabitValue()`, jamais
+  `skipHabit()` (un jour sauté ne peut pas battre un record).
 - `js/shopping.js` — écran Courses, **rempli au Lot 9**. Classement automatique par rayon
   (`guessRayon()`, fonction pure testée isolément comme `parseQuick()` : normalise le libellé
   (`normalizeLabel()`), cherche par groupes de mots consécutifs — du plus long au plus court, pour
@@ -227,7 +233,10 @@ uniquement des déclarations.
   jauge agrégée par pièce (la plus basse de ses éléments, `freshLabel()` pour le texte à côté —
   jamais « en retard ») + jauge de fraîcheur continue par élément ; tap sur une ligne
   (`tapMaisonItem()`) appelle `completeTask()`, avec un retour visuel immédiat (largeur de la jauge
-  posée à 100 % avant le rendu complet) que `prefers-reduced-motion` supprime. `entretienSheet()` :
+  posée à 100 % avant le rendu complet) que `prefers-reduced-motion` supprime. **Depuis le Lot 10**,
+  la toute première réalisation d'un entretien `repeat.kind:'year'` (`history` encore vide juste
+  avant `completeTask()`) déclenche un toast sobre, une fois pour toutes — même geste dans
+  `tapTodayCare()` (`js/today.js`), qui complète les mêmes tâches depuis Aujourd'hui. `entretienSheet()` :
   feuille d'ajout — on choisit une pièce puis on coche des modèles du catalogue
   `data/entretien.js`, créés en une fois comme tâches récurrentes `'done'` (`doneAt` posé à
   l'instant de la création). Les tâches d'entretien ont toujours un `doneAt`, donc elles
@@ -237,10 +246,11 @@ uniquement des déclarations.
   (`careRowHtml()` unifie les deux types de ligne) : un tap sur une tâche la marque faite
   (`tapMaisonItem()`), un tap sur un soin de plante ouvre sa fiche (`plantSheet()`) — c'est là que
   vit le bouton « arrosé ». Bouton « Ajouter une plante » posé à côté de « Ajouter un entretien ».
-- `js/settings.js` — deux vraies cartes et **un seul réglage** : l'interrupteur « Oiseaux »
-  (`toggleBirds()` → `S.settings.birds`), posé au Lot 2 avec les oiseaux. Le reste (profil, export,
-  import, mode sombre) arrive au Lot 11. Seul écran en `screenHead(..., {noGear:true})` :
-  l'engrenage y mène, il n'y apparaît pas.
+- `js/settings.js` — trois cartes depuis le Lot 10 : l'interrupteur « Oiseaux » (`toggleBirds()` →
+  `S.settings.birds`, posé au Lot 2), la revue hebdomadaire à la demande (`startReview()` sans
+  argument, `js/review.js` — le compte de `reviewCandidates()` affiché en clair, « Rien à trier pour
+  l'instant. » si vide), et un dernier bloc placeholder (profil, export, import, mode sombre :
+  Lot 11). Seul écran en `screenHead(..., {noGear:true})` : l'engrenage y mène, il n'y apparaît pas.
 - `js/recur.js` — moteur de récurrence, **rempli au Lot 4**, fonctions pures sans DOM, testées
   isolément dans `test.mjs` : `intervalDays(repeat)` (intervalle en jours tous kinds confondus,
   approximation pour la jauge), `nextDue(task, ref)` (distinction `repeat.from:'due'` — depuis
@@ -282,8 +292,23 @@ uniquement des déclarations.
   Photos : `resizePhoto()` (canvas, 1000 px max, JPEG 0,8) puis `idbPutPhoto()` (store `photos`,
   jamais dans `S`), chargement paresseux (`idbGetPhoto()` seulement à l'ouverture de la fiche), URL
   objet révoquée à la fermeture via le hook `_onSheetClose` posé dans `js/ui.js`.
-- `js/review.js` — placeholder **sans conteneur DOM propre** : `renderReview()` renvoie juste un
-  fragment `emptyState()`, jamais appelée par `go()`. Logique réelle au Lot 10.
+- `js/review.js` — **rempli au Lot 10**. La revue hebdomadaire, le « système immunitaire » de
+  l'app (ROADMAP §3 point ⑨) : toujours une feuille modale (`startReview()`/`openSheet()`), jamais
+  un écran propre — pas de `#s-review`, jamais appelée par `go()`. `reviewCandidates()` (pure) :
+  tâches ouvertes dont `touchedAt` dépasse 30 jours (`REVIEW_STALE_DAYS`) ou `postponed` dépasse 3
+  (`REVIEW_POSTPONE_MAX`) — l'entretien (`repeat.from:'done'`) en est déjà exclu par le filtre
+  `!t.doneAt`, comme dans `getTaskItems()` (`js/tasks.js`), puisqu'il garde toujours un `doneAt`.
+  `reviewDue()` : vrai le jour `settings.reviewDay` si `lastReview` est absent ou vieux d'au moins
+  6 jours — jamais deux fois dans la même semaine. `maybeStartReview()` (appelée une fois au boot)
+  ne propose la feuille que si `reviewCandidates()` n'est pas vide : une revue vide serait un bruit,
+  pas un service (principe 6). Flux une tâche à la fois (`reviewStepHtml()`), trois issues —
+  `reviewKeep()` (start = aujourd'hui, bucket `scheduled`, `postponed` à 0), `reviewSomeday()`
+  (bucket `someday`, start `null`), `reviewDrop()` (tombstone, annulable par toast comme
+  `delTask()`) — et un « Plus tard » qui ferme sans rien enregistrer. `S.lastReview` n'est posé
+  qu'à la toute dernière tâche triée. Écran de fin (`reviewEndHtml()`) : juste le compte, un mot
+  sobre, **aucun score** (CONVENTIONS.md §3). `_onSheetClose = rerender` : l'écran dessous (Aujourd'hui
+  au déclenchement automatique, Réglages à la demande) reprend à jour quel que soit le chemin de
+  fermeture. Accessible aussi à la demande depuis Réglages (`startReview()` sans argument).
 - `data/rayons.js` (`RAYONS`, `RAYON_ORDER_DEFAULT`) — **rempli au Lot 9** : dictionnaire d'environ
   430 libellés normalisés (minuscules, accents retirés) vers une clé de rayon, y compris des clés à
   plusieurs mots pour désambiguïser un mot trop générique pour être une clé seule (« papier
@@ -363,7 +388,14 @@ uniquement des déclarations.
   (`rayonOrderSheet()`/`moveRayon()`/`saveRayonOrder()`) et l'intégration au bloc 5 d'« Aujourd'hui »
   (compte seul, jamais la liste ; ne bloque jamais l'état vide ; absent de la pastille). Ces
   scénarios (helper `shopScenario()`) restaurent `S.shopping`/`S.frequents`/`settings.rayonOrder`/
-  `settings.rayonOverrides` derrière eux.
+  `settings.rayonOverrides` derrière eux. Depuis le Lot 10, **la revue hebdomadaire** :
+  `reviewCandidates()` (dormance à 30 jours, report à plus de 3 fois), `reviewDue()` (le bon jour,
+  jamais deux fois dans la même semaine, dates fixes 26/07 et 02/08/2026 — deux dimanches), le flux
+  complet des trois issues jusqu'à `S.lastReview` et l'écran de fin (`reviewScenario()` isole
+  `S.tasks`/`S.lastReview`/`settings.reviewDay`, comme `scenario()` le fait pour `S.tasks` seul), et
+  **les célébrations sobres** : record de série d'habitude (aucun bruit le tout premier jour) et
+  première réalisation d'un entretien annuel — les deux en interceptant `win.toast` plutôt qu'en
+  lisant le DOM, pour rester fiables même si un toast précédent est encore affiché.
 - **À chaque release** : incrémenter `CACHE` (`sw.js`) **et** `APP_VERSION` (`js/state.js`), même
   numéro (`mylife-b1-N` / `'Bêta 1.N'`).
 
@@ -474,7 +506,7 @@ mémorisées) complètent les réglages.
 | **7 — Maison v2 (plantes)** | Bêta 1.7 | ✅ Fait. Catalogue `data/plantes.js` (~40 espèces, intervalles chaud/froid + rempotage), modulation saisonnière `plantSeason()` (`js/plants.js`) réutilisant `freshness()`/`completeTask()` de `js/recur.js` sans dupliquer le moteur, fiche plante (`plantSheet()` : identité, pièce, photo redimensionnée/recompressée en JPEG, jauges des trois soins, historique, boutons d'action immédiate), intégration à l'écran Maison (mêlée à l'entretien, par pièce) et au bloc du jour d'« Aujourd'hui » (soins réellement dus, jamais le bloc Entretien). |
 | **8 — Habitudes** | Bêta 1.8 | ✅ Fait. Moteur `js/habits.js` — série et quota, **jamais** une jauge de fraîcheur (frontière `CONVENTIONS.md` §6, ne réutilise donc pas `js/recur.js`) ; deux modes de planification traités séparément (`sched:{kind:'days',days}` / `sched:{kind:'week',perWeek}`) ; jour sauté neutre et progression partielle (seule l'atteinte de `target` alimente `habitStreak()`) ; bloc permanent d'« Aujourd'hui » en position 4 de la cascade (saisie en ligne, ± sous `HAB_STEP_MAX`, clavier numérique au-delà, jamais « Sauter » et deux boutons sur la même ligne — CSS repris de `maquettes/today.html`) ; écran secondaire `go('habits')` (fiche `habitSheet()`, calendrier mensuel à quatre états fait/partiel/sauté/inactif, **pas** un cinquième « manqué » — CONVENTIONS.md §3 proscrit le ton culpabilisant) ; série en cours, record (`habitBestStreak()`) et taux de réussite sur 30 jours (`habitRate30()`). |
 | **9 — Courses** | Bêta 1.9 | ✅ Fait. Dictionnaire `data/rayons.js` (~430 libellés, `guessRayon()` par groupes de mots consécutifs, du plus long au plus court) ; correction de rayon mémorisée par libellé (`settings.rayonOverrides`), pas à chaque ajout ; cartes par rayon triées selon `settings.rayonOrder` (réglable, flèches haut/bas) ; mode magasin (gros libellés, Wake Lock avec garde de disponibilité, coché grisé en bas du rayon jamais retiré) ; produits fréquents (`S.frequents[]`, ≥ 3 ajouts) ; vidage des cochés en tombstone, jamais automatique ; bouton d'Aujourd'hui en position 5 de la cascade (une ligne, jamais la liste, ne bloque jamais l'état vide, absent de la pastille — même traitement que le bloc 7). |
-| 10 — « Aujourd'hui » v2 & revue | Bêta 1.10 | À faire |
+| **10 — « Aujourd'hui » v2 & revue** | Bêta 1.10 | ✅ Fait. Passe de vérification (pas de construction) sur la cascade des 7 blocs de ROADMAP §6 : ordre et absence de doublon confirmés, la pastille ne comptait déjà que les dus. `js/review.js` rempli : la revue hebdomadaire (`reviewCandidates()`, `reviewDue()`, flux une tâche à la fois — faire cette semaine / un jour / abandonner —, écran de fin sobre), déclenchée au boot (`maybeStartReview()`) et accessible à la demande depuis Réglages. Motivation légère sans le moindre score : `celebrateHabitRecord()` (record de série, jamais le premier jour) et un toast à la première réalisation d'un entretien annuel (`tapMaisonItem()`/`tapTodayCare()`). Compteur de reports déjà posé aux Lots 3/5, vérifié conforme. |
 | 11 — Réglages & filet de sécurité | Bêta 1.11 | À faire |
 | 12 — Polish, QA, dettes | Bêta 1.12 | À faire |
 
