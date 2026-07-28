@@ -1,11 +1,11 @@
 /* ==========================================================================
    maison.js — écran Maison : vue par pièce (ROADMAP-V1.md §6 bis). Réunit les
    tâches d'entretien (repeat.from:'done' rattachée à une pièce, glossaire
-   CONVENTIONS.md §6) sous une jauge de fraîcheur continue par élément et une
-   jauge agrégée par pièce (la plus basse de ses éléments). Un tap sur une
-   ligne marque la tâche faite. Les plantes rejoindront cette même structure
-   de ligne au Lot 7 (soins de plantes mêlés à l'entretien, même moteur ⑯) :
-   aucun code plantes ici, seulement une structure qui les accueillera.
+   CONVENTIONS.md §6) ET, depuis le Lot V1-7, les soins de plantes de la même
+   pièce (js/plants.js, même moteur de fraîcheur ⑯) sous une jauge continue
+   par élément et une jauge agrégée par pièce (la plus basse de ses éléments).
+   Un tap sur une tâche la marque faite ; un tap sur un soin de plante ouvre
+   sa fiche (ROADMAP §6 bis) — c'est là que vit le bouton « arrosé ».
    ========================================================================== */
 
 // Textuel neutre à côté de la jauge agrégée d'une pièce — jamais « en retard »,
@@ -28,26 +28,35 @@ function maisonAgo(t){
   return 'Il y a '+n+(n>1 ? ' jours' : ' jour');
 }
 
-// Jauge posée à droite, sa légende dessous — disposition de la maquette,
-// appliquée au Lot V1-5 (c'était une jauge pleine largeur sous le titre).
-function maisonItemRow(t){
-  const f = freshness(t, Date.now());
-  return '<li class="row row-care" onclick="tapMaisonItem(\''+t.id+'\')">'+
-    '<div class="row-main"><div class="row-title">'+esc(t.title)+'</div></div>'+
+// Ligne générique — jauge posée à droite, sa légende dessous (disposition de
+// la maquette). `e` unifie une tâche d'entretien et un soin de plante :
+// {title, f, ago, onTap, fillId}. `fillId` n'existe que pour les tâches, dont
+// tapMaisonItem() fait remonter la jauge à 100 % avant le rendu complet.
+function careRowHtml(e){
+  return '<li class="row row-care" onclick="'+e.onTap+'">'+
+    '<div class="row-main"><div class="row-title">'+esc(e.title)+'</div></div>'+
     '<div class="gauge-cell">'+
-      '<div class="gauge"><div class="gauge-fill" id="mfill-'+t.id+'" '+
-        'style="width:'+gaugeWidth(f)+';background:'+gaugeColor(f)+'"></div></div>'+
-      '<div class="gauge-cap">'+esc(maisonAgo(t))+'</div>'+
+      '<div class="gauge"><div class="gauge-fill"'+(e.fillId ? ' id="'+e.fillId+'"' : '')+' '+
+        'style="width:'+gaugeWidth(e.f)+';background:'+gaugeColor(e.f)+'"></div></div>'+
+      '<div class="gauge-cap">'+esc(e.ago)+'</div>'+
     '</div>'+
   '</li>';
 }
 
 // Carte blanche, nom de pièce en 18 px/700, jauge agrégée à droite sous un
 // filet. La jauge de la pièce est plus large que celles des lignes : c'est la
-// seule différence de largeur qui porte un sens.
-function maisonRoomSection(room, items, i, n){
-  const f = items.reduce((min, t)=>Math.min(min, freshness(t, Date.now())), 1);
-  const sorted = items.slice().sort((a,b)=>freshness(a, Date.now()) - freshness(b, Date.now()));
+// seule différence de largeur qui porte un sens. `taskItems` (entretien) et
+// `plantItems` (soins, js/plants.js) sont mêlés puis triés ensemble par
+// fraîcheur croissante : une seule liste par pièce, comme le veut la maquette.
+function maisonRoomSection(room, taskItems, plantItems, i, n){
+  const entries = taskItems.map(t=>({
+    title:t.title, f:freshness(t, Date.now()), ago:maisonAgo(t),
+    onTap:"tapMaisonItem('"+t.id+"')", fillId:'mfill-'+t.id
+  })).concat(plantItems.map(s=>({
+    title:s.title, f:s.f, ago:s.ago, onTap:"plantSheet('"+s.plantId+"')", fillId:null
+  })));
+  const f = entries.reduce((min, e)=>Math.min(min, e.f), 1);
+  const sorted = entries.slice().sort((a, b)=>a.f - b.f);
   return '<div class="card">'+birdOnCard(i, n)+
     '<div class="room-head">'+
       '<h2 class="card-title">'+esc(ROOM_LABELS[room] || room)+'</h2>'+
@@ -56,7 +65,7 @@ function maisonRoomSection(room, items, i, n){
         '<div class="gauge-cap">'+esc(freshLabel(f))+'</div>'+
       '</div>'+
     '</div>'+
-    '<ul class="list room-list">'+sorted.map(maisonItemRow).join('')+'</ul>'+
+    '<ul class="list room-list">'+sorted.map(careRowHtml).join('')+'</ul>'+
   '</div>';
 }
 
@@ -72,19 +81,22 @@ function tapMaisonItem(id){
 
 function renderMaison(){
   const items = getMaisonItems();
+  const soins = getPlantCareItems(); // js/plants.js — soins d'arrosage/engrais/rempotage
   const byRoom = {};
   items.forEach(t=>{ (byRoom[t.room] = byRoom[t.room] || []).push(t); });
-  const rooms = ROOM_ORDER.filter(r=>byRoom[r] && byRoom[r].length);
+  const byRoomSoins = {};
+  soins.forEach(s=>{ (byRoomSoins[s.room] = byRoomSoins[s.room] || []).push(s); });
+  const rooms = ROOM_ORDER.filter(r=>(byRoom[r] && byRoom[r].length) || (byRoomSoins[r] && byRoomSoins[r].length));
   const body = rooms.length
-    ? rooms.map((r,i)=>maisonRoomSection(r, byRoom[r], i, rooms.length)).join('')
-    : emptyState('Rien à entretenir pour l’instant.', 'Ajoute un modèle d’entretien ci-dessous.');
-  const sur = items.length
-    ? items.length + (items.length > 1 ? ' éléments suivis' : ' élément suivi')
-    : '';
+    ? rooms.map((r,i)=>maisonRoomSection(r, byRoom[r] || [], byRoomSoins[r] || [], i, rooms.length)).join('')
+    : emptyState('Rien à entretenir pour l’instant.', 'Ajoute un modèle d’entretien ou une plante ci-dessous.');
+  const total = items.length + soins.length;
+  const sur = total ? total + (total > 1 ? ' éléments suivis' : ' élément suivi') : '';
   document.getElementById('s-maison').innerHTML =
     screenHead(sur, 'Maison')+
     body+
-    '<button class="btn secondary btn-full" onclick="entretienSheet()">Ajouter un entretien</button>';
+    '<button class="btn secondary btn-full" onclick="entretienSheet()">Ajouter un entretien</button>'+
+    '<button class="btn secondary btn-full" onclick="plantSheet(null)">Ajouter une plante</button>';
 }
 
 /* ==========================================================================

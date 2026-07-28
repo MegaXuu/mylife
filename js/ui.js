@@ -62,6 +62,7 @@ function icon(d, size){
 }
 const IC_GEAR = '<circle cx="12" cy="12" r="3.2"></circle><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.5 1.5M16.5 16.5L18 18M18 6l-1.5 1.5M7.5 16.5L6 18"></path>';
 const IC_CLOSE = '<path d="M7 7l10 10M17 7L7 17"></path>';
+const IC_EDIT = '<path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z"></path><path d="M14 8l2 2"></path>';
 
 /* ---------- En-tête d'écran : sur-titre, titre, engrenage discret ---------- */
 // sur = date ou compte (« 9 tâches ouvertes »), titre = nom de l'écran.
@@ -195,9 +196,15 @@ function openSheet(html){
   sheet.innerHTML = '<div class="handle"></div>'+html;
   bg.classList.add('show');
 }
+// Hook générique, posé par un écran qui a besoin de nettoyer une ressource
+// à la fermeture de la feuille (Lot V1-7 : révoquer l'URL objet d'une photo
+// de plante), quel que soit le chemin de fermeture (bouton, tap en dehors,
+// glisser la poignée).
+let _onSheetClose = null;
 function closeSheet(){
   const bg = document.getElementById('sheet-bg');
   if(bg) bg.classList.remove('show');
+  if(_onSheetClose){ const fn = _onSheetClose; _onSheetClose = null; fn(); }
 }
 document.getElementById('sheet-bg').addEventListener('click', e=>{
   if(e.target.id === 'sheet-bg') closeSheet(); // fermeture par tap en dehors de la feuille

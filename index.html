@@ -425,6 +425,69 @@ html[data-mode="dark"] .card.t-courses{--ink2:#A89D8D;}
 .cap-chip{display:inline-flex; align-items:center; gap:6px;}
 .cap-details{margin-top:var(--s2); padding:0 var(--s1);}
 
+/* ==========================================================================
+   Lot V1-7 — plantes. Les lignes de soin (Maison, Aujourd'hui, fiche) et
+   leurs jauges réutilisent .row-care/.gauge-cell/.gauge-side déjà posés au
+   Lot V1-5 ; seuls la photo et son contrôle de sélection sont nouveaux.
+   ========================================================================== */
+.plant-photo{
+  display:flex; align-items:center; justify-content:center;
+  width:100%; height:160px; padding:0; margin-bottom:var(--s2);
+  border:0; border-radius:var(--r-btn); background:var(--sunken);
+  color:var(--ink2); font-size:var(--fs-low); overflow:hidden;
+}
+.plant-photo img{width:100%; height:100%; object-fit:cover;}
+/* Masqué visuellement mais toujours dans le DOM : .plant-photo déclenche son
+   clic. display:none empêcherait le sélecteur de fichiers sur certains
+   navigateurs, d'où cette technique plutôt qu'un simple display:none. */
+.file-input{position:absolute; width:1px; height:1px; overflow:hidden; opacity:0; pointer-events:none;}
+
+/* ==========================================================================
+   Lot V1-8 — habitudes. Bloc permanent sur Aujourd'hui (position 4 de la
+   cascade) + écran secondaire go('habits'). Les valeurs .hab-val/.step/.skip/
+   .row-soft reprennent telles quelles maquettes/today.html (§ « Habitude »,
+   déjà validées) : aucune barre de quota ici, elle vit sur l'écran Habitudes.
+   ========================================================================== */
+.hab-val{font-size:var(--fs-body); font-weight:700; color:var(--ink);}
+.step{
+  flex:none; width:44px; height:44px;
+  border:0; border-radius:var(--r-btn);
+  background:var(--card); color:var(--act);
+  font-size:22px; font-weight:700; line-height:1;
+  box-shadow:var(--elev);
+}
+.skip{
+  flex:none; min-height:44px; padding:10px 6px;
+  background:none; border:0; color:var(--ink2);
+  font-size:var(--fs-meta); font-weight:500;
+}
+/* Habitude déjà au quota (ou sautée) : reste posée là, en retrait, sans
+   barré — un quota atteint n'est pas une case cochée — et toujours actionnable. */
+.row-soft .row-title{color:var(--ink2); font-weight:500;}
+
+/* En-tête du bloc du jour : seule porte vers go('habits'), pas d'onglet.
+   padding + marge négative pour porter la cible tactile à 44 px sans agrandir
+   visuellement le titre (même technique que .gear). */
+.habits-head{
+  display:block; width:100%; min-height:44px; padding:10px 0; margin:-10px 0 var(--s2);
+  background:none; border:0; text-align:left;
+}
+.habits-head .card-title{margin:0;}
+
+/* Clavier numérique au-delà de HAB_STEP_MAX (js/habits.js) : un .field étroit
+   à la place des boutons ±. */
+.hab-num{flex:none; width:64px; height:44px; padding:0; text-align:center;}
+
+/* Calendrier mensuel de régularité (écran Habitudes) : quatre traitements
+   visuels distincts — fait / partiel / sauté / inactif. */
+.hab-cal{display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; margin-top:var(--s3);}
+.hab-day{aspect-ratio:1; border-radius:6px; background:var(--sunken);}
+.hab-day.blank,.hab-day.future{background:none;}
+.hab-day.inactive{background:var(--sunken); opacity:.5;}
+.hab-day.partial{background:color-mix(in oklab, var(--g-hab) 45%, var(--sunken));}
+.hab-day.done{background:var(--g-hab);}
+.hab-day.skip{background:none; border:1.5px dashed var(--line);}
+
 /* ---------- Au-delà de 900 px : colonne centrée plafonnée (desktop en V2) ---------- */
 @media (min-width:900px){
   .app{max-width:560px; margin:0 auto;}

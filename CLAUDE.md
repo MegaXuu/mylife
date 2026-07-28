@@ -122,7 +122,13 @@ uniquement des déclarations.
   `.card-title`, `.list-page` (liste posée hors carte), `.row-low` (registre bas), `.more`,
   `.row-care`, `.gauge-side/.gauge-cell/.gauge-cap`, `.room-head`, `.group-toggle`, et le bloc
   **Lot 6** : `.capture`, `.cap-chips`, `.cap-chip`, `.cap-details` (barre de capture — réutilisent
-  `.addbar/.field/.add-btn/.chip/.btn.quiet` déjà en place).
+  `.addbar/.field/.add-btn/.chip/.btn.quiet` déjà en place), le bloc **Lot 7** : `.plant-photo`,
+  `.file-input` (photo de plante — le reste de la fiche et des lignes de soin réutilise
+  `.row-care/.gauge-cell/.gauge-side/.repeat-n/.field-group` déjà en place), et le bloc **Lot 8** :
+  `.hab-val/.step/.skip/.row-soft` (bloc du jour, repris tels quels de `maquettes/today.html`),
+  `.habits-head` (en-tête du bloc, seule porte vers `go('habits')`), `.hab-num` (clavier numérique
+  au-delà de `HAB_STEP_MAX`), `.hab-cal/.hab-day` (calendrier mensuel de l'écran Habitudes — quatre
+  états `.done/.partial/.skip/.inactive`, jamais un cinquième « manqué », cf. `js/habits.js`).
   Au-delà de **900 px** : colonne centrée plafonnée à 560 px (desktop optimisé en V2).
 - `js/state.js` — **socle**, aucun rendu DOM : `APP_VERSION`, IndexedDB (`openDb`/`idbGet`/`idbSet`,
   + `idbPutPhoto`/`idbGetPhoto`/`idbDelPhoto` pour le store `photos`), `defaults()`/`migrate()`,
@@ -163,8 +169,33 @@ uniquement des déclarations.
   session (`tickToday`) gardent une ligne barrée à sa place jusqu'au prochain démarrage : rien n'est
   persisté, ce n'est pas un journal. Porte aussi `longDate()` (sur-titre « Lundi 27 juillet »).
   `renderToday()` se termine par `captureBarHtml()` (`js/nlp.js`), comme Tâches — depuis le Lot 6.
-- `js/habits.js`, `js/shopping.js` — placeholders, chacun `renderX()` écrit
-  `screenHead(...) + emptyState('Bientôt.', '…')` dans son `#s-x`.
+  Depuis le **Lot V1-7**, le bloc du jour (`todaySection()`) mêle aussi les soins de plantes
+  réellement dus (jauge à 0, `getPlantCareItems()`) aux tâches planifiées — jamais le bloc Entretien,
+  réservé aux tâches `from:'done'` — via des entrées `{id, kind:'task'|'soin', t|s}` dans
+  `todayBuckets().scheduled` ; un tap sur un soin ouvre sa fiche plante plutôt que de le compléter.
+  Depuis le **Lot V1-8**, `todayBuckets()` porte aussi `habits` (`getTodayHabits()`, `js/habits.js`) —
+  un domaine à part, jamais mêlé aux tâches ni à l'entretien (une série ne se compte pas comme une
+  jauge, `CONVENTIONS.md` §6). `todayBadgeCount()` ajoute les habitudes encore actionnables
+  (`habitsPendingCount()`) ; l'état vide (`vide` dans `renderToday()`) les prend en compte de la même
+  façon : une habitude déjà atteinte ou sautée aujourd'hui ne bloque plus « c'est bon ».
+- `js/habits.js` — **rempli au Lot 8**. Domaine Habitudes : moteur de **série et quota**, jamais une
+  jauge de fraîcheur (frontière posée par `CONVENTIONS.md` §6 — ne réutilise donc pas `js/recur.js`).
+  Deux modes de planification traités séparément : `sched:{kind:'days', days:[1..7]}` (jours fixes)
+  et `sched:{kind:'week', perWeek:N}` (quota hebdomadaire libre, actionnable n'importe quel jour).
+  Le jour « sauté » (`habitLog[jour][id] === 'skip'`) est neutre : `habitStreak()` (jours ou
+  semaines selon le mode) l'ignore sans casser la série ; seule l'atteinte de l'objectif (`target`)
+  l'alimente, jamais une valeur partielle. `habitBestStreak()` (record) et `habitRate30()` (taux de
+  réussite sur 30 jours) complètent l'écran secondaire. Bloc permanent d'« Aujourd'hui »
+  (`getTodayHabits()`, `todayHabitsCard()`) : saisie en ligne, ± (`stepHabit()`) sous
+  `HAB_STEP_MAX` (10), clavier numérique au-delà (`setHabitValue()`), jamais « Sauter » et deux
+  boutons sur la même ligne. Écran secondaire `go('habits')` (atteint uniquement en tapant l'en-tête
+  du bloc, pas d'onglet) : liste des habitudes, fiche création/édition (`habitSheet()`, comme
+  `taskSheet()`/`plantSheet()`), calendrier mensuel de régularité (`habitCalendarHtml()`) à
+  **quatre** traitements visuels — fait / partiel / sauté / inactif — et pas un cinquième
+  « manqué » : `CONVENTIONS.md` §3 proscrit tout ton culpabilisant, un jour resté sans saisie se lit
+  comme « inactif », jamais comme un reproche.
+- `js/shopping.js` — placeholder, `renderShopping()` écrit `screenHead(...) +
+  emptyState('Bientôt.', '…')` dans `#s-shopping`.
 - `js/maison.js` — écran Maison, **vue par pièce posée au Lot 4** : `getMaisonItems()` regroupe les
   tâches d'entretien (`room` posé + `repeat.from:'done'`, glossaire `CONVENTIONS.md` §6) par pièce ;
   jauge agrégée par pièce (la plus basse de ses éléments, `freshLabel()` pour le texte à côté —
@@ -175,8 +206,11 @@ uniquement des déclarations.
   `data/entretien.js`, créés en une fois comme tâches récurrentes `'done'` (`doneAt` posé à
   l'instant de la création). Les tâches d'entretien ont toujours un `doneAt`, donc elles
   n'apparaissent plus dans l'écran Tâches (filtré sur `!doneAt`) : elles vivent uniquement ici.
-  Structure de ligne prévue pour accueillir les soins de plantes au Lot 7 (même moteur, §6 bis de
-  la roadmap), pas codée.
+  Depuis le **Lot V1-7**, `renderMaison()` mêle ces tâches et les soins de plantes de la même pièce
+  (`getPlantCareItems()`, `js/plants.js`) en une seule liste triée par fraîcheur croissante
+  (`careRowHtml()` unifie les deux types de ligne) : un tap sur une tâche la marque faite
+  (`tapMaisonItem()`), un tap sur un soin de plante ouvre sa fiche (`plantSheet()`) — c'est là que
+  vit le bouton « arrosé ». Bouton « Ajouter une plante » posé à côté de « Ajouter un entretien ».
 - `js/settings.js` — deux vraies cartes et **un seul réglage** : l'interrupteur « Oiseaux »
   (`toggleBirds()` → `S.settings.birds`), posé au Lot 2 avec les oiseaux. Le reste (profil, export,
   import, mode sombre) arrive au Lot 11. Seul écran en `screenHead(..., {noGear:true})` :
@@ -208,12 +242,26 @@ uniquement des déclarations.
   la fiche du Lot 3 préremplie pour ce que le langage naturel n'a pas couvert. Testé isolément dans
   `test.mjs` (plus de 50 cas sur `parseQuick()`, plus le mécanisme d'ignorance) : c'est le seul
   module de l'app qui mérite de vrais tests unitaires.
-- `js/plants.js`, `js/review.js` — placeholders **sans conteneur DOM propre** (pas de `#s-plants`
-  etc.) : `renderX()` renvoie juste un fragment `emptyState()`, jamais appelée par `go()`. Existent
-  uniquement pour figer l'ordre de chargement et les listes miroir ; logique réelle aux Lots 7
-  (plants), 10 (review).
-- `data/rayons.js` (`RAYONS`), `data/plantes.js` (`PLANTES`) — structures vides commentées, remplies
-  aux Lots 9, 7.
+- `js/plants.js` — **rempli au Lot 7**. Toujours sans conteneur DOM propre (pas d'écran Plantes,
+  ROADMAP §6 bis) : les plantes vivent dans Maison et dans le bloc du jour d'Aujourd'hui. Modulation
+  saisonnière `plantSeason()` (déduite de `settings.coldFrom`/`coldTo`, jamais d'une date en dur) ;
+  un soin (arrosage, engrais, rempotage) est traduit en un objet minimal `{doneAt,
+  repeat:{kind:'day', n, from:'done'}}` passé tel quel à `freshness()`/`completeTask()` de
+  `js/recur.js` — **le moteur du Lot 4 n'est pas dupliqué**. `getPlantCareItems()` expose les soins
+  actifs à `js/maison.js` et `js/today.js` (un `feed` à `cold:0` est suspendu et n'est jamais
+  proposé). `plantSheet()` : fiche unique création/édition — identité, pièce obligatoire, espèce du
+  catalogue `data/plantes.js` (pré-remplit les intervalles, modifiables ensuite par plante), photo,
+  jauge des trois soins avec l'intervalle appliqué en clair, historique d'arrosage, boutons
+  « Arrosé » / « Fait l'engrais » / « Rempoté » en action immédiate (comme `tapMaisonItem()`).
+  Photos : `resizePhoto()` (canvas, 1000 px max, JPEG 0,8) puis `idbPutPhoto()` (store `photos`,
+  jamais dans `S`), chargement paresseux (`idbGetPhoto()` seulement à l'ouverture de la fiche), URL
+  objet révoquée à la fermeture via le hook `_onSheetClose` posé dans `js/ui.js`.
+- `js/review.js` — placeholder **sans conteneur DOM propre** : `renderReview()` renvoie juste un
+  fragment `emptyState()`, jamais appelée par `go()`. Logique réelle au Lot 10.
+- `data/rayons.js` (`RAYONS`) — structure vide commentée, remplie au Lot 9.
+- `data/plantes.js` (`PLANTES`) — **rempli au Lot 7** : une quarantaine de plantes d'intérieur
+  courantes (nom, nom latin, intervalles d'arrosage/engrais saison chaude et froide, rempotage en
+  mois). Choisir une espèce dans la fiche plante pré-remplit ces intervalles.
 - `data/entretien.js` (`ENTRETIEN`) — **rempli au Lot 4** : une quarantaine de modèles d'entretien
   courants (`{title, room, intervalDays, effort}`), proposés en un tap depuis `entretienSheet()`
   (`js/maison.js`).
@@ -256,10 +304,21 @@ uniquement des déclarations.
   cochage de session, plafond `todayCap` + « + N autres », état vide sans aucune cible tactile,
   pastille — et, depuis le Lot 6, **`parseQuick()`** attaqué directement (plus de 50 cas
   d'entrée/sortie sur une date de référence fixe, plus le mécanisme d'ignorance des puces), sans
-  passer par le DOM. Vérifie enfin la persistance directe en IndexedDB après `saveNow()`. Échoue à
+  passer par le DOM. Depuis le Lot 7, **les plantes** : `plantSeason()` (bouclage sur l'année),
+  `careFreshness()` (suspension `cold:0`), `getPlantCareItems()` traduisant un soin en tâche pour
+  `recur.js` sans dupliquer le moteur, l'intégration à Maison et au bloc du jour d'Aujourd'hui, et la
+  fiche (`plantSheet()`/`savePlantSheet()`, asynchrone — hors du helper `call()` synchrone, comme le
+  flush `saveNow()`). Vérifie enfin la persistance directe en IndexedDB après `saveNow()`. Échoue à
   la moindre erreur runtime. Les scénarios d'« Aujourd'hui » travaillent sur une ardoise vide et
   **restaurent `S.tasks`** derrière eux (helper `scenario()`) : ne pas y pousser de tâche sans passer
-  par lui.
+  par lui. Depuis le Lot 8, **les habitudes** : `isoDow()`/`habitActiveOn()` (jours fixes vs quota
+  libre), le jour sauté neutre et la progression partielle testés directement sur `habitStreak()`,
+  le mode quota hebdomadaire (`habitWeekDone()`/`habitStreakWeeks()`), l'intégration à
+  `todayBuckets()` et à l'état vide, et la fiche (`habitSheet()`/`saveHabitSheet()`, synchrone).
+  Ces scénarios (helper `habitScenario()`) restaurent `S.habits`/`S.habitLog` derrière eux, comme
+  `scenario()` le fait pour `S.tasks` — le test de l'état vide isole en plus `S.plants` (le Ficus du
+  Lot 7 a un engrais/rempotage jamais faits, donc perpétuellement dus, qui polluerait sinon tout
+  état vide calculé après ce point du fichier).
 - **À chaque release** : incrémenter `CACHE` (`sw.js`) **et** `APP_VERSION` (`js/state.js`), même
   numéro (`mylife-b1-N` / `'Bêta 1.N'`).
 
@@ -277,6 +336,23 @@ est `['YYYY-MM-DD', …]` (réalisations passées). `migrate()` a basculé les t
 antérieure au Lot 4. Tout objet persisté suit la discipline synchro-ready :
 `id` = `crypto.randomUUID()`, `createdAt`/`updatedAt` (ms), `deletedAt` (tombstone, jamais de
 suppression dure), aucun compteur global stocké, aucun ordre implicite par position.
+
+Depuis le Lot 7, `plants[]` porte `{id,createdAt,updatedAt,deletedAt,name,species,room,photoId,
+care:{water:{warm,cold,lastAt,history}, feed:{warm,cold,lastAt,history}, repot:{months,lastAt}},
+notes,sort}`. `room` n'est jamais `null` (sinon la plante n'apparaît sur aucun écran). `species` est
+une clé de `data/plantes.js` ou une chaîne libre. `water`/`feed` portent deux intervalles (jours),
+saison chaude et froide — `cold:0` suspend le soin cette saison-là, `repot` est en mois et ne varie
+pas avec la saison. `photoId` est la clé du Blob dans le store IndexedDB `photos` (même id que la
+plante), ou `null`.
+
+Depuis le Lot 8, `habits[]` porte `{id,createdAt,updatedAt,deletedAt,name,unit,target,sched,sort}` —
+`unit` ∈ `''` (coche simple, `target` forcé à 1) / `'min'` / `'fois'` / `'L'` / `'pages'` ; `sched`
+est `{kind:'days', days:[1..7]=lundi..dimanche}` (jours fixes) **ou** `{kind:'week', perWeek}`
+(quota hebdomadaire libre, sans jour imposé — deux modes traités séparément, jamais l'un comme cas
+particulier de l'autre). `habitLog{}` est `{'YYYY-MM-DD':{habitId: valeur|'skip'}}`, journal séparé
+des définitions pour ne pas perdre l'historique en renommant/supprimant une habitude. Une valeur
+`'skip'` est neutre (ne casse ni n'alimente la série) ; seule `valeur >= target` alimente
+`habitStreak()`.
 
 ## Règles et pièges à connaître
 - **Ouvrir `maquettes/MyLife Canopée.html` avant de dessiner ou de coder un écran.** Elle contient
@@ -340,8 +416,8 @@ suppression dure), aucun compteur global stocké, aucun ordre implicite par posi
 | **4 — Récurrence & Maison v1** | Bêta 1.4 | ✅ Fait. Moteur `js/recur.js` pur et testé isolément (`nextDue`/`freshness`/`intervalDays`/`completeTask`, distinction `from:'due'`/`from:'done'` — le cœur du lot), récurrence dans la fiche tâche (fréquence, jours fixes facultatifs, depuis-date-fixe/après-réalisation, phrase en clair), écran Maison en vue par pièce (jauge agrégée + jauge de fraîcheur par élément, tap = fait avec retour visuel), catalogue `data/entretien.js` (~40 modèles) et feuille d'ajout `entretienSheet()`. |
 | **5 — « Aujourd'hui » v1** | Bêta 1.5 | ✅ Fait. Maquettes validées (`maquettes/today.html`, `maquettes/today-vide.html`) puis codées : `js/today.js` (blocs 1, 2, 3, 6, 7 de ROADMAP §6, tri, plafond `todayCap`, seuil d'entretien, cochages de session, état vide), pastille iOS (`updateBadge()` dans `boot.js`), `rerender()` dans `ui.js` (la fiche tâche s'ouvre désormais depuis deux écrans), plancher de jauge `gaugeWidth()`. **Mise en conformité incluse** (arbitrage du 27/07) : titres de groupe en `.sec` 18 px sur Tâches, cartes de pièce blanches + jauge à droite sur Maison, `.empty` à 140 px. **Hors périmètre** : les blocs Habitudes et Courses de la maquette ne sont pas codés — leurs modèles de données n'existent pas encore, et leur CSS n'a donc pas été posé (ce serait du CSS mort). Chaque domaine pose son bloc dans son propre lot : **plantes au 7, habitudes au 8, courses au 9** (contradiction ROADMAP levée le 27/07, cf. §7). |
 | **6 — Saisie rapide** | Bêta 1.6 | ✅ Fait. `js/nlp.js` : `parseQuick()` pur (dates relatives/absolues, échéance explicite `avant/pour/deadline` → `due`, récurrence à date fixe ou après réalisation, ce soir, priorité, effort, catégorie/pièce par dièse, tout le non-reconnu reste dans le titre) et la **barre de capture universelle** sur Aujourd'hui et Tâches (aperçu à puces supprimables, `commitCapture()`, bouton discret « Détails… » → fiche du Lot 3 préremplie). Remplace l'ancien champ « Ajouter une tâche » (`addTask()` retiré). Plus de 50 cas de test sur `parseQuick()`. |
-| 7 — Maison v2 (plantes) | Bêta 1.7 | À faire |
-| 8 — Habitudes | Bêta 1.8 | À faire |
+| **7 — Maison v2 (plantes)** | Bêta 1.7 | ✅ Fait. Catalogue `data/plantes.js` (~40 espèces, intervalles chaud/froid + rempotage), modulation saisonnière `plantSeason()` (`js/plants.js`) réutilisant `freshness()`/`completeTask()` de `js/recur.js` sans dupliquer le moteur, fiche plante (`plantSheet()` : identité, pièce, photo redimensionnée/recompressée en JPEG, jauges des trois soins, historique, boutons d'action immédiate), intégration à l'écran Maison (mêlée à l'entretien, par pièce) et au bloc du jour d'« Aujourd'hui » (soins réellement dus, jamais le bloc Entretien). |
+| **8 — Habitudes** | Bêta 1.8 | ✅ Fait. Moteur `js/habits.js` — série et quota, **jamais** une jauge de fraîcheur (frontière `CONVENTIONS.md` §6, ne réutilise donc pas `js/recur.js`) ; deux modes de planification traités séparément (`sched:{kind:'days',days}` / `sched:{kind:'week',perWeek}`) ; jour sauté neutre et progression partielle (seule l'atteinte de `target` alimente `habitStreak()`) ; bloc permanent d'« Aujourd'hui » en position 4 de la cascade (saisie en ligne, ± sous `HAB_STEP_MAX`, clavier numérique au-delà, jamais « Sauter » et deux boutons sur la même ligne — CSS repris de `maquettes/today.html`) ; écran secondaire `go('habits')` (fiche `habitSheet()`, calendrier mensuel à quatre états fait/partiel/sauté/inactif, **pas** un cinquième « manqué » — CONVENTIONS.md §3 proscrit le ton culpabilisant) ; série en cours, record (`habitBestStreak()`) et taux de réussite sur 30 jours (`habitRate30()`). |
 | 9 — Courses | Bêta 1.9 | À faire |
 | 10 — « Aujourd'hui » v2 & revue | Bêta 1.10 | À faire |
 | 11 — Réglages & filet de sécurité | Bêta 1.11 | À faire |

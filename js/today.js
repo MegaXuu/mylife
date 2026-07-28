@@ -4,13 +4,22 @@
      1. Échéances dépassées   — uniquement les vraies deadlines (due < aujourd'hui)
      2. Aujourd'hui           — start ≤ aujourd'hui et récurrences dues, plafonné
      3. Entretien             — au plus 3 jauges, les plus basses
+     4. Habitudes du jour     — actives aujourd'hui, saisie en ligne (js/habits.js)
      6. Ce soir               — sous-section discrète
      7. Si tu as 10 minutes   — 1 à 3 tâches anytime à effort court
-   Les blocs 4 (Habitudes) et 5 (Courses) de la maquette ne sont pas ici :
-   chaque domaine pose son propre bloc dans son lot — plantes au 7 (dans le
-   bloc du jour), habitudes au 8, courses au 9 (ROADMAP §7). Leurs modèles de
-   données n'existent pas encore. Rien n'est câblé en attendant : un bloc vide
-   est un bloc absent, et son CSS serait du CSS mort.
+   Le bloc 5 (Courses) n'est pas ici : il arrive avec son domaine au Lot 9
+   (ROADMAP §7). Son modèle de données n'existe pas encore.
+
+   Depuis le Lot V1-7 : les soins de plantes réellement dus (jauge à 0,
+   js/plants.js) rejoignent le bloc 2 « Aujourd'hui » — jamais le bloc 3
+   Entretien, réservé aux tâches from:'done' (ROADMAP §6.2). `scheduled`
+   devient donc un tableau mixte d'entrées {id, kind:'task'|'soin', t|s} ;
+   `id` est dupliqué au premier niveau pour que has()/tri/plafond restent
+   indifférents au contenu, tâche ou soin.
+
+   Depuis le Lot V1-8 : les habitudes actives aujourd'hui (js/habits.js,
+   getTodayHabits()) rejoignent la sélection — un domaine à part, jamais mêlé
+   aux tâches (une série ne se compte pas comme une jauge, CONVENTIONS.md §6).
 
    Mise en forme : la maquette fait foi (cf. le bloc Lot V1-5 du <style>).
    Le bloc du jour est le seul à ne pas être une carte : c'est ce qui le rend
@@ -83,9 +92,14 @@ function todayBuckets(){
   const evening = rest.filter(t=>t.evening && (!t.start || t.start <= today)).sort(taskCompare);
   const takenE = evening.map(t=>t.id);
 
-  // 2. Le jour même : une date posée, arrivée à terme.
-  const scheduled = rest.filter(t=>takenE.indexOf(t.id) === -1 && t.bucket === 'scheduled' &&
+  // 2. Le jour même : une date posée, arrivée à terme — et, depuis le Lot
+  //    V1-7, les soins de plantes réellement dus (jauge à 0), jamais someday
+  //    ni le bloc Entretien.
+  const scheduledTasks = rest.filter(t=>takenE.indexOf(t.id) === -1 && t.bucket === 'scheduled' &&
     ((t.start && t.start <= today) || (t.due && t.due <= today))).sort(taskCompare);
+  const duePlants = getPlantCareItems().filter(s=>s.f <= 0).sort((a,b)=>a.f - b.f);
+  const scheduled = scheduledTasks.map(t=>({id:t.id, kind:'task', t}))
+    .concat(duePlants.map(s=>({id:s.id, kind:'soin', s})));
 
   // 7. Le mécanisme qui empêche le « un jour » de pourrir silencieusement.
   //    Jamais someday : ce qui n'est pas mûr n'a rien à faire sur cet écran.
@@ -100,14 +114,19 @@ function todayBuckets(){
     .sort((a,b)=>a.f - b.f)
     .slice(0, TODAY_CARE_MAX);
 
-  return {overdue, scheduled, soins, evening, quick, done};
+  // 4. Habitudes actives aujourd'hui (js/habits.js) — domaine à part, jamais
+  //    mêlé aux tâches : une série ne se compte pas comme une jauge.
+  const habits = getTodayHabits(today);
+
+  return {overdue, scheduled, soins, evening, quick, done, habits};
 }
 
 // Pastille de l'icône iOS (ROADMAP §6) : ce qu'il reste à faire aujourd'hui.
 // « Si tu as 10 minutes » n'y entre pas — c'est une offre, pas un dû.
 function todayBadgeCount(){
   const b = todayBuckets();
-  return b.overdue.length + b.scheduled.length + b.soins.length + b.evening.length;
+  return b.overdue.length + b.scheduled.length + b.soins.length + b.evening.length +
+    habitsPendingCount(b.habits);
 }
 
 /* ==========================================================================
@@ -141,6 +160,21 @@ function todayRow(t, meta, cls){
   '</li>';
 }
 
+// Soin de plante dû, dans le bloc du jour : même disposition que le bloc
+// Entretien (row-care + gauge-side), mais un tap ouvre la fiche plante
+// (js/plants.js) au lieu de compléter directement — c'est là que vit le
+// bouton « arrosé ».
+function todayPlantRow(s){
+  const lieu = ROOM_LABELS[s.room] || s.room;
+  return '<li class="row row-care" onclick="plantSheet(\''+s.plantId+'\')">'+
+    '<div class="row-main">'+
+      '<div class="row-title">'+esc(s.title)+'</div>'+
+      (lieu ? '<div class="row-meta">'+esc(lieu)+'</div>' : '')+
+    '</div>'+
+    '<div class="gauge gauge-side"><div class="gauge-fill" style="width:'+gaugeWidth(s.f)+';background:'+gaugeColor(s.f)+'"></div></div>'+
+  '</li>';
+}
+
 function todayDoneRow(t){
   return '<li class="row done">'+
     '<button class="check on" aria-label="Fait" disabled></button>'+
@@ -169,7 +203,7 @@ function todaySection(b){
   return '<div class="sec"><h2 class="sec-title">Aujourd’hui</h2>'+
       '<span class="sec-count">'+b.scheduled.length+'</span></div>'+
     '<ul class="list list-page">'+
-      shown.map(t=>todayRow(t, todayMeta(t))).join('')+
+      shown.map(e=> e.kind === 'soin' ? todayPlantRow(e.s) : todayRow(e.t, todayMeta(e.t))).join('')+
       b.done.map(todayDoneRow).join('')+
     '</ul>'+
     (hidden > 0 ? '<button class="more" onclick="toggleTodayMore()">+ '+hidden+' autre'+(hidden>1?'s':'')+'</button>'
@@ -204,9 +238,11 @@ function renderToday(){
   const b = todayBuckets();
   // L'écran est vide quand plus rien ne demande d'attention. « Ce soir » n'en
   // fait pas partie : la phrase de l'état vide le dit explicitement, et la
-  // tâche du soir reste visible dessous pour rester atteignable.
+  // tâche du soir reste visible dessous pour rester atteignable. Une
+  // habitude déjà en retrait (row-soft — sautée ou au quota) ne compte pas :
+  // seule une habitude encore actionnable retient l'écran.
   const vide = !b.overdue.length && !b.scheduled.length && !b.done.length &&
-               !b.soins.length && !b.quick.length;
+               !b.soins.length && !b.quick.length && !habitsPendingCount(b.habits);
 
   let html;
   if(vide){
@@ -216,12 +252,13 @@ function renderToday(){
     // jamais fini.
     html = emptyState('C’est bon pour aujourd’hui.', 'Rien ne demande ton attention avant ce soir.');
   } else {
-    const nCards = (b.overdue.length ? 1 : 0) + (b.soins.length ? 1 : 0);
+    const nCards = (b.overdue.length ? 1 : 0) + (b.soins.length ? 1 : 0) + (b.habits.length ? 1 : 0);
     let i = 0;
     html = '';
     if(b.overdue.length) html += overdueCard(b.overdue, i++, nCards);
     if(b.scheduled.length || b.done.length) html += todaySection(b);
     if(b.soins.length) html += careCard(b.soins, i++, nCards);
+    if(b.habits.length) html += todayHabitsCard(b.habits, i++, nCards);
   }
   if(b.evening.length) html += softSection('Ce soir', b.evening);
   if(!vide && b.quick.length) html += softSection('Si tu as 10 minutes', b.quick);

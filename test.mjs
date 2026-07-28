@@ -495,6 +495,237 @@ call("parseQuick — ignore('repeat') rend le fragment au titre", () => {
   if(!/tous les 3 jours après/i.test(sans.title)) throw new Error('le fragment de récurrence devrait revenir dans le titre, obtenu « ' + sans.title + ' »');
 });
 
+// 6 quinquies) Plantes (Lot V1-7, js/plants.js) : modulation saisonnière et
+// réutilisation du moteur de récurrence (js/recur.js) sans le dupliquer.
+call('Plantes — plantSeason() suit settings.coldFrom/coldTo, y compris le bouclage sur l’année', () => {
+  S.settings.coldFrom = 10; S.settings.coldTo = 2;
+  if(win.plantSeason(new Date(2026, 0, 15)) !== 'cold') throw new Error('janvier devrait être en saison froide');
+  if(win.plantSeason(new Date(2026, 6, 15)) !== 'warm') throw new Error('juillet devrait être en saison chaude');
+  if(win.plantSeason(new Date(2026, 9, 15)) !== 'cold') throw new Error('octobre (coldFrom) devrait déjà être froid');
+  if(win.plantSeason(new Date(2026, 1, 28)) !== 'cold') throw new Error('février (coldTo) devrait encore être froid');
+});
+call('Plantes — careFreshness() : cold:0 suspend le soin (null), jamais une jauge', () => {
+  if(win.careFreshness({warm:7, cold:0, lastAt:Date.now()}, 'cold') !== null)
+    throw new Error('un soin à cold:0 doit être suspendu (null) en saison froide');
+  const f = win.careFreshness({warm:7, cold:14, lastAt:Date.now()}, 'cold');
+  if(f === null || Math.abs(f - 1) > 0.01) throw new Error('un soin tout juste fait doit être ~1, obtenu ' + f);
+});
+
+let plantId;
+call('Plantes — création, soin traduit en tâche pour recur.js, historique', () => {
+  const p = win.stamp({
+    name: 'Ficus du salon', species: 'ficus_lyrata', room: 'salon', photoId: null,
+    care: {
+      water: {warm: 7, cold: 14, lastAt: Date.now() - 5000, history: []},
+      feed: {warm: 30, cold: 0, lastAt: null, history: []},
+      repot: {months: 24, lastAt: null}
+    },
+    notes: '', sort: 0
+  });
+  S.plants.push(p);
+  plantId = p.id;
+  // getPlantCareItems() déduit la saison de la date réelle (plantSeason() sans
+  // ref) : on force la saison froide via les réglages, indépendamment de la
+  // date du jour où tourne le test, pour vérifier la suspension de l'engrais.
+  S.settings.coldFrom = 1; S.settings.coldTo = 12;
+  const items = win.getPlantCareItems();
+  S.settings.coldFrom = 10; S.settings.coldTo = 2;
+  const water = items.find(x => x.id === p.id + '-water');
+  if(!water) throw new Error('le soin arrosage devrait apparaître dans getPlantCareItems()');
+  if(water.title !== 'Ficus du salon (arrosage)') throw new Error('titre du soin incorrect : ' + water.title);
+  if(items.some(x => x.id === p.id + '-feed'))
+    throw new Error('l’engrais suspendu en saison froide (cold:0) ne doit jamais être proposé');
+  if(!items.some(x => x.id === p.id + '-repot')) throw new Error('le rempotage devrait aussi apparaître');
+  const before = p.care.water.lastAt;
+  win.doPlantCare(p.id, 'water');
+  if(p.care.water.lastAt <= before) throw new Error('doPlantCare devrait rafraîchir lastAt');
+  if(p.care.water.history.length !== 1) throw new Error('doPlantCare devrait historiser l’arrosage (recur.js completeTask)');
+});
+
+call('Maison — les soins de plante rejoignent la vue par pièce, à côté de l’entretien', () => {
+  win.go('maison');
+  const html = win.document.getElementById('s-maison').innerHTML;
+  if(!html.includes('Ficus du salon (arrosage)'))
+    throw new Error('le soin d’arrosage du Ficus devrait apparaître dans la vue Maison');
+  if(!/plantSheet\('/.test(html)) throw new Error('un tap sur une plante devrait ouvrir sa fiche (plantSheet), pas la compléter directement');
+});
+
+call('Aujourd’hui — un soin de plante vraiment dû rejoint le bloc du jour, jamais le bloc Entretien', () => {
+  const p = S.plants.find(x => x.id === plantId);
+  const savedLastAt = p.care.water.lastAt;
+  p.care.water.lastAt = Date.now() - 30 * 86400000; // très en retard : jauge à 0
+  const b = win.todayBuckets();
+  const entry = b.scheduled.find(x => x.id === plantId + '-water');
+  if(!entry || entry.kind !== 'soin') throw new Error('le soin d’arrosage dû devrait rejoindre le bloc du jour (kind:"soin")');
+  if(b.soins.some(x => x.t && x.t.id === plantId + '-water'))
+    throw new Error('un soin de plante ne doit jamais fuiter dans le bloc Entretien, réservé aux tâches from:done');
+  win.go('today');
+  const el = win.document.getElementById('s-today');
+  if(!/Ficus du salon \(arrosage\)/.test(el.textContent))
+    throw new Error('le soin dû devrait être rendu dans le bloc « Aujourd’hui »');
+  p.care.water.lastAt = savedLastAt; // remis à l'état frais pour ne pas polluer les autres scénarios
+});
+
+// 6 sexies) Habitudes (Lot V1-8, js/habits.js) : moteur de série/quota — JAMAIS
+// une jauge de fraîcheur (CONVENTIONS.md §6, frontière entretien/habitude).
+// Chaque scénario part d'une ardoise vide (habits + habitLog) et restaure
+// derrière lui, comme scenario() le fait pour S.tasks.
+const habitScenario = (label, build) => call(label, () => {
+  const backupH = S.habits.slice(), backupLog = S.habitLog;
+  S.habits.length = 0; S.habitLog = {};
+  try{ build(); } finally { S.habits.length = 0; backupH.forEach(h => S.habits.push(h)); S.habitLog = backupLog; }
+});
+
+habitScenario('isoDow / habitActiveOn — jours fixes n’activent que leurs jours, le quota n’importe lequel', () => {
+  if(win.isoDow('2026-07-27') !== 1) throw new Error('27/07/2026 est un lundi, isoDow devrait valoir 1');
+  if(win.isoDow('2026-08-02') !== 7) throw new Error('02/08/2026 est un dimanche, isoDow devrait valoir 7');
+  const h = {sched: {kind: 'days', days: [1, 3]}};
+  if(!win.habitActiveOn(h, '2026-07-27')) throw new Error('lundi devrait être actif (jours [1,3])');
+  if(win.habitActiveOn(h, '2026-07-28')) throw new Error('mardi ne devrait pas être actif (jours [1,3])');
+  const q = {sched: {kind: 'week', perWeek: 3}};
+  if(!win.habitActiveOn(q, '2026-07-28')) throw new Error('mode quota : actionnable n’importe quel jour');
+});
+
+habitScenario('Habitudes — jour sauté : neutre, ne casse ni n’alimente la série (point ㉑)', () => {
+  const h = win.stamp({name: 'Lecture', unit: 'pages', target: 20, sched: {kind: 'days', days: [1,2,3,4,5,6,7]}, sort: 0});
+  S.habits.push(h);
+  const today = win.todayKey();
+  win.setHabitLogValue(h.id, 20, win.addDays(today, -2)); // avant-hier : atteint
+  win.setHabitLogValue(h.id, 'skip', win.addDays(today, -1)); // hier : sauté
+  win.setHabitLogValue(h.id, 20, today); // aujourd'hui : atteint
+  const streak = win.habitStreak(h, today);
+  // 2 réussites réelles (avant-hier, aujourd'hui) : le jour sauté entre les
+  // deux ne les additionne pas à 3, il se contente de ne pas les séparer.
+  if(streak !== 2) throw new Error('un jour sauté ne doit pas casser la série : attendu 2, obtenu ' + streak);
+  if(win.habitReachedOn(h, win.addDays(today, -1))) throw new Error('un jour sauté n’est jamais une réussite');
+});
+
+habitScenario('Habitudes — progression partielle : ni échec ni réussite, seule l’atteinte alimente la série (point ㉓)', () => {
+  const h = win.stamp({name: 'Eau', unit: 'L', target: 2, sched: {kind: 'days', days: [1,2,3,4,5,6,7]}, sort: 0});
+  S.habits.push(h);
+  const today = win.todayKey();
+  win.setHabitLogValue(h.id, 1, today); // 1 L sur 2 : partiel
+  if(win.habitReachedOn(h, today)) throw new Error('1/2 ne devrait pas compter comme atteint');
+  if(win.habitValueOn(h, today) !== 1) throw new Error('la valeur partielle devrait être conservée telle quelle, pas arrondie à 0 ou 1');
+});
+
+habitScenario('Habitudes — mode quota hebdomadaire : la série se compte en semaines, pas en jours (point ㉒)', () => {
+  const h = win.stamp({name: 'Sport', unit: '', target: 1, sched: {kind: 'week', perWeek: 2}, sort: 0});
+  S.habits.push(h);
+  const today = win.todayKey();
+  const ws = win.habitWeekStart(today);
+  win.setHabitLogValue(h.id, 1, ws);               // semaine en cours : 2 jours distincts atteints
+  win.setHabitLogValue(h.id, 1, win.addDays(ws, 1));
+  if(win.habitWeekDone(h, ws) !== 2) throw new Error('2 jours atteints cette semaine, obtenu ' + win.habitWeekDone(h, ws));
+  if(win.habitStreak(h, today) < 1) throw new Error('la semaine en cours, quota atteint, devrait compter dans la série');
+  win.setHabitLogValue(h.id, 1, win.addDays(ws, -7)); // semaine précédente : 1 seul jour, quota non atteint
+  if(win.habitStreak(h, today) !== 1)
+    throw new Error('une semaine précédente sous le quota devrait arrêter la série à 1, obtenu ' + win.habitStreak(h, today));
+});
+
+habitScenario('Aujourd’hui — le bloc Habitudes rejoint todayBuckets(), jamais mêlé aux tâches ni à l’entretien', () => {
+  const today = win.todayKey();
+  const h = win.stamp({name: 'Lecture', unit: 'pages', target: 20, sched: {kind: 'days', days: [win.isoDow(today)]}, sort: 0});
+  S.habits.push(h);
+  const b = win.todayBuckets();
+  if(!b.habits.some(x => x.id === h.id)) throw new Error('une habitude active aujourd’hui devrait apparaître dans todayBuckets().habits');
+  if(b.scheduled.some(x => x.id === h.id) || b.soins.some(x => x.t && x.t.id === h.id))
+    throw new Error('une habitude ne doit jamais fuiter dans les blocs de tâches ou d’entretien');
+  if(win.todayBadgeCount() < 1) throw new Error('une habitude non atteinte devrait compter dans la pastille');
+  win.go('today');
+  const el = win.document.getElementById('s-today');
+  if(!/Lecture/.test(el.textContent)) throw new Error('le bloc Habitudes devrait être rendu sur Aujourd’hui');
+  if(!/Habitudes du jour/.test(el.textContent)) throw new Error('le titre du bloc devrait être « Habitudes du jour »');
+});
+
+// Isole aussi S.plants : le Ficus créé plus haut a un engrais/rempotage
+// jamais fait (donc perpétuellement dus) qui polluerait sinon tout état vide
+// calculé après ce point du fichier.
+call('Aujourd’hui — état vide : une habitude non atteinte l’empêche, une déjà faite ne gêne plus (principe 6)', () => {
+  const backupH = S.habits.slice(), backupLog = S.habitLog, backupP = S.plants.slice();
+  S.habits.length = 0; S.habitLog = {}; S.plants.length = 0;
+  try{
+    const today = win.todayKey();
+    const h = win.stamp({name: 'Lecture', unit: '', target: 1, sched: {kind: 'days', days: [win.isoDow(today)]}, sort: 0});
+    S.habits.push(h);
+    win.go('today');
+    let el = win.document.getElementById('s-today');
+    if(/C’est bon pour aujourd’hui\./.test(el.textContent))
+      throw new Error('une habitude encore actionnable devrait empêcher l’état vide');
+    win.setHabitLogValue(h.id, 1, today); // atteinte
+    win.go('today');
+    el = win.document.getElementById('s-today');
+    if(!/C’est bon pour aujourd’hui\./.test(el.textContent))
+      throw new Error('une habitude déjà atteinte aujourd’hui ne doit plus bloquer l’état vide');
+  } finally {
+    S.habits.length = 0; backupH.forEach(h => S.habits.push(h));
+    S.habitLog = backupLog;
+    S.plants.length = 0; backupP.forEach(p => S.plants.push(p));
+  }
+});
+
+habitScenario('Habitudes — stepHabit()/skipHabit() écrivent dans habitLog ; changer d’avis après un saut reste possible', () => {
+  const h = win.stamp({name: 'Verres d’eau', unit: 'L', target: 6, sched: {kind: 'days', days: [1,2,3,4,5,6,7]}, sort: 0});
+  S.habits.push(h);
+  const today = win.todayKey();
+  win.stepHabit(h.id, 1);
+  if(win.habitValueOn(h, today) !== 1) throw new Error('stepHabit(+1) devrait poser la valeur à 1');
+  win.stepHabit(h.id, -1);
+  if(win.habitValueOn(h, today) !== 0) throw new Error('stepHabit(-1) devrait redescendre à 0');
+  win.skipHabit(h.id);
+  if(!win.habitSkippedOn(h, today)) throw new Error('skipHabit() devrait marquer le jour comme sauté');
+  win.stepHabit(h.id, 1); // change d'avis : une habitude sautée reste actionnable
+  if(win.habitSkippedOn(h, today)) throw new Error('reprendre après un saut devrait écraser le skip');
+  if(win.habitValueOn(h, today) !== 1) throw new Error('la valeur devrait être posée après le changement d’avis');
+});
+
+// Fiche habitude (création/édition/suppression via l’UI, comme taskSheet/plantSheet) —
+// synchrone, donc dans le helper call() standard.
+call('Habitudes — fiche : création via l’UI, casse posée par cap(), tombstone à la suppression', () => {
+  win.go('habits');
+  win.habitSheet(null);
+  const nameEl = win.document.getElementById('h-name');
+  if(!nameEl) throw new Error('le champ nom devrait être présent à la création');
+  nameEl.value = 'marche quotidienne';
+  nameEl.dispatchEvent(new win.Event('input', {bubbles: true}));
+  win.setHUnit('min');
+  win.setHTarget('30');
+  win.setHSchedKind('days');
+  win.saveHabitSheet();
+  const h = S.habits.find(x => x.name === 'Marche quotidienne');
+  if(!h) throw new Error('l’habitude devrait être créée avec la casse posée par cap()');
+  if(!h.id || !h.createdAt || !h.updatedAt || h.deletedAt !== null)
+    throw new Error('la discipline synchro-ready (id/createdAt/updatedAt/deletedAt) devrait être respectée');
+  if(h.unit !== 'min' || h.target !== 30) throw new Error('unité/objectif non enregistrés correctement');
+  win.deleteHabit(h.id);
+  win._runConfirm();
+  if(!h.deletedAt) throw new Error('la suppression d’une habitude doit être un tombstone, jamais un splice()');
+  if(!S.habits.some(x => x.id === h.id)) throw new Error('l’habitude supprimée doit rester dans le tableau (tombstone)');
+});
+
+// savePlantSheet() est asynchrone (photo éventuelle) : hors du helper call()
+// synchrone, comme le flush saveNow() plus bas.
+try{
+  win.plantSheet(null);
+  const nameEl = win.document.getElementById('p-name');
+  if(!nameEl) throw new Error('le champ nom devrait être présent à la création');
+  // _pSheet est un `let` de plants.js : accessible en interne (oninput=) mais
+  // pas via win._pSheet (pas de propriété sur window). On passe donc par le
+  // DOM et les setters exposés, comme le ferait un vrai geste utilisateur.
+  nameEl.value = 'orchidée du bureau';
+  nameEl.dispatchEvent(new win.Event('input', {bubbles: true}));
+  win.setPRoom('bureau');
+  await win.savePlantSheet();
+  const p = S.plants.find(x => x.name === 'Orchidée du bureau');
+  if(!p) throw new Error('la plante devrait être créée avec la casse posée par cap()');
+  if(!p.id || !p.createdAt || !p.updatedAt || p.deletedAt !== null)
+    throw new Error('la discipline synchro-ready (id/createdAt/updatedAt/deletedAt) devrait être respectée');
+  win.deletePlant(p.id);
+  win._runConfirm();
+  if(!p.deletedAt) throw new Error('la suppression d’une plante doit être un tombstone, jamais un splice()');
+  if(!S.plants.some(x => x.id === p.id)) throw new Error('la plante supprimée doit rester dans le tableau (tombstone)');
+}catch(e){ onError('plantSheet — création/suppression', e); }
+
 // 7) Écriture immédiate puis relecture directe dans IndexedDB — équivalent, pour ce
 //    test de fumée, à vérifier la persistance après un rechargement de l'app.
 if(typeof win.saveNow === 'function'){
@@ -534,5 +765,8 @@ if(fails.length){
   console.log('✓ Test fumée OK — 6 écrans, cycle de vie d’une tâche, oiseaux, casse,\n' +
               '  récurrence, Maison, algorithme d’« Aujourd’hui » (blocs, seuil d’entretien,\n' +
               '  cochage de session, plafond, état vide, pastille), parseQuick (' + nlpCases.length + ' cas\n' +
-              '  + mécanisme d’ignorance) et persistance.');
+              '  + mécanisme d’ignorance), plantes (saison, soins réutilisant recur.js,\n' +
+              '  intégration Maison et bloc du jour, fiche), habitudes (série/quota, jour\n' +
+              '  sauté neutre, progression partielle, mode quota hebdomadaire, intégration\n' +
+              '  Aujourd’hui, fiche) et persistance.');
 }
