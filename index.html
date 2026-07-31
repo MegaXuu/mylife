@@ -138,15 +138,15 @@ svg{display:block;}
   padding:14px var(--s4); margin-bottom:var(--s3);
 }
 /* Teintes de domaine : à l'intérieur, les filets et la piste de jauge passent
-   en --line-in (le filet clair disparaîtrait sur un fond teinté). */
-.card.t-plantes,.card.t-maison,.card.t-habitudes,.card.t-courses{
+   en --line-in (le filet clair disparaîtrait sur un fond teinté). Seules
+   .t-maison et .t-habitudes sont posées sur une carte en V1 (plantes et
+   courses restent des cartes blanches, cf. arbitrage du 27/07/2026) —
+   .card.t-plantes/.card.t-courses ont été retirées au Lot 12, orphelines. */
+.card.t-maison,.card.t-habitudes{
   --line:var(--line-in); --g-track:var(--line-in);
 }
-.card.t-plantes{background:var(--t-plantes);}
 .card.t-maison{background:var(--t-maison);}
 .card.t-habitudes{background:var(--t-habitudes);}
-.card.t-courses{background:var(--t-courses); --ink2:#6A6154;} /* 4,46:1 → 4,74:1 sur cette teinte */
-html[data-mode="dark"] .card.t-courses{--ink2:#A89D8D;}
 
 /* ---------- Boutons ---------- */
 .btn{
@@ -165,7 +165,7 @@ html[data-mode="dark"] .card.t-courses{--ink2:#A89D8D;}
 
 /* ---------- Chips (état, pas action : inversion achromatique, pas de vert) ---------- */
 .chip{
-  height:40px; padding:0 var(--s4);
+  height:44px; padding:0 var(--s4);
   border:1px solid var(--line); border-radius:var(--r-pill);
   background:var(--sunken); color:var(--ink);
   font-size:14.5px; font-weight:500;

@@ -156,7 +156,7 @@ function todayMeta(t){
 // supprimer ni reporter ici — Aujourd'hui décide, il n'administre pas.
 function todayRow(t, meta, cls){
   return '<li class="row'+(cls ? ' '+cls : '')+'">'+
-    '<button class="check" aria-label="Marquer fait" onclick="todayDone(\''+t.id+'\')"></button>'+
+    '<button class="check" role="checkbox" aria-checked="false" aria-label="Marquer fait" onclick="todayDone(\''+t.id+'\')"></button>'+
     '<div class="row-main" onclick="taskSheet(\''+t.id+'\')">'+
       '<div class="row-title">'+esc(t.title)+'</div>'+
       (meta ? '<div class="row-meta">'+meta+'</div>' : '')+
@@ -181,7 +181,7 @@ function todayPlantRow(s){
 
 function todayDoneRow(t){
   return '<li class="row done">'+
-    '<button class="check on" aria-label="Fait" disabled></button>'+
+    '<button class="check on" role="checkbox" aria-checked="true" aria-label="Fait" disabled></button>'+
     '<div class="row-main"><div class="row-title">'+esc(t.title)+'</div></div>'+
   '</li>';
 }
@@ -267,7 +267,14 @@ function renderToday(){
     // propose RIEN d'autre — pas d'entretien encore vert, pas de « 10 minutes »,
     // pas de récapitulatif. Un écran qui remplit son propre silence n'est
     // jamais fini.
-    html = emptyState('C’est bon pour aujourd’hui.', 'Rien ne demande ton attention avant ce soir.');
+    // Deux variantes (point laissé ouvert au Lot 5, tranché au Lot 12) : la
+    // phrase ne doit pas sous-informer quand la tâche du soir est déjà faite
+    // elle aussi — b.evening exclu du calcul de `vide` exprès (voir plus
+    // haut), donc il peut encore y avoir quelque chose ce soir à ce point.
+    const sousEmpty = b.evening.length
+      ? 'Rien ne demande ton attention avant ce soir.'
+      : 'Il ne reste rien à faire aujourd’hui.';
+    html = emptyState('C’est bon pour aujourd’hui.', sousEmpty);
   } else {
     const nCards = (b.overdue.length ? 1 : 0) + (b.soins.length ? 1 : 0) + (b.habits.length ? 1 : 0);
     let i = 0;

@@ -125,7 +125,7 @@ function entretienSheetHtml(){
   const rows = modelRows.map(({m, i})=>{
     const on = !!_entSheet.checked[i];
     return '<li class="row" onclick="toggleEntModel('+i+')">'+
-      '<button class="check'+(on?' on':'')+'" aria-label="Sélectionner"></button>'+
+      '<button class="check'+(on?' on':'')+'" role="checkbox" aria-checked="'+on+'" aria-label="Sélectionner"></button>'+
       '<div class="row-main"><div class="row-title">'+esc(m.title)+'</div>'+
         '<div class="row-meta">Tous les '+m.intervalDays+' jours</div></div>'+
     '</li>';
