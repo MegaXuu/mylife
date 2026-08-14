@@ -188,6 +188,25 @@ function _runToastAct(){
   if(a && a.fn) a.fn();
 }
 
+// Enveloppe toast() avec une action « Annuler » déjà câblée (Lot V2-1) : le
+// motif qui revient partout où la V2 rend une action annulable (ROADMAP-V2.md
+// §1, checklist §6). Réutilise toast(msg, {action:{...}}) tel quel.
+function undoable(msg, undoFn){
+  toast(msg, {action:{label:'Annuler', fn:undoFn}});
+}
+
+// Attributs communs d'une ligne cliquable (Lot V2-1, audit D3) : role="button",
+// focusable au clavier, Entrée et Espace déclenchent comme un tap. `onTap` est
+// une expression JS, évaluée telle quelle — comme un onclick= l'est déjà
+// ailleurs dans le projet. `opts.label` pose un aria-label quand le texte
+// visible de la ligne ne suffit pas à la décrire ; facultatif sinon.
+function rowAttrs(onTap, opts){
+  const label = (opts && opts.label) ? ' aria-label="'+esc(opts.label)+'"' : '';
+  return ' role="button" tabindex="0"'+label+
+    ' onclick="'+onTap+'"'+
+    ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();'+onTap+'}"';
+}
+
 /* ---------- Feuilles modales ---------- */
 function openSheet(html){
   const sheet = document.getElementById('sheet'), bg = document.getElementById('sheet-bg');

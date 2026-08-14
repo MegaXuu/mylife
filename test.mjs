@@ -19,7 +19,7 @@ const read = f => readFileSync(root + f, 'utf8');
 // <script> pour rester robuste sous jsdom, même portée globale qu'en prod.
 const FILES = [
   'data/rayons.js', 'data/plantes.js', 'data/entretien.js', 'data/oiseaux.js',
-  'js/state.js', 'js/ui.js', 'js/recur.js', 'js/nlp.js', 'js/today.js',
+  'js/state.js', 'js/ui.js', 'js/gestures.js', 'js/recur.js', 'js/nlp.js', 'js/today.js',
   'js/tasks.js', 'js/maison.js', 'js/plants.js', 'js/habits.js',
   'js/shopping.js', 'js/review.js', 'js/settings.js', 'js/boot.js',
 ];
@@ -1074,6 +1074,75 @@ try{
   if(!S.plants.some(x => x.id === p.id)) throw new Error('la plante supprimée doit rester dans le tableau (tombstone)');
 }catch(e){ onError('plantSheet — création/suppression', e); }
 
+// 6 undecies) Socle d'interaction (Lot V2-1) : gestures.js se charge sans
+// erreur runtime (déjà couvert par window.onerror sur l'ensemble du bundle,
+// vérifié ici explicitement par la présence d'un de ses symboles globaux —
+// le balayage lui-même ne se simule pas sous jsdom, cf. consigne du lot),
+// undoable() et rowAttrs().
+call('gestures.js — chargé sans erreur, sa fonction globale est bien exposée', () => {
+  // Les `const` de tête de fichier (comme SWIPE_COMMIT_RATIO) ne deviennent
+  // pas des propriétés de window (portée lexicale du script, pas globalThis) :
+  // seule une déclaration `function` l'est, d'où ce choix de symbole ici.
+  if(typeof win.swipeRunAttr !== 'function') throw new Error('gestures.js ne semble pas chargé (swipeRunAttr absent)');
+});
+
+call('undoable() — enveloppe toast() avec une action « Annuler » déjà câblée', () => {
+  let ran = false;
+  win.undoable('Test annulable', () => { ran = true; });
+  const t = win.document.getElementById('toast');
+  if(!t.classList.contains('show')) throw new Error('undoable() devrait afficher le toast');
+  const btn = t.querySelector('.toast-act');
+  if(!btn || btn.textContent !== 'Annuler') throw new Error('undoable() devrait poser un bouton « Annuler »');
+  btn.click();
+  if(!ran) throw new Error('cliquer sur « Annuler » devrait exécuter la fonction fournie');
+  win.hideToast();
+});
+
+call('rowAttrs() — role, tabindex, et Entrée/Espace déclenchent comme un clic (audit D3)', () => {
+  let n = 0;
+  win.rowAttrsTestBump = () => { n++; };
+  const wrap = win.document.createElement('div');
+  wrap.innerHTML = '<div id="ra-test"' + win.rowAttrs('rowAttrsTestBump()') + '>x</div>';
+  win.document.body.appendChild(wrap);
+  const el = win.document.getElementById('ra-test');
+  if(el.getAttribute('role') !== 'button') throw new Error('rowAttrs() devrait poser role="button"');
+  if(el.getAttribute('tabindex') !== '0') throw new Error('rowAttrs() devrait poser tabindex="0"');
+  el.click();
+  if(n !== 1) throw new Error('le clic devrait déclencher onTap via onclick');
+  el.dispatchEvent(new win.KeyboardEvent('keydown', {key: 'Enter', bubbles: true, cancelable: true}));
+  if(n !== 2) throw new Error('Entrée devrait déclencher onTap comme un clic');
+  el.dispatchEvent(new win.KeyboardEvent('keydown', {key: ' ', bubbles: true, cancelable: true}));
+  if(n !== 3) throw new Error('Espace devrait déclencher onTap comme un clic');
+  wrap.remove();
+});
+
+call('rowAttrs() — appliqué aux lignes cliquables de Aujourd’hui, Tâches, Maison, Courses', () => {
+  // Aujourd'hui : rien ne garantit qu'une tâche du bloc du jour (row-main via
+  // todayRow()) traîne encore à ce point du test — on en pose une exprès.
+  const t = mk({title: 'Ligne accessible', bucket: 'scheduled', start: win.todayKey()});
+  win.go('today');
+  const todayHtml = win.document.getElementById('s-today').innerHTML;
+  if(!/class="row-main" role="button" tabindex="0"/.test(todayHtml))
+    throw new Error('Aujourd’hui — les .row-main cliquables devraient porter role="button"/tabindex="0"');
+  t.deletedAt = Date.now(); win.touch(t); // nettoyage : ne pollue pas les scénarios suivants
+  win.go('tasks');
+  const tasksHtml = win.document.getElementById('s-tasks').innerHTML;
+  if(!/class="row-main" role="button" tabindex="0"/.test(tasksHtml))
+    throw new Error('Tâches — les .row-main cliquables devraient porter role="button"/tabindex="0"');
+  win.go('maison');
+  const maisonHtml = win.document.getElementById('s-maison').innerHTML;
+  if(maisonHtml.includes('class="row row-care"') && !/class="row row-care" role="button" tabindex="0"/.test(maisonHtml))
+    throw new Error('Maison — les lignes d’entretien/soin cliquables devraient porter role="button"/tabindex="0"');
+  win.go('shopping');
+  win.addShoppingItem('Test rowAttrs');
+  win.go('shopping');
+  const shopHtml = win.document.getElementById('s-shopping').innerHTML;
+  if(!/class="row-main" role="button" tabindex="0"/.test(shopHtml))
+    throw new Error('Courses — les .row-main cliquables devraient porter role="button"/tabindex="0"');
+  const it = S.shopping.find(x => x.label === 'Test rowAttrs');
+  if(it){ it.deletedAt = Date.now(); win.touch(it); } // nettoyage : ne pollue pas les scénarios suivants
+});
+
 // 7) Écriture immédiate puis relecture directe dans IndexedDB — équivalent, pour ce
 //    test de fumée, à vérifier la persistance après un rechargement de l'app.
 if(typeof win.saveNow === 'function'){
@@ -1111,6 +1180,7 @@ if(fails.length){
   process.exit(1);
 } else {
   console.log('✓ Test fumée OK — 6 écrans, cycle de vie d’une tâche, oiseaux, casse,\n' +
+              '  socle d’interaction V2-1 (gestures.js chargé, undoable(), rowAttrs()),\n' +
               '  récurrence, Maison, algorithme d’« Aujourd’hui » (blocs, seuil d’entretien,\n' +
               '  cochage de session, plafond, état vide, pastille), parseQuick (' + nlpCases.length + ' cas\n' +
               '  + mécanisme d’ignorance), plantes (saison, soins réutilisant recur.js,\n' +

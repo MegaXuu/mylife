@@ -33,7 +33,7 @@ function maisonAgo(t){
 // {title, f, ago, onTap, fillId}. `fillId` n'existe que pour les tâches, dont
 // tapMaisonItem() fait remonter la jauge à 100 % avant le rendu complet.
 function careRowHtml(e){
-  return '<li class="row row-care" onclick="'+e.onTap+'">'+
+  return '<li class="row row-care"'+rowAttrs(e.onTap)+'>'+
     '<div class="row-main"><div class="row-title">'+esc(e.title)+'</div></div>'+
     '<div class="gauge-cell">'+
       '<div class="gauge"><div class="gauge-fill"'+(e.fillId ? ' id="'+e.fillId+'"' : '')+' '+
@@ -124,7 +124,7 @@ function entretienSheetHtml(){
   const modelRows = ENTRETIEN.map((m, i)=> m.room === _entSheet.room ? {m, i} : null).filter(Boolean);
   const rows = modelRows.map(({m, i})=>{
     const on = !!_entSheet.checked[i];
-    return '<li class="row" onclick="toggleEntModel('+i+')">'+
+    return '<li class="row"'+rowAttrs('toggleEntModel('+i+')')+'>'+
       '<button class="check'+(on?' on':'')+'" role="checkbox" aria-checked="'+on+'" aria-label="Sélectionner"></button>'+
       '<div class="row-main"><div class="row-title">'+esc(m.title)+'</div>'+
         '<div class="row-meta">Tous les '+m.intervalDays+' jours</div></div>'+

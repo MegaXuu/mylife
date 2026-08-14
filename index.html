@@ -97,7 +97,7 @@ body{
   -webkit-text-size-adjust:100%;
 }
 p{margin:0 0 var(--s2);}
-button,input{font:inherit;color:inherit;}
+button,input,textarea,select{font:inherit;color:inherit;}
 button{cursor:pointer;}
 svg{display:block;}
 
@@ -526,6 +526,27 @@ svg{display:block;}
    est nouveau ici. */
 .row-postpone:disabled,.row-del:disabled{opacity:.35; pointer-events:none;}
 
+/* ==========================================================================
+   Lot V2-1 — socle du balayage (js/gestures.js). Une ligne devient balayable
+   en portant data-swipe-left/right ; le moteur enveloppe alors son contenu
+   déjà rendu dans .swipe-content (seule cible du transform) et pose les
+   fonds .swipe-bg dessous. touch-action:pan-y laisse toujours le défilement
+   vertical gagner au doigt, avant même que le JS ne tranche.
+   « Supprimer » reste un contour --due, jamais un aplat rouge (discipline
+   chromatique) ; le fond positif (compléter, reporter) est --act plein.
+   ========================================================================== */
+.row[data-swipe-left],.row[data-swipe-right]{position:relative; overflow:hidden; touch-action:pan-y;}
+.swipe-content{position:relative; background:var(--card);}
+.swipe-bg{
+  position:absolute; inset:0; display:flex; align-items:center;
+  padding:0 var(--s4); border-radius:var(--r-btn);
+  font-size:var(--fs-low); font-weight:600;
+  opacity:0; pointer-events:none;
+}
+.swipe-bg.show{opacity:1;}
+.swipe-bg.left{justify-content:flex-end; background:none; border:1.5px solid var(--due); color:var(--due);}
+.swipe-bg.right{justify-content:flex-start; background:var(--act); color:var(--on);}
+
 /* ---------- Au-delà de 900 px : colonne centrée plafonnée (desktop en V2) ---------- */
 @media (min-width:900px){
   .app{max-width:560px; margin:0 auto;}
@@ -563,6 +584,7 @@ svg{display:block;}
 <script src="data/oiseaux.js"></script>
 <script src="js/state.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/gestures.js"></script>
 <script src="js/recur.js"></script>
 <script src="js/nlp.js"></script>
 <script src="js/today.js"></script>

@@ -33,6 +33,10 @@ function applyTheme(){
   else if(t === 'light') dark = false;
   else dark = !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.setAttribute('data-mode', dark ? 'dark' : 'light');
+  // Bandeau système de la PWA installée (audit D2) : mêmes valeurs que --bg
+  // en clair et en sombre (index.html <style> :root / html[data-mode="dark"]).
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute('content', dark ? '#17140F' : '#F3EEE5');
 }
 let _themeMql = null;
 // Un seul écouteur pour toute la session : en mode 'auto', un changement de

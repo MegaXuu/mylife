@@ -157,7 +157,7 @@ function todayMeta(t){
 function todayRow(t, meta, cls){
   return '<li class="row'+(cls ? ' '+cls : '')+'">'+
     '<button class="check" role="checkbox" aria-checked="false" aria-label="Marquer fait" onclick="todayDone(\''+t.id+'\')"></button>'+
-    '<div class="row-main" onclick="taskSheet(\''+t.id+'\')">'+
+    '<div class="row-main"'+rowAttrs("taskSheet('"+t.id+"')")+'>'+
       '<div class="row-title">'+esc(t.title)+'</div>'+
       (meta ? '<div class="row-meta">'+meta+'</div>' : '')+
     '</div>'+
@@ -170,7 +170,7 @@ function todayRow(t, meta, cls){
 // bouton « arrosé ».
 function todayPlantRow(s){
   const lieu = ROOM_LABELS[s.room] || s.room;
-  return '<li class="row row-care" onclick="plantSheet(\''+s.plantId+'\')">'+
+  return '<li class="row row-care"'+rowAttrs("plantSheet('"+s.plantId+"')")+'>'+
     '<div class="row-main">'+
       '<div class="row-title">'+esc(s.title)+'</div>'+
       (lieu ? '<div class="row-meta">'+esc(lieu)+'</div>' : '')+
@@ -218,7 +218,7 @@ function careCard(soins, i, n){
   const rows = soins.map(({t, f})=>{
     const lieu = ROOM_LABELS[t.room] || t.room;
     const etat = f <= 0 ? '<b>À faire</b>' : esc(maisonAgo(t));
-    return '<li class="row row-care" onclick="tapTodayCare(\''+t.id+'\')">'+
+    return '<li class="row row-care"'+rowAttrs("tapTodayCare('"+t.id+"')")+'>'+
       '<div class="row-main">'+
         '<div class="row-title">'+esc(t.title)+'</div>'+
         '<div class="row-meta">'+esc(lieu)+' · '+etat+'</div>'+

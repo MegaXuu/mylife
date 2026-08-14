@@ -140,7 +140,7 @@ function shopRowHtml(it){
   return '<li class="row'+(it.done ? ' done' : '')+'">'+
     '<button class="check'+(it.done ? ' on' : '')+'" role="checkbox" aria-checked="'+it.done+'" '+
       'aria-label="'+(it.done ? 'Décocher' : 'Marquer acheté')+'" onclick="toggleShopDone(\''+it.id+'\')"></button>'+
-    '<div class="row-main" onclick="shopItemSheet(\''+it.id+'\')"><div class="row-title">'+esc(it.label)+'</div></div>'+
+    '<div class="row-main"'+rowAttrs("shopItemSheet('"+it.id+"')")+'><div class="row-title">'+esc(it.label)+'</div></div>'+
     (it.qty ? '<div class="row-qty">× '+esc(it.qty)+'</div>' : '')+
   '</li>';
 }

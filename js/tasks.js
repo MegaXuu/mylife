@@ -80,7 +80,7 @@ function taskRowHtml(t, allowPostpone, soft){
   const meta = taskMeta(t, today);
   return '<li class="row'+(soft ? ' row-low' : '')+'">'+
     '<button class="check" role="checkbox" aria-checked="false" aria-label="Marquer fait" onclick="doneTask(\''+t.id+'\')"></button>'+
-    '<div class="row-main" onclick="taskSheet(\''+t.id+'\')">'+
+    '<div class="row-main"'+rowAttrs("taskSheet('"+t.id+"')")+'>'+
       '<div class="row-title">'+esc(t.title)+'</div>'+
       (meta ? '<div class="row-meta">'+meta+'</div>' : '')+
     '</div>'+

@@ -27,7 +27,8 @@ maintenant ? » — tâches, entretien de la maison, plantes, habitudes, courses
   **à la saisie**, jamais au rendu, pour que la donnée stockée et exportée soit déjà propre. Toute
   saisie texte passe par `cap()` + `autocapitalize="sentences"`. Arbitré au Lot 2, remplace la
   consigne « minuscules de phrase » d'origine (`CONVENTIONS.md` §3 est à jour).
-- Versionnage affiché : **Bêta 1.N**, synchronisé avec `CACHE` dans `sw.js`.
+- Versionnage affiché : **Bêta N.M** (`N`=1 en V1, `N`=2 depuis le cycle V2 ouvert au Lot V2-1),
+  synchronisé avec `CACHE` dans `sw.js`.
 
 ## Identité visuelle — « Canopée » (Lot 2, appliquée)
 Crème chaud, cartes posées à un seul niveau d'élévation, jauges pilule qui rougissent par calcul,
@@ -96,14 +97,17 @@ Mode sombre : bloc `html[data-mode="dark"]` prêt dans `:root` depuis le Lot 2, 
 au Lot 11** — trois états dans Réglages (Clair/Sombre/Auto, `S.settings.theme`), posés sur
 `data-mode` par `applyTheme()` (`js/settings.js`), appelée au boot avant le premier rendu. « Auto »
 suit `prefers-color-scheme` via `watchSystemTheme()` (écouteur posé une fois, réagit à un changement
-de thème système en direct) ; silencieux et replié sur clair si l'API n'existe pas.
+de thème système en direct) ; silencieux et replié sur clair si l'API n'existe pas. Depuis le
+**Lot V2-1**, `applyTheme()` pose aussi `<meta name="theme-color">` (`#F3EEE5` clair / `#17140F`
+sombre — audit D2) : le bandeau système de la PWA installée suit désormais le thème.
 
 ## Fichiers et ordre de chargement
 Ordre impératif (CONVENTIONS.md §1), déclaré dans `index.html`, miroir dans `sw.js` (`ASSETS`) et
-`test.mjs` (`FILES`) — **17 fichiers** au total :
+`test.mjs` (`FILES`) — **18 fichiers** au total depuis le Lot V2-1 (`js/gestures.js` ajouté après
+`js/ui.js`) :
 ```
 data/rayons.js · data/plantes.js · data/entretien.js · data/oiseaux.js
-→ js/state.js → js/ui.js → js/recur.js → js/nlp.js → js/today.js → js/tasks.js
+→ js/state.js → js/ui.js → js/gestures.js → js/recur.js → js/nlp.js → js/today.js → js/tasks.js
 → js/maison.js → js/plants.js → js/habits.js → js/shopping.js → js/review.js
 → js/settings.js → js/boot.js (toujours en dernier)
 ```
@@ -155,7 +159,20 @@ uniquement des déclarations.
   (trait 2 px, terminaisons rondes), `screenHead(surTitre, titre, {noGear})`,
   `emptyState(titre, sousTitre)`, `gaugeColor(f)`, `CURRENT_SCREEN` (posé par `go()`), et les
   oiseaux : `pickBirds()` (appelé une fois au boot), `birdsOn()`, `birdSvg(nom, w, pos)`,
-  `birdOnCard(i, n)`, `birdOnPerch()`.
+  `birdOnCard(i, n)`, `birdOnPerch()`. Depuis le **Lot V2-1** : `undoable(msg, undoFn)` (enveloppe
+  `toast()` avec une action « Annuler » déjà câblée) et `rowAttrs(onTap, opts)` (attributs communs
+  d'une ligne cliquable — `role="button"`, `tabindex="0"`, `onclick`, Entrée/Espace — posés sur les
+  `.row`/`.row-main` cliquables de `today.js`/`tasks.js`/`maison.js`/`shopping.js`, audit D3).
+- `js/gestures.js` — **nouveau au Lot V2-1**, socle de balayage horizontal consommé par les Lots
+  V2-4/5/6, sans écran propre. Une ligne devient balayable en portant `data-swipe-left="fn(...)"`
+  et/ou `data-swipe-right="fn(...)"` (nom de fonction évalué comme un `onclick=` l'est déjà,
+  `swipeRunAttr()`) ; un seul écouteur délégué au `document` (Pointer Events) suit le contenu de la
+  ligne en `translateX`, révèle un fond `.swipe-bg` (contour `--due` à gauche/« supprimer », plein
+  `--act` à droite/positif — discipline chromatique), et déclenche l'action au relâchement au-delà
+  de 33 % de la largeur ou 0,5 px/ms de vélocité (mêmes seuils que `endSheetDrag`, `js/ui.js`).
+  Abandonné dès que le vertical dépasse l'horizontal (le défilement gagne toujours) ; rien ne se
+  passe sous `prefers-reduced-motion`. Aucune ligne de l'app ne porte encore ces attributs à ce
+  stade : c'est aux Lots V2-4/5/6 de les poser.
 - `js/tasks.js` — écran Tâches, **moteur Things 3 posé au Lot 3** : groupes « Aujourd'hui et avant »
   (`bucket:'scheduled'` avec `start` ou `due` ≤ aujourd'hui) / « À venir » (le reste du `scheduled`) /
   « Un jour » (`anytime`) / « Peut-être » (`someday`, replié par défaut, visuellement en retrait),
@@ -382,7 +399,7 @@ uniquement des déclarations.
   que de s'acharner à vider l'ancien.
 - **Vérif syntaxe** : `node --check <fichier>` sur chaque fichier `js/`/`data/` modifié.
 - **Test de fumée** : `npm test` (après un premier `npm install`) — charge `index.html` sous jsdom
-  avec `fake-indexeddb` injecté, inline les 17 fichiers `data/`+`js/` concaténés dans l'ordre de
+  avec `fake-indexeddb` injecté, inline les 18 fichiers `data/`+`js/` concaténés dans l'ordre de
   chargement, attend `await window.__ready()`, exerce `go()` sur les 6 écrans, le cycle de vie d'une
   tâche (créer/cocher/supprimer), `stamp()`/`touch()`/`live()`, les invariants des oiseaux (un seul
   par écran, `aria-hidden`, aucun en mode sombre, interrupteur effectif), la majuscule initiale
@@ -486,10 +503,11 @@ mémorisées) complètent les réglages.
   Lots 3 et 4 ont dérivé sans le savoir (écarts listés dans « Identité visuelle »). En cas de
   désaccord entre le code livré et la maquette, **c'est la maquette qui gagne** (arbitrage 27/07).
 - **Les trois listes miroir** (`<script>` de `index.html`, `ASSETS` de `sw.js`, `FILES` de
-  `test.mjs`) doivent toujours lister les **17 mêmes fichiers** dans le même ordre. Piège classique :
+  `test.mjs`) doivent toujours lister les **18 mêmes fichiers** dans le même ordre. Piège classique :
   ajouter un fichier sans mettre à jour les trois — l'app marche en local et casse une fois installée.
-  (Décompte : 4 `data/` + 13 `js/` = 17. Le Lot 2 a ajouté `data/oiseaux.js` — c'était le premier
-  test réel de cette règle, et les trois listes ont bien été mises à jour ensemble.)
+  (Décompte : 4 `data/` + 14 `js/` = 18. Le Lot 2 a ajouté `data/oiseaux.js`, le Lot V2-1
+  `js/gestures.js` — à chaque fois le même risque, et les trois listes ont bien été mises à jour
+  ensemble.)
 - **Incrémenter `CACHE` (sw.js) à chaque release**, synchroniser `APP_VERSION` (`js/state.js`) sur le
   même numéro — sinon l'app installée garde silencieusement l'ancienne version.
 - Toujours échapper le texte utilisateur avec `esc()`. Jamais `confirm()`/`alert()`/`prompt()`
@@ -548,6 +566,16 @@ mémorisées) complètent les réglages.
 | **10 — « Aujourd'hui » v2 & revue** | Bêta 1.10 | ✅ Fait. Passe de vérification (pas de construction) sur la cascade des 7 blocs de ROADMAP §6 : ordre et absence de doublon confirmés, la pastille ne comptait déjà que les dus. `js/review.js` rempli : la revue hebdomadaire (`reviewCandidates()`, `reviewDue()`, flux une tâche à la fois — faire cette semaine / un jour / abandonner —, écran de fin sobre), déclenchée au boot (`maybeStartReview()`) et accessible à la demande depuis Réglages. Motivation légère sans le moindre score : `celebrateHabitRecord()` (record de série, jamais le premier jour) et un toast à la première réalisation d'un entretien annuel (`tapMaisonItem()`/`tapTodayCare()`). Compteur de reports déjà posé aux Lots 3/5, vérifié conforme. |
 | **11 — Réglages & filet de sécurité** | Bêta 1.11 | ✅ Fait. Écran Réglages en six groupes (Profil, Aujourd'hui, Maison, Courses, Données, À propos) : prénom, apparence (interrupteur de mode sombre `setTheme('light'\|'dark'\|'auto')`, 'auto' suit `prefers-color-scheme`), Oiseaux (déjà là depuis le Lot 2), plafond du jour, jour de revue, saison froide des plantes, ordre des rayons (réutilise `rayonOrderSheet()` du Lot 9). Export/import JSON complets de `S` (photos exclues, signalé explicitement à l'écran), import validé intégralement avant toute écriture (`validateImportPayload()`/`applyImportedData()`). Réinitialisation en deux temps (proposer l'export, puis seulement le bouton danger) avec purge du store `photos`. Feuille de bienvenue au tout premier lancement (`maybeWelcome()`, trois écrans, jamais revue une fois fermée) ; `migrate()` marque d'office `onboarded=true` sur une base déjà peuplée. Le mode sombre n'était pas dans les six points du prompt de lot mais explicitement promis ici par ce fichier et par ROADMAP-V1.md §7 (« il arrivera avec Réglages au Lot 11 ») : inclus après arbitrage avec Florian. |
 | **12 — Polish, QA, dettes** | Bêta 1.12 | ✅ Fait. Dernier lot du cycle V1, aucune fonctionnalité nouvelle. Audit accessibilité/tactile : une seule cible sous 44 px trouvée (`.chip`, 40 px) et corrigée à 44 ; `:focus-visible`, `prefers-reduced-motion` et zone sûre iOS déjà conformes depuis le premier écran, rien à corriger ; contrastes recalculés par calcul (WCAG) sur toutes les paires ink/ink2 × bg/card/teintes de domaine, clair et sombre : toutes ≥ 4,5:1, aucune régression. `role="checkbox"`/`aria-checked` ajoutés aux 5 boutons `.check` (tasks.js, today.js ×2, shopping.js, maison.js), qui n'exposaient jusque-là qu'un `aria-label` sans état. Audit textuel : aucun emoji, aucune casse fautive, aucun « en retard »/« manqué » hors du seul emploi légitime (échéance réelle d'une tâche, `js/tasks.js`) ; point laissé ouvert au Lot 5 tranché — l'état vide d'Aujourd'hui a désormais deux variantes selon `b.evening.length` (« Rien ne demande ton attention avant ce soir. » s'il reste quelque chose ce soir, « Il ne reste rien à faire aujourd'hui. » sinon). Audit des chemins redondants : une seule vraie redondance trouvée (`rayonOrderSheet()` accessible à l'identique depuis Réglages ET depuis Courses) ; soumise à Florian, qui a choisi de garder les deux (centralisation vs. contexte d'usage) — aucune suppression faite. Dettes techniques : purge des tombstones >90 j déjà en place (rien à faire) ; deux classes CSS orphelines retirées (`.card.t-plantes`, `.card.t-courses` — jamais posées en HTML depuis que Lot 5/7/9 ont gardé Maison et Courses en cartes blanches ; les variables `--t-plantes`/`--t-courses` restent définies, la première est désormais un token dormant) ; aucun `style="..."` non calculé trouvé (les 6 existants sont tous des jauges/oiseaux calculés, légitimes) ; aucune fonction morte détectée (recherche automatisée sur toutes les déclarations `function` de `js/`+`data/`) ; aucun fichier au-dessus de 600 lignes (le plus long est `js/habits.js`, 447 lignes). Les 3 listes miroir revérifiées fichier par fichier : toujours les 17 mêmes, dans le même ordre. `QA-IPHONE.md` créé (checklist à dérouler sur l'iPhone réel : installation, mode avion, pastille, persistance 48 h, photo de plante, mode magasin/Wake Lock, glisser-fermer, zone sûre, mise à jour du service worker, export/import). |
+
+## Cycle V2 « L'usage » — en cours
+Plan complet dans `ROADMAP-V2.md` (audit du 14/08/2026, arbitrages §3, huit lots) ; `CONVENTIONS.md`
+reste la loi permanente, amendée par ce même §3. Ce fichier ne détaille pas ici le tableau des huit
+lots V2 (il vit dans `ROADMAP-V2.md`, pas dupliqué pour rester court) ; la synchronisation complète
+de `CLAUDE.md`/`CONVENTIONS.md` avec l'état final de la V2 est prévue au Lot V2-8.
+- **V2-1 — Socle d'interaction** (Bêta 2.1) : ✅ Fait. `js/gestures.js` (balayage, non encore posé
+  sur aucune ligne — c'est aux Lots V2-4/5/6), `undoable()`/`rowAttrs()` dans `js/ui.js`, `role`/
+  `tabindex`/Entrée-Espace posés sur les 7 lignes cliquables existantes (audit D3), correctifs D1
+  (`textarea`/`select` en `font:inherit`) et D2 (`theme-color` suit `applyTheme()`).
 
 ## Cycle V1 clos — dettes sciemment laissées pour la V2
 Le Lot 12 a fermé le cycle V1. Rien ci-dessous n'est un oubli : chaque point a été examiné et
