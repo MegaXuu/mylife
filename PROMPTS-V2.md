@@ -13,7 +13,7 @@
 
 | Lot | Titre | Modèle | Validation | Statut |
 |---|---|---|---|---|
-| V2-1 | Socle d'interaction | Sonnet | — | à faire |
+| V2-1 | Socle d'interaction | Sonnet | — | fait |
 | V2-2 | Navigation & saisie | Sonnet | — | à faire |
 | V2-3 | « Aujourd'hui » v3 | Opus puis Sonnet | ⚑ | à faire |
 | V2-4 | Tâches v2 | Sonnet | — | à faire |
