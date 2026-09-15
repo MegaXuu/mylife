@@ -157,6 +157,11 @@ uniquement des déclarations.
   Lot V2-2 la barre occupait 76 → 138 px et le toast était posé à 96 px, donc caché derrière elle
   sur les trois écrans qui en portent une (un « Annuler » invisible n'annule rien). `.hab-num` a été
   **retirée** au même lot, orpheline depuis que le clavier numérique a disparu du bloc du jour.
+  Puis le bloc **Lot V2-4** : `.row-note-ic` (indicateur de notes, 14 px, dans `.row-title`),
+  `.done-sub` (sous-titre à l'intérieur du groupe « Fait », plus léger qu'un `.sec` entier) et
+  `.more-toggle` (respiration propre au bouton « Plus d'options », qui n'est pas un `.field-group`).
+  Aucune classe nouvelle pour le balayage lui-même : `.row[data-swipe-left]`/`.swipe-content`/
+  `.swipe-bg` du Lot V2-1 suffisaient, posés sur de vraies lignes pour la première fois ici.
   Au-delà de **900 px** : colonne centrée plafonnée à 560 px (desktop V2).
 - `js/state.js` — **socle**, aucun rendu DOM : `APP_VERSION`, IndexedDB (`openDb`/`idbGet`/`idbSet`,
   + `idbPutPhoto`/`idbGetPhoto`/`idbDelPhoto`/`idbClearPhotos` — ce dernier posé au Lot 11 pour la
@@ -193,8 +198,14 @@ uniquement des déclarations.
   `--act` à droite/positif — discipline chromatique), et déclenche l'action au relâchement au-delà
   de 33 % de la largeur ou 0,5 px/ms de vélocité (mêmes seuils que `endSheetDrag`, `js/ui.js`).
   Abandonné dès que le vertical dépasse l'horizontal (le défilement gagne toujours) ; rien ne se
-  passe sous `prefers-reduced-motion`. Aucune ligne de l'app ne porte encore ces attributs à ce
-  stade : c'est aux Lots V2-4/5/6 de les poser.
+  passe sous `prefers-reduced-motion`. Aucune ligne de l'app ne portait encore ces attributs à ce
+  stade : c'est au Lot V2-4 de les avoir posées le premier (Tâches), et c'est ce qui a révélé un
+  défaut du fichier lui-même — corrigé sur place, toujours au Lot V2-4 : `swipePrepareRow()`
+  (reparente le contenu de la ligne dans `.swipe-content`) s'exécutait dès `pointerdown`, sur
+  **toute** ligne balayable, y compris un simple tap immobile — ce reparentage synchrone fait
+  perdre au navigateur le clic de synthèse qui devait suivre, donc plus aucune ligne ne s'ouvrait
+  au tap. `swipePrepareRow()` ne s'appelle désormais qu'au premier `pointermove` qui verrouille le
+  balayage horizontal (`s.locked = 'h'`) : un tap qui ne bouge pas ne touche plus jamais au DOM.
 - `js/tasks.js` — écran Tâches, **moteur Things 3 posé au Lot 3** : groupes « Aujourd'hui et avant »
   (`bucket:'scheduled'` avec `start` ou `due` ≤ aujourd'hui) / « À venir » (le reste du `scheduled`) /
   « Un jour » (`anytime`) / « Peut-être » (`someday`, replié par défaut, visuellement en retrait),
@@ -211,6 +222,20 @@ uniquement des déclarations.
   `from:'done'` pose `doneAt` sur l'instant présent. **Depuis le Lot 6**, l'ancien champ « Ajouter une
   tâche » (`addTask()`) a été retiré : `renderTasks()` se termine par `captureBarHtml()`
   (`js/nlp.js`), un seul chemin de saisie pour tout l'écran (CONVENTIONS.md §3, principe 5).
+  **Depuis le Lot V2-4**, plus aucun bouton permanent sur une ligne : `taskRowHtml()` pose
+  `data-swipe-left`/`data-swipe-right` (`js/gestures.js`) — gauche supprime toujours, droite
+  reporte uniquement dans le groupe « Aujourd'hui et avant » (`opts.postpone`), jamais dans les
+  autres où seule la fiche fait ce travail. `taskGroupHtml()` généralise son repli
+  (`opts.toggleFn`/`opts.open`, avant réservé à « Peut-être ») pour aussi porter le groupe
+  **« Fait »** (`taskDoneSectionHtml()`/`taskDoneItems()`) : fenêtre de 7 jours, sous-titres
+  « Fait aujourd'hui »/« Fait cette semaine », entretien toujours exclu (il garde un `doneAt`
+  permanent par construction), et `settings.hideDone` enfin lu — il masque tout le groupe, pas
+  seulement son repli, qui reste une préférence de session. La fiche (`taskSheetHtml()`) passe en
+  divulgation progressive : `_tSheet._more` (posé par `tsHasExtras()` à l'ouverture, jamais dans le
+  DOM — il doit survivre à `refreshTaskSheet()`) ne déplie Notes/Catégorie/Pièce/Ce soir/Priorité/
+  Effort/Récurrence/Bucket que si un de ces champs porte déjà une valeur non par défaut. Indicateur
+  de notes (`IC_NOTE`) sur la ligne. Recherche et filtres n'apparaissent plus dans `renderTasks()`
+  qu'au-delà de `TASK_FILTER_MIN` tâches ouvertes.
 - `js/today.js` — écran **« Aujourd'hui », posé au Lot 5**. `todayBuckets()` est le seul endroit où
   se décide ce qui compte : une passe unique qui répartit en `overdue` (échéance réelle dépassée) /
   `evening` / `scheduled` (le bloc du jour) / `quick` (anytime à effort 1) / `soins` (entretien) /
@@ -497,7 +522,16 @@ uniquement des déclarations.
   reste valide), `idbClearPhotos()` (réinitialisation) et l'ordre des six groupes de l'écran.
   L'export réel (téléchargement du fichier) et le rechargement après import/réinitialisation ne
   sont pas exercés par le test de fumée : `URL.createObjectURL` et `File.prototype.text()`
-  n'existent pas sous jsdom (comme le canvas de `resizePhoto()`, Lot 7, déjà hors test).
+  n'existent pas sous jsdom (comme le canvas de `resizePhoto()`, Lot 7, déjà hors test). Depuis le
+  Lot V2-4, **Tâches v2** : plus aucun bouton `row-postpone`/`row-del` rendu, `data-swipe-left`/
+  `-right` posés à la place ; reporter annulable ; le groupe « Fait » exclut toujours l'entretien,
+  `settings.hideDone` pilote bien son existence, et `unDoneTask()` rouvre correctement une tâche
+  décochée depuis ce groupe ; la fiche s'ouvre repliée sur une tâche neuve et dépliée dès qu'un
+  champ caché porte une valeur non par défaut ; l'indicateur de notes n'apparaît que si `t.notes`
+  n'est pas vide ; recherche et filtres n'apparaissent dans le DOM qu'au-delà de `TASK_FILTER_MIN`.
+  Le balayage lui-même ne se simule pas sous jsdom (comme au Lot V2-1) — vérifié en conditions
+  réelles de clic dans le panneau de prévisualisation, ce qui a d'ailleurs révélé et fait corriger
+  le défaut de `js/gestures.js` documenté plus haut.
 - **À chaque release** : incrémenter `CACHE` (`sw.js`) **et** `APP_VERSION` (`js/state.js`), même
   numéro (`mylife-b1-N` / `'Bêta 1.N'`).
 
@@ -645,6 +679,34 @@ de `CLAUDE.md`/`CONVENTIONS.md` avec l'état final de la V2 est prévue au Lot V
   du Lot V2-2 est enfin dessinée sur cet écran. Un défaut trouvé en dessinant et corrigé au passage :
   le toast était caché derrière la barre de saisie collée depuis le Lot V2-2, donc l'« Annuler »
   inatteignable — `body.capture-open .toast` le relève.
+- **V2-4 — Tâches v2** (Bêta 2.4) : ✅ Fait. `js/tasks.js` seul touché (+ son CSS). Les boutons
+  permanents `>`/`×` des lignes disparaissent : balayer à gauche supprime (`delTask()`), à droite
+  reporte (`postponeTask()`, désormais annulable lui aussi) — seul le groupe « Aujourd'hui et
+  avant » porte le sens droit, la fiche reste le chemin de secours partout (§3.3). Fiche tâche en
+  divulgation progressive (`_tSheet._more`, `tsHasExtras()`) : titre + dates + Enregistrer
+  visibles d'emblée, le reste derrière « Plus d'options » — déplié d'office si la tâche porte déjà
+  une valeur non par défaut dans un de ces champs (audit A5). Groupe **« Fait »** repliable en bas
+  de l'écran (`taskDoneItems()`, fenêtre de 7 jours, sous-groupes « aujourd'hui »/« cette
+  semaine ») : `settings.hideDone` pilote enfin son existence (audit C2) — `true` le masque
+  entièrement, son ouverture/fermeture à l'écran reste une préférence de session comme « Peut-être »
+  ; un entretien (`room`+`repeat.from:'done'`) en est exclu par construction, il garde toujours un
+  `doneAt`. `doneTask()` devient annulable (cliché exact, comme `todayDone()`) ; décocher une ligne
+  du groupe « Fait » (`unDoneTask()`) rouvre la tâche sans chercher à restituer l'échéance exacte
+  d'avant — une décochage tardive n'a pas le même besoin de fidélité qu'un « Annuler » à chaud.
+  Indicateur de notes discret (14 px, `IC_NOTE`) à côté du titre si `t.notes` n'est pas vide (audit
+  C3). Recherche et filtres de catégorie n'apparaissent plus qu'au-delà de `TASK_FILTER_MIN` (6
+  tâches ouvertes) — en dessous ils sont retirés du DOM et leur état est réinitialisé, pour ne
+  jamais laisser un filtre actif sans moyen visible de le lever.
+  **Correctif hors périmètre déclaré, nécessaire à l'acceptation du lot** : `js/gestures.js`
+  (Lot V2-1) préparait le calque `.swipe-content` dès `pointerdown`, sur toute ligne portant
+  `data-swipe-left`/`-right` — donc désormais toutes les lignes de Tâches. Ce lot est le premier à
+  poser ces attributs sur de vraies lignes tapables ; le défaut était donc resté invisible jusqu'ici.
+  Or ce reparentage synchrone pendant `pointerdown` fait perdre au navigateur le clic de synthèse
+  qui devait suivre un simple tap immobile (confirmé en conditions réelles de clic, pas seulement
+  sous jsdom) — un tap sur une ligne n'ouvrait plus sa fiche. Corrigé en différant
+  `swipePrepareRow()` du `pointerdown` au premier `pointermove` qui verrouille le balayage
+  horizontal : un tap qui ne bouge pas ne touche plus jamais au DOM, un vrai balayage se comporte
+  à l'identique. À surveiller aux Lots V2-5/V2-6, qui posent `data-swipe-*` sur d'autres écrans.
 
 ## Cycle V1 clos — dettes sciemment laissées pour la V2
 Le Lot 12 a fermé le cycle V1. Rien ci-dessous n'est un oubli : chaque point a été examiné et

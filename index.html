@@ -608,6 +608,27 @@ body.capture-open .app{padding-bottom:calc(158px + env(safe-area-inset-bottom));
    d'un cochage, inatteignable. Piloté par la classe que go() pose déjà. */
 body.capture-open .toast{bottom:calc(150px + env(safe-area-inset-bottom));}
 
+/* ==========================================================================
+   Lot V2-4 — Tâches v2. Le balayage lui-même n'ajoute aucune règle : il
+   réutilise .swipe-content/.swipe-bg déjà posés au Lot V2-1. Restent trois
+   petits ajouts propres à cet écran.
+   ========================================================================== */
+
+/* Indicateur de notes (point 4, audit C3) : discret, à côté du titre —
+   jamais un extrait de texte, juste la présence. */
+.row-note-ic{display:inline-flex; vertical-align:-2px; margin-left:6px; color:var(--ink2);}
+
+/* Sous-titre à l'intérieur du groupe « Fait » (point 3) : distingue
+   « aujourd'hui » de « cette semaine » sans leur donner le poids d'un .sec
+   entier — ce sont des repères dans un seul groupe replié, pas deux groupes. */
+.done-sub{font-size:13px; font-weight:600; color:var(--ink2); margin:var(--s4) var(--s1) 4px;}
+.done-sub:first-child{margin-top:var(--s2);}
+
+/* Divulgation progressive de la fiche tâche (point 2, audit A5) : le bouton
+   « Plus d'options » n'est pas un .field-group, il lui faut sa propre
+   respiration entre les dates et le reste. */
+.more-toggle{margin-top:var(--s4);}
+
 /* ---------- Au-delà de 900 px : colonne centrée plafonnée (desktop en V2) ---------- */
 @media (min-width:900px){
   .app{max-width:560px; margin:0 auto;}

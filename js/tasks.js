@@ -2,6 +2,13 @@
    tasks.js — écran Tâches (Lot V1-3, moteur Things 3) : groupes Aujourd'hui
    et avant / À venir / Un jour / Peut-être, filtres par catégorie, recherche,
    fiche tâche complète (taskSheet). La récurrence (repeat) arrive au Lot 4.
+
+   Lot V2-4 : les boutons permanents « > »/« × » des lignes disparaissent au
+   profit du balayage (js/gestures.js, ROADMAP-V2.md §3.3) ; la fiche tâche
+   passe en divulgation progressive (audit A5) ; un groupe « Fait » repliable
+   rend enfin utile settings.hideDone (audit C2) ; les notes affichent un
+   indicateur discret (audit C3) ; recherche et filtres n'apparaissent plus
+   que si l'écran en a vraiment besoin.
    ========================================================================== */
 
 const CAT_LABELS = {perso:'Perso', menage:'Ménage', entretien:'Entretien', admin:'Admin'};
@@ -15,6 +22,18 @@ const REPEAT_KIND_LABELS = {day:'Jour', week:'Semaine', month:'Mois', year:'An'}
 const REPEAT_KIND_ORDER = ['day','week','month','year'];
 const DOW_LABELS = {1:'Lun', 2:'Mar', 3:'Mer', 4:'Jeu', 5:'Ven', 6:'Sam', 7:'Dim'};
 const DOW_ORDER = [1,2,3,4,5,6,7];
+// Indicateur de notes (audit C3) : un rectangle à deux lignes, même trait
+// que le reste des icônes du projet (icon(), js/ui.js).
+const IC_NOTE = '<path d="M5 4.5h11l3 3v12h-14z"></path><path d="M8.5 10.5h7M8.5 14.5h5"></path>';
+// Seuil au-delà duquel recherche + filtres méritent leur place à l'écran
+// (point 5 du lot) : en dessous, ~180 px de contrôles en permanence pour
+// trier trois tâches ne sert à rien ; au-delà, retrouver une tâche à l'œil
+// devient pénible sans eux.
+const TASK_FILTER_MIN = 6;
+// Fenêtre du groupe « Fait » (point 3) : au-delà d'une semaine, une tâche
+// réalisée n'a plus sa place ici — elle reste dans son historique, juste
+// plus affichée.
+const TASK_DONE_DAYS = 7;
 
 function fmtDateShort(k){
   const d = new Date(k+'T00:00');
@@ -75,17 +94,29 @@ function taskMeta(t, today){
   return bits.join(' · ');
 }
 
-function taskRowHtml(t, allowPostpone, soft){
+// Ligne de tâche. Depuis le Lot V2-4, plus aucun bouton permanent « > »/« × »
+// (c'était eux qui écrasaient un titre long sur deux lignes) : balayer vers
+// la gauche supprime, vers la droite reporte — la même action reste toujours
+// atteignable dans la fiche, le balayage ne fait que la doubler (§3.3). Une
+// ligne du groupe « Fait » (opts.done) n'a que le balayage gauche : le tap
+// sur sa case suffit déjà à la décocher, un balayage droit ferait doublon.
+function taskRowHtml(t, opts){
+  opts = opts || {};
+  const done = !!opts.done;
   const today = todayKey();
-  const meta = taskMeta(t, today);
-  return '<li class="row'+(soft ? ' row-low' : '')+'">'+
-    '<button class="check" role="checkbox" aria-checked="false" aria-label="Marquer fait" onclick="doneTask(\''+t.id+'\')"></button>'+
+  const meta = done ? fmtDateShort(dayKey(new Date(t.doneAt))) : taskMeta(t, today);
+  const noteIcon = t.notes ? '<span class="row-note-ic" aria-hidden="true">'+icon(IC_NOTE, 14)+'</span>' : '';
+  const checkBtn = done
+    ? '<button class="check on" role="checkbox" aria-checked="true" aria-label="Marquer non fait" onclick="unDoneTask(\''+t.id+'\')"></button>'
+    : '<button class="check" role="checkbox" aria-checked="false" aria-label="Marquer fait" onclick="doneTask(\''+t.id+'\')"></button>';
+  const swipe = ' data-swipe-left="delTask(\''+t.id+'\')"'+
+    (!done && opts.postpone ? ' data-swipe-right="postponeTask(\''+t.id+'\')" data-swipe-right-label="Reporter"' : '');
+  return '<li class="row'+(opts.soft ? ' row-low' : '')+(done ? ' done' : '')+'"'+swipe+'>'+
+    checkBtn+
     '<div class="row-main"'+rowAttrs("taskSheet('"+t.id+"')")+'>'+
-      '<div class="row-title">'+esc(t.title)+'</div>'+
+      '<div class="row-title">'+esc(t.title)+noteIcon+'</div>'+
       (meta ? '<div class="row-meta">'+meta+'</div>' : '')+
     '</div>'+
-    (allowPostpone ? '<button class="row-postpone" aria-label="Reporter à demain" onclick="postponeTask(\''+t.id+'\')">'+icon('<path d="M9 6l6 6-6 6"></path>', 20)+'</button>' : '')+
-    '<button class="row-del" aria-label="Supprimer" onclick="delTask(\''+t.id+'\')">'+icon(IC_CLOSE, 20)+'</button>'+
   '</li>';
 }
 
@@ -93,29 +124,76 @@ function taskRowHtml(t, allowPostpone, soft){
 // page. Les deux derniers groupes (« Un jour », « Peut-être ») passent au
 // registre bas : titre 14 px --ink2 et lignes de 15 px. Mise en conformité
 // avec la maquette au Lot V1-5 — c'était `.overline` 13 px auparavant.
+// opts.toggleFn (nom de fonction) + opts.open rendent le groupe repliable,
+// généralisé au Lot V2-4 pour être réutilisé par le groupe « Fait ».
 function taskGroupHtml(title, list, opts){
   if(!list.length) return '';
   opts = opts || {};
   const soft = !!opts.soft;
-  const toggle = opts.toggle
-    ? '<button class="group-toggle" onclick="toggleSomeday()">'+(_somedayOpen?'Masquer':'Afficher')+'</button>'
+  const toggle = opts.toggleFn
+    ? '<button class="group-toggle" onclick="'+opts.toggleFn+'()">'+(opts.open?'Masquer':'Afficher')+'</button>'
     : '';
-  const body = opts.collapsed ? ''
-    : '<ul class="list list-page">'+list.map(t=>taskRowHtml(t, opts.postpone, soft)).join('')+'</ul>';
+  const body = (opts.toggleFn && !opts.open) ? ''
+    : '<ul class="list list-page">'+list.map(t=>taskRowHtml(t, opts)).join('')+'</ul>';
   return '<div class="sec'+(soft ? ' soft' : '')+'">'+
       '<h2 class="sec-title">'+esc(title)+'</h2>'+
       '<span class="sec-count">'+list.length+'</span>'+toggle+
     '</div>'+body;
 }
 
+/* ==========================================================================
+   Groupe « Fait » (point 3, audit C2) — settings.hideDone enfin lu : il
+   décide si le groupe existe du tout sur cet écran (« cacher les tâches
+   faites »). Sa propre ouverture/fermeture, elle, reste une préférence de
+   session comme « Peut-être » (_somedayOpen) : repliée par défaut à chaque
+   arrivée sur l'écran, pas un réglage à retenir entre deux visites.
+   Un entretien (room + repeat.from:'done') garde toujours un doneAt par
+   construction (glossaire CONVENTIONS.md §6) : il est exclu ici comme
+   partout ailleurs sur cet écran, sinon le groupe se remplirait de toute la
+   maison à chaque rendu.
+   ========================================================================== */
+let _doneOpen = false;
+function toggleDoneGroup(){ _doneOpen = !_doneOpen; refreshTaskGroups(); }
+
+function taskDoneItems(){
+  const floor = addDays(todayKey(), -(TASK_DONE_DAYS - 1));
+  return live(S.tasks)
+    .filter(t => t.doneAt && !(t.room && t.repeat && t.repeat.from === 'done'))
+    .filter(t => dayKey(new Date(t.doneAt)) >= floor)
+    .sort((a, b) => b.doneAt - a.doneAt);
+}
+
+function taskDoneSectionHtml(){
+  if(S.settings.hideDone) return '';
+  const items = taskDoneItems();
+  if(!items.length) return '';
+  const today = todayKey();
+  const doneToday = items.filter(t => dayKey(new Date(t.doneAt)) === today);
+  const doneWeek = items.filter(t => dayKey(new Date(t.doneAt)) !== today);
+  const toggle = '<button class="group-toggle" onclick="toggleDoneGroup()">'+(_doneOpen?'Masquer':'Afficher')+'</button>';
+  const body = !_doneOpen ? '' :
+    taskDoneSubHtml('Fait aujourd’hui', doneToday) + taskDoneSubHtml('Fait cette semaine', doneWeek);
+  return '<div class="sec soft">'+
+      '<h2 class="sec-title">Fait</h2>'+
+      '<span class="sec-count">'+items.length+'</span>'+toggle+
+    '</div>'+body;
+}
+
+function taskDoneSubHtml(title, list){
+  if(!list.length) return '';
+  return '<h3 class="done-sub">'+esc(title)+'</h3>'+
+    '<ul class="list list-page">'+list.map(t=>taskRowHtml(t, {done:true, soft:true})).join('')+'</ul>';
+}
+
 function renderTaskGroups(){
   const items = getTaskItems();
+  const doneHtml = taskDoneSectionHtml();
   if(!items.length){
     const filtered = !!(_taskQuery || _taskCat);
     return emptyState(
       filtered ? 'Aucun résultat.' : 'Rien à faire ici.',
       filtered ? 'Essaie une autre recherche ou retire le filtre.' : 'Ajoute une première tâche ci-dessous.'
-    );
+    ) + doneHtml;
   }
   const today = todayKey();
   const gNow = items.filter(t=> t.bucket==='scheduled' && ((t.start && t.start<=today)||(t.due && t.due<=today)));
@@ -127,8 +205,9 @@ function renderTaskGroups(){
   const html = taskGroupHtml('Aujourd’hui et avant', gNow, {postpone:true})+
     taskGroupHtml('À venir', gSoon)+
     taskGroupHtml('Un jour', gAny, {soft:true})+
-    taskGroupHtml('Peut-être', gSome, {soft:true, toggle:true, collapsed:!_somedayOpen});
-  return html || emptyState('Aucun résultat.', 'Essaie une autre recherche ou retire le filtre.');
+    taskGroupHtml('Peut-être', gSome, {soft:true, toggleFn:'toggleSomeday', open:_somedayOpen})+
+    doneHtml;
+  return html || (emptyState('Aucun résultat.', 'Essaie une autre recherche ou retire le filtre.') + doneHtml);
 }
 
 function refreshTaskGroups(){
@@ -144,24 +223,58 @@ function renderTasks(){
   const nOpen = live(S.tasks).filter(t=>!t.doneAt).length;
   const sur = nOpen === 0 ? 'Aucune tâche ouverte'
                           : nOpen + (nOpen > 1 ? ' tâches ouvertes' : ' tâche ouverte');
+  // Recherche et filtres ne prennent de la place que quand ils servent
+  // (point 5) : en dessous du seuil, ils disparaissent — et leur état avec
+  // eux, pour ne rien laisser de filtré sans moyen visible de le défiltrer.
+  const showFilters = nOpen > TASK_FILTER_MIN;
+  if(!showFilters){ _taskCat = null; _taskQuery = ''; }
   const catChips = CAT_ORDER.map(c=>
     '<button class="chip'+(_taskCat===c?' on':'')+'" onclick="setTaskCat(\''+c+'\')">'+esc(CAT_LABELS[c])+'</button>'
   ).join('');
-  document.getElementById('s-tasks').innerHTML =
-    screenHead(sur, 'Tâches')+
+  const filters = !showFilters ? '' :
     '<input id="task-search" class="field search-field" type="search" placeholder="Rechercher…" '+
       'autocomplete="off" autocapitalize="none" value="'+esc(_taskQuery)+'" oninput="onTaskSearch(this.value)">'+
     '<div class="chips filter-chips">'+
       '<button class="chip'+(!_taskCat?' on':'')+'" onclick="setTaskCat(null)">Toutes</button>'+catChips+
-    '</div>'+
+    '</div>';
+  document.getElementById('s-tasks').innerHTML =
+    screenHead(sur, 'Tâches')+
+    filters+
     '<div id="task-groups">'+renderTaskGroups()+'</div>'+
     captureBarHtml();
 }
 
+// Annulable (point 3) : cliché des champs que completeTask() modifie, pour
+// un retour exact si on se ravise dans les secondes qui suivent — même
+// discipline que todayDone()/todayUndone() (js/today.js).
 function doneTask(id){
   const t = S.tasks.find(x=>x.id === id);
   if(!t) return;
+  const snap = {doneAt:t.doneAt, due:t.due, postponed:t.postponed||0, history:(t.history||[]).slice()};
   completeTask(t); // recalcule l'échéance et la fraîcheur si récurrente (js/recur.js)
+  save();
+  rerender();
+  undoable(t.title + ' : fait.', ()=>{
+    const x = S.tasks.find(y=>y.id === id);
+    if(!x) return;
+    x.doneAt = snap.doneAt; x.due = snap.due; x.postponed = snap.postponed; x.history = snap.history;
+    touch(x);
+    save();
+    rerender();
+  });
+}
+
+// Décoche une tâche depuis le groupe « Fait », potentiellement des jours
+// après (le cliché exact de doneTask() n'a plus de raison d'exister à ce
+// moment-là) : on rouvre simplement la tâche et on retire sa dernière
+// réalisation de l'historique. Ne concerne jamais une tâche from:'due' — elle
+// n'a justement jamais de doneAt persistant, donc jamais de ligne « Fait ».
+function unDoneTask(id){
+  const t = S.tasks.find(x=>x.id === id);
+  if(!t) return;
+  if(t.history && t.history.length) t.history.pop();
+  t.doneAt = null;
+  touch(t);
   save();
   rerender();
 }
@@ -185,10 +298,12 @@ function delTask(id){
 }
 
 // Reporter : pousse le début à demain, jamais l'échéance (la vraie deadline ne bouge pas
-// sans décision explicite dans la fiche). Discret, sans jugement : pas de toast.
+// sans décision explicite dans la fiche). Annulable depuis le Lot V2-4 (point 1) :
+// le balayage droit double désormais ce geste, il doit se rattraper comme les autres.
 function postponeTask(id){
   const t = S.tasks.find(x=>x.id === id);
   if(!t) return;
+  const snap = {start:t.start, bucket:t.bucket, postponed:t.postponed||0};
   t.start = addDays(todayKey(), 1);
   t.bucket = 'scheduled';
   t.postponed = (t.postponed||0) + 1;
@@ -196,12 +311,36 @@ function postponeTask(id){
   touch(t);
   save();
   refreshTaskGroups();
+  undoable('Reportée à demain.', ()=>{
+    const x = S.tasks.find(y=>y.id === id);
+    if(!x) return;
+    x.start = snap.start; x.bucket = snap.bucket; x.postponed = snap.postponed;
+    touch(x);
+    save();
+    refreshTaskGroups();
+  });
 }
 
 /* ==========================================================================
    Fiche tâche — création et édition par la même feuille modale.
+
+   Divulgation progressive depuis le Lot V2-4 (point 2, audit A5) : titre,
+   début, échéance et « Enregistrer » sont seuls visibles d'emblée — le reste
+   (notes, catégorie, pièce, ce soir, priorité, effort, récurrence, bucket)
+   vit derrière « Plus d'options ». _tSheet._more porte cet état déplié/replié
+   : il doit survivre à refreshTaskSheet(), qui remplace tout l'innerHTML de
+   la feuille à chaque setter — le DOM n'est donc pas une option pour le
+   stocker.
    ========================================================================== */
 let _tSheet = null;
+
+// Vrai si la tâche porte déjà une valeur non par défaut dans un champ caché
+// derrière « Plus d'options » : la feuille s'ouvre alors dépliée d'emblée,
+// pour ne jamais cacher à l'utilisateur ce qu'il a lui-même posé.
+function tsHasExtras(d){
+  return !!((d.notes||'').trim() || d.cat !== 'perso' || d.room || d.evening ||
+    d.prio || d.effort !== 2 || d.repeat || d.bucket === 'someday');
+}
 
 function taskSheet(id){
   const t = id ? S.tasks.find(x=>x.id === id) : null;
@@ -214,12 +353,15 @@ function taskSheet(id){
     id: null, title:'', notes:'', cat:'perso', room:null, bucket:'anytime',
     start:null, due:null, evening:false, prio:0, effort:2, repeat:null
   };
+  _tSheet._more = tsHasExtras(_tSheet);
   openSheet(taskSheetHtml());
   if(!_tSheet.id){
     const el = document.getElementById('ts-title');
     if(el) el.focus();
   }
 }
+
+function toggleTsMore(){ _tSheet._more = !_tSheet._more; refreshTaskSheet(); }
 
 function refreshTaskSheet(){ openSheet(taskSheetHtml()); }
 
@@ -287,21 +429,16 @@ function taskSheetHtml(){
         '<button class="chip'+(d.bucket!=='someday'?' on':'')+'" onclick="setTsBucket(\'anytime\')">Un jour</button>'+
         '<button class="chip'+(d.bucket==='someday'?' on':'')+'" onclick="setTsBucket(\'someday\')">Peut-être</button>'+
       '</div>';
-  return '<p class="sheet-title">'+(d.id ? 'Modifier la tâche' : 'Nouvelle tâche')+'</p>'+
-    '<div class="field-group">'+
-      '<input id="ts-title" class="field field-full" type="text" placeholder="Titre" value="'+esc(d.title)+'" '+
-        'autocomplete="off" autocapitalize="sentences" oninput="_tSheet.title=this.value">'+
-    '</div>'+
+  // Visible d'emblée : titre + les deux dates. Tout le reste vit derrière
+  // « Plus d'options » (point 2, audit A5 — 1 285 px, 11 sections toujours
+  // dépliées pour des tâches qui n'ont besoin que d'un titre et d'une date).
+  const more = !d._more ? '' :
     '<div class="field-group">'+
       '<textarea id="ts-notes" class="field area field-full" placeholder="Notes" autocapitalize="sentences" '+
         'oninput="_tSheet.notes=this.value">'+esc(d.notes)+'</textarea>'+
     '</div>'+
     '<div class="field-group"><span class="overline">Catégorie</span><div class="chips">'+catChips+'</div></div>'+
     '<div class="field-group"><span class="overline">Pièce</span><div class="chips">'+roomChips+'</div></div>'+
-    '<div class="field-group"><span class="overline">Début</span>'+
-      '<input class="field field-full" type="date" value="'+(d.start||'')+'" onchange="setTsDate(\'start\', this.value)"></div>'+
-    '<div class="field-group"><span class="overline">Échéance</span>'+
-      '<input class="field field-full" type="date" value="'+(d.due||'')+'" onchange="setTsDate(\'due\', this.value)"></div>'+
     '<div class="field-group"><ul class="list"><li class="row">'+
       '<div class="row-main"><div class="row-title">Ce soir</div></div>'+
       '<button class="switch'+(d.evening?' on':'')+'" role="switch" aria-checked="'+d.evening+'" '+
@@ -315,7 +452,18 @@ function taskSheetHtml(){
         'aria-label="Récurrente" onclick="toggleTsRepeat()"></button>'+
     '</li></ul></div>'+
     repeatBlock+
-    '<div class="field-group"><span class="overline">Bucket</span>'+bucketBlock+'</div>'+
+    '<div class="field-group"><span class="overline">Bucket</span>'+bucketBlock+'</div>';
+  return '<p class="sheet-title">'+(d.id ? 'Modifier la tâche' : 'Nouvelle tâche')+'</p>'+
+    '<div class="field-group">'+
+      '<input id="ts-title" class="field field-full" type="text" placeholder="Titre" value="'+esc(d.title)+'" '+
+        'autocomplete="off" autocapitalize="sentences" oninput="_tSheet.title=this.value">'+
+    '</div>'+
+    '<div class="field-group"><span class="overline">Début</span>'+
+      '<input class="field field-full" type="date" value="'+(d.start||'')+'" onchange="setTsDate(\'start\', this.value)"></div>'+
+    '<div class="field-group"><span class="overline">Échéance</span>'+
+      '<input class="field field-full" type="date" value="'+(d.due||'')+'" onchange="setTsDate(\'due\', this.value)"></div>'+
+    '<button class="btn quiet btn-full more-toggle" onclick="toggleTsMore()">'+(d._more?'Moins d’options':'Plus d’options')+'</button>'+
+    more+
     '<button class="btn primary btn-full" onclick="saveTaskSheet()">Enregistrer</button>'+
     '<button class="btn quiet btn-full" onclick="closeSheet()">Annuler</button>';
 }

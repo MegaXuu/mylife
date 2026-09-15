@@ -1391,6 +1391,105 @@ call('rowAttrs() — appliqué aux lignes cliquables de Aujourd’hui, Tâches, 
   if(it){ it.deletedAt = Date.now(); win.touch(it); } // nettoyage : ne pollue pas les scénarios suivants
 });
 
+// 6 duodecies) Tâches v2 (Lot V2-4) : balayage à la place des boutons de
+// ligne, fiche en divulgation progressive, groupe « Fait » piloté par
+// settings.hideDone, indicateur de notes, filtres qui n'apparaissent que
+// s'ils servent.
+scenario('Tâches — plus aucun bouton de ligne permanent, le balayage les remplace (point 1)', () => {
+  const t = mk({title: 'Tâche avec balayage', bucket: 'scheduled', start: win.todayKey()});
+  win.go('tasks');
+  const html = win.document.getElementById('s-tasks').innerHTML;
+  if(html.includes('row-postpone') || html.includes('row-del'))
+    throw new Error('les boutons « > »/« × » permanents ne devraient plus être rendus sur Tâches');
+  if(!new RegExp('data-swipe-left="delTask\\(\'' + t.id + '\'\\)"').test(html))
+    throw new Error('la ligne devrait porter data-swipe-left vers delTask()');
+  if(!new RegExp('data-swipe-right="postponeTask\\(\'' + t.id + '\'\\)"').test(html))
+    throw new Error('une tâche du groupe « Aujourd’hui et avant » devrait porter data-swipe-right vers postponeTask()');
+});
+
+scenario('Tâches — reporter est annulable (point 1)', () => {
+  const t = mk({title: 'À reporter', bucket: 'scheduled', start: win.todayKey()});
+  const startAvant = t.start, postponedAvant = t.postponed || 0;
+  win.go('tasks');
+  win.postponeTask(t.id);
+  if(t.start === startAvant) throw new Error('postponeTask() devrait pousser le début à demain');
+  if(!/Annuler/.test(win.document.getElementById('toast').textContent))
+    throw new Error('reporter devrait offrir « Annuler », il ne l’offrait pas avant ce lot');
+  win._runToastAct();
+  if(t.start !== startAvant) throw new Error('annuler un report devrait restituer le début d’avant');
+  if((t.postponed || 0) !== postponedAvant) throw new Error('annuler un report devrait remettre le compteur d’avant');
+});
+
+scenario('Tâches — le groupe « Fait » exclut toujours l’entretien (point 3)', () => {
+  const normale = mk({title: 'Tâche faite', doneAt: Date.now(), history: [win.todayKey()]});
+  const entretien = mk({
+    title: 'Entretien fait', room: 'salon', repeat: {kind: 'day', n: 7, days: [], from: 'done'},
+    doneAt: Date.now(), history: [win.todayKey()]
+  });
+  const ids = win.taskDoneItems().map(x => x.id);
+  if(ids.indexOf(normale.id) === -1) throw new Error('une tâche normale faite devrait apparaître dans le groupe « Fait »');
+  if(ids.indexOf(entretien.id) !== -1)
+    throw new Error('un entretien garde toujours un doneAt par construction : il ne doit JAMAIS polluer « Fait »');
+});
+
+scenario('Tâches — settings.hideDone pilote l’existence du groupe « Fait » (audit C2)', () => {
+  mk({title: 'Tâche faite (hideDone)', doneAt: Date.now(), history: [win.todayKey()]});
+  const avant = S.settings.hideDone;
+  S.settings.hideDone = false;
+  if(!win.taskDoneSectionHtml()) throw new Error('hideDone=false : le groupe « Fait » devrait se rendre');
+  S.settings.hideDone = true;
+  if(win.taskDoneSectionHtml()) throw new Error('hideDone=true : « cacher les tâches faites » devrait vider le groupe');
+  S.settings.hideDone = avant;
+});
+
+scenario('Tâches — décochage depuis le groupe « Fait » rouvre la tâche (point 3)', () => {
+  const t = mk({title: 'À décocher', doneAt: Date.now(), history: [win.todayKey()]});
+  const histAvant = t.history.length;
+  win.unDoneTask(t.id);
+  if(t.doneAt !== null) throw new Error('unDoneTask() devrait vider doneAt');
+  if(t.history.length !== histAvant - 1) throw new Error('unDoneTask() devrait retirer la dernière réalisation de l’historique');
+});
+
+scenario('Tâches — fiche : divulguée d’emblée sur une tâche neuve, dépliée sur une tâche avec une valeur non par défaut (point 2, audit A5)', () => {
+  const neuve = mk({title: 'Tâche simple'});
+  win.taskSheet(neuve.id);
+  let html = win.document.getElementById('sheet').innerHTML;
+  if(html.includes('id="ts-notes"')) throw new Error('une tâche sans particularité devrait s’ouvrir repliée (Notes cachées)');
+  if(!/Plus d.?options/.test(html)) throw new Error('le bouton « Plus d’options » devrait être présent, replié');
+  win.closeSheet();
+
+  const marquee = mk({title: 'Tâche catégorisée', cat: 'menage'});
+  win.taskSheet(marquee.id);
+  html = win.document.getElementById('sheet').innerHTML;
+  if(!html.includes('id="ts-notes"'))
+    throw new Error('une catégorie non par défaut devrait déplier la fiche d’emblée, pas la cacher à l’utilisateur');
+  win.closeSheet();
+});
+
+scenario('Tâches — indicateur de notes (point 4, audit C3)', () => {
+  const avecNotes = mk({title: 'A des notes', bucket: 'scheduled', start: win.todayKey(), notes: 'Détail important'});
+  const sansNotes = mk({title: 'Sans notes', bucket: 'scheduled', start: win.todayKey()});
+  win.go('tasks');
+  const html = win.document.getElementById('s-tasks').innerHTML;
+  const rowAvec = html.slice(html.indexOf(win.esc(avecNotes.title)));
+  if(!rowAvec.slice(0, 400).includes('row-note-ic'))
+    throw new Error('une tâche avec des notes devrait porter l’indicateur discret');
+  const rowSans = html.slice(html.indexOf(win.esc(sansNotes.title)));
+  if(rowSans.slice(0, 200).includes('row-note-ic'))
+    throw new Error('une tâche sans notes ne devrait porter aucun indicateur');
+});
+
+scenario('Tâches — recherche et filtres n’apparaissent qu’au-delà du seuil (point 5)', () => {
+  for(let i = 0; i < 3; i++) mk({title: 'Tâche ' + i});
+  win.go('tasks');
+  if(win.document.getElementById('task-search'))
+    throw new Error('avec peu de tâches ouvertes, la recherche ne devrait pas prendre de la place pour rien');
+  for(let i = 3; i < 10; i++) mk({title: 'Tâche ' + i});
+  win.go('tasks');
+  if(!win.document.getElementById('task-search'))
+    throw new Error('au-delà du seuil, la recherche devrait redevenir accessible');
+});
+
 // 7) Écriture immédiate puis relecture directe dans IndexedDB — équivalent, pour ce
 //    test de fumée, à vérifier la persistance après un rechargement de l'app.
 if(typeof win.saveNow === 'function'){

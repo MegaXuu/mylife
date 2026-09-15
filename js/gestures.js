@@ -76,6 +76,15 @@ function swipeShowBg(row, dir){
 
 let _swipe = null;
 
+// swipePrepareRow() est appelé seulement une fois le balayage confirmé
+// (pointermove, plus bas), jamais dès pointerdown : y toucher au DOM pour
+// un simple tap — reparenter row-main dans .swipe-content puis le laisser
+// en place — suffit à faire perdre au navigateur le clic de synthèse qui
+// devait suivre (repéré au Lot V2-4, premier lot à poser réellement
+// data-swipe-* sur des lignes tapables ; latent depuis ce fichier au Lot
+// V2-1, jamais exercé avant faute de ligne concernée). Un tap immobile ne
+// mute donc plus jamais le DOM ; seul un vrai déplacement horizontal le
+// fait, exactement au moment où il devient nécessaire.
 document.addEventListener('pointerdown', e=>{
   if(reduceMotion()) return;
   if(e.pointerType === 'mouse' && e.button !== 0) return;
@@ -84,10 +93,8 @@ document.addEventListener('pointerdown', e=>{
   // Un contrôle propre (case, bouton, champ) garde son tap normal — le
   // balayage ne fait que doubler le corps de la ligne, pas ses boutons.
   if(e.target.closest('button,input,select,textarea,a')) return;
-  const content = swipePrepareRow(row);
-  content.style.transition = 'none';
   _swipe = {
-    row, content, pid: e.pointerId,
+    row, content: null, pid: e.pointerId,
     startX: e.clientX, startY: e.clientY, x: 0, t: Date.now(), vx: 0,
     w: row.getBoundingClientRect().width || 1,
     locked: null // null = indécis, 'h' = balayage engagé, 'v' = laissé au défilement
@@ -103,6 +110,8 @@ document.addEventListener('pointermove', e=>{
     if(Math.abs(dx) < 8 && Math.abs(dy) < 8) return; // pas assez de mouvement pour trancher
     if(Math.abs(dy) >= Math.abs(dx)){ s.locked = 'v'; return; } // le défilement gagne toujours
     s.locked = 'h';
+    s.content = swipePrepareRow(s.row); // DOM touché seulement maintenant, le balayage est confirmé
+    s.content.style.transition = 'none';
     try{ s.row.setPointerCapture(e.pointerId); }catch(err){}
   }
   let x = dx;

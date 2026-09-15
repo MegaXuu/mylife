@@ -16,7 +16,7 @@
 | V2-1 | Socle d'interaction | Sonnet | — | fait |
 | V2-2 | Navigation & saisie | Sonnet | — | fait |
 | V2-3 | « Aujourd'hui » v3 | Opus puis Sonnet | ⚑ | fait |
-| V2-4 | Tâches v2 | Sonnet | — | à faire |
+| V2-4 | Tâches v2 | Sonnet | — | fait |
 | V2-5 | Maison & plantes v2 | Sonnet | — | à faire |
 | V2-6 | Courses v2 | Sonnet | — | à faire |
 | V2-7 | Habitudes v2 | Sonnet | — | à faire |
