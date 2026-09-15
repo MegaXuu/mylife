@@ -67,6 +67,12 @@ Habitudes et Courses n'étaient pas encore codés (modèles de données inexista
 depuis** — Habitudes au Lot 8, Courses au Lot 9, CSS désormais dans `index.html` comme le reste.
 Les deux maquettes restent la trace de l'écran cible complet, utile pour vérifier un écart.
 
+Maquettes du **Lot V2-3**, validées et codées : `maquettes/today-v2.html` (journée chargée, jeu de
+données exact de l'audit B3 — 4 soins dus, 7 tâches, plafond à 7) et `maquettes/today-v2-vide.html`
+(tout est fait). Même facture que celles du Lot 5, mais bâties sur le CSS d'`index.html` à l'état
+Bêta 2.2 : **ce sont elles la référence de l'écran Aujourd'hui désormais**, les deux du Lot 5 ne
+montrant ni le prénom, ni la réserve des soins, ni la barre de saisie collée.
+
 **Discipline chromatique — engage tous les lots suivants.** Elle est aussi écrite en tête du
 `<style>` d'`index.html` ; les deux doivent rester d'accord.
 
@@ -134,8 +140,7 @@ uniquement des déclarations.
   `.file-input` (photo de plante — le reste de la fiche et des lignes de soin réutilise
   `.row-care/.gauge-cell/.gauge-side/.repeat-n/.field-group` déjà en place), et le bloc **Lot 8** :
   `.hab-val/.step/.skip/.row-soft` (bloc du jour, repris tels quels de `maquettes/today.html`),
-  `.habits-head` (en-tête du bloc, seule porte vers `go('habits')`), `.hab-num` (clavier numérique
-  au-delà de `HAB_STEP_MAX`), `.hab-cal/.hab-day` (calendrier mensuel de l'écran Habitudes — quatre
+  `.habits-head` (en-tête du bloc, seule porte vers `go('habits')`), `.hab-cal/.hab-day` (calendrier mensuel de l'écran Habitudes — quatre
   états `.done/.partial/.skip/.inactive`, jamais un cinquième « manqué », cf. `js/habits.js`), et le
   bloc **Lot 9** : `.shop/.shop-l/.shop-go` (bouton d'Aujourd'hui, repris de `maquettes/today.html`),
   `.row-qty` (quantité à droite d'un article), `.rayon-left` (compteur restant d'un rayon, mode
@@ -145,7 +150,14 @@ uniquement des déclarations.
   **fixée juste au-dessus de la tab bar** (§3.2 de `ROADMAP-V2.md`) — même classe réutilisée telle
   quelle par le champ d'ajout de `js/shopping.js` — sous `.sheet-bg` (`z-index:30` < 50), et
   `body.capture-open` (posée par `go()`, `js/ui.js`) qui augmente le `padding-bottom` de `.app` pour
-  qu'aucune liste ne passe dessous. Au-delà de **900 px** : colonne centrée plafonnée à 560 px (desktop V2).
+  qu'aucune liste ne passe dessous. Enfin le bloc **Lot V2-3** : `.row-head` (+ `.row-head .skip`,
+  marge négative pour garder 44 px sans épaissir la ligne), `.hab-ctrl`, `.hab-count`, et deux
+  modificateurs de `.step` — `.step.num` (pas chiffré « +5 ») et `.step.wide` (« Fait ») — plus
+  `body.capture-open .toast`, qui **relève le toast au-dessus de la barre de saisie** : depuis le
+  Lot V2-2 la barre occupait 76 → 138 px et le toast était posé à 96 px, donc caché derrière elle
+  sur les trois écrans qui en portent une (un « Annuler » invisible n'annule rien). `.hab-num` a été
+  **retirée** au même lot, orpheline depuis que le clavier numérique a disparu du bloc du jour.
+  Au-delà de **900 px** : colonne centrée plafonnée à 560 px (desktop V2).
 - `js/state.js` — **socle**, aucun rendu DOM : `APP_VERSION`, IndexedDB (`openDb`/`idbGet`/`idbSet`,
   + `idbPutPhoto`/`idbGetPhoto`/`idbDelPhoto`/`idbClearPhotos` — ce dernier posé au Lot 11 pour la
   réinitialisation — pour le store `photos`), `defaults()`/`migrate()`, `let S`, `save()` (débounce
@@ -207,12 +219,25 @@ uniquement des déclarations.
   permanent et l'écran ne saurait jamais dire « c'est bon ») et `S.settings.todayCap` (plafond du
   bloc du jour, « + N autres »). `todayBadgeCount()` alimente la pastille iOS. Les cochages de la
   session (`tickToday`) gardent une ligne barrée à sa place jusqu'au prochain démarrage : rien n'est
-  persisté, ce n'est pas un journal. Porte aussi `longDate()` (sur-titre « Lundi 27 juillet »).
+  persisté, ce n'est pas un journal — depuis le **Lot V2-3**, `_ticked` est un objet `{id: cliché}`
+  et non plus un tableau d'ids : une ligne barrée et son moyen de la décocher ont exactement la même
+  durée de vie, celle de la session (`tickSnapshot()`, `untickToday()`). Porte aussi `longDate()`
+  et, depuis le Lot V2-3, `userFirstName()` / `todayOverline()` — le sur-titre devient « Bonjour
+  Florian · Mardi 15 septembre », et redevient la date seule si aucun prénom n'est posé (audit C1,
+  arbitrage `ROADMAP-V2.md` §3.6) ; l'état vide se personnalise de la même façon.
   `renderToday()` se termine par `captureBarHtml()` (`js/nlp.js`), comme Tâches — depuis le Lot 6.
   Depuis le **Lot V1-7**, le bloc du jour (`todaySection()`) mêle aussi les soins de plantes
   réellement dus (jauge à 0, `getPlantCareItems()`) aux tâches planifiées — jamais le bloc Entretien,
   réservé aux tâches `from:'done'` — via des entrées `{id, kind:'task'|'soin', t|s}` dans
   `todayBuckets().scheduled` ; un tap sur un soin ouvre sa fiche plante plutôt que de le compléter.
+  Depuis le **Lot V2-3**, ces soins ne tombent plus sous le plafond (audit B3) : `todayShown()`
+  (pure, testée directement) leur réserve jusqu'à `TODAY_SOIN_RESERVE` (3) places **à la tête** du
+  bloc, les tâches se partageant le reste — la réserve est un minimum garanti, jamais un maximum
+  (sans tâche, tous les soins passent), et elle ne dépasse ni le plafond lui-même ni la moitié du
+  plafond quand il y a aussi des tâches. `todayDone()` pose un cliché des champs que
+  `completeTask()` modifie puis appelle `undoable()` ; `todayUndone()` (case de la ligne barrée,
+  plus jamais `disabled`) le restitue — sans lui, décocher une tâche récurrente la laisserait avec
+  l'échéance *suivante* et une réalisation de trop dans son historique (audit A2).
   Depuis le **Lot V1-8**, `todayBuckets()` porte aussi `habits` (`getTodayHabits()`, `js/habits.js`) —
   un domaine à part, jamais mêlé aux tâches ni à l'entretien (une série ne se compte pas comme une
   jauge, `CONVENTIONS.md` §6). `todayBadgeCount()` ajoute les habitudes encore actionnables
@@ -232,9 +257,19 @@ uniquement des déclarations.
   semaines selon le mode) l'ignore sans casser la série ; seule l'atteinte de l'objectif (`target`)
   l'alimente, jamais une valeur partielle. `habitBestStreak()` (record) et `habitRate30()` (taux de
   réussite sur 30 jours) complètent l'écran secondaire. Bloc permanent d'« Aujourd'hui »
-  (`getTodayHabits()`, `todayHabitsCard()`) : saisie en ligne, ± (`stepHabit()`) sous
-  `HAB_STEP_MAX` (10), clavier numérique au-delà (`setHabitValue()`), jamais « Sauter » et deux
-  boutons sur la même ligne. Écran secondaire `go('habits')` (atteint uniquement en tapant l'en-tête
+  (`getTodayHabits()`, `todayHabitsCard()`) : saisie en ligne, jamais « Sauter » et deux boutons
+  d'ajout sur la même ligne. **Refondue au Lot V2-3** (audit B8 — noter 30 minutes de marche
+  demandait un champ de 64 px et le clavier iOS) : `habStep(h)` (pure, testée) donne un pas adapté à
+  l'objectif — 1 jusqu'à 10, 5 jusqu'à 25, 10 jusqu'à 60, 25 au-delà, et l'objectif lui-même pour
+  une coche simple — et le bouton **dit** ce qu'il ajoute (« +5 », « +10 »). `reachHabit()` pose
+  l'objectif en un geste (« Fait ») ; il remplace le « + » sur une habitude sans unité, qui n'a rien
+  à compter. Une habitude chiffrée encore à faire prend une ligne de contrôles (`.hab-ctrl` :
+  valeur, pas, « Fait ») sous la série, ~122 px, et retombe à la ligne compacte du Lot V1-8 (~70 px)
+  dès qu'elle est atteinte ou sautée : la carte rétrécit à mesure que la journée avance. Les deux
+  boutons d'ajout vivent dans cette ligne, jamais sur celle du titre où se trouve « Sauter » — c'est
+  ainsi que la règle du Lot V1-8 est tenue à la lettre. `stepHabit()` ne saute jamais **par-dessus**
+  l'objectif (de 25 à 30, « +10 » pose 30), puis reprend son pas plein au-delà (on peut toujours
+  boire un septième verre). `setHabitValue()` et `HAB_STEP_MAX` ont disparu avec le champ numérique. Écran secondaire `go('habits')` (atteint uniquement en tapant l'en-tête
   du bloc, pas d'onglet) : liste des habitudes, fiche création/édition (`habitSheet()`, comme
   `taskSheet()`/`plantSheet()`), calendrier mensuel de régularité (`habitCalendarHtml()`) à
   **quatre** traitements visuels — fait / partiel / sauté / inactif — et pas un cinquième
@@ -243,8 +278,9 @@ uniquement des déclarations.
   moindre score : `celebrateHabitRecord()` compare le record (`habitBestStreak()`, capturé *avant*
   d'écrire le jour) à la série une fois la valeur posée — un toast sobre (« Record de série pour…
   ») seulement si elle le dépasse, et jamais le tout premier jour d'une habitude (`prevBest` à 0,
-  ce serait un « record » systématique). Appelé depuis `stepHabit()` et `setHabitValue()`, jamais
-  `skipHabit()` (un jour sauté ne peut pas battre un record).
+  ce serait un « record » systématique). Appelé depuis `stepHabit()` et `reachHabit()`, jamais
+  `skipHabit()` (un jour sauté ne peut pas battre un record). Depuis le Lot V2-3 il **renvoie** s'il
+  a parlé, pour que `reachHabit()` n'empile pas son toast d'annulation par-dessus celui du record.
 - `js/shopping.js` — écran Courses, **rempli au Lot 9**. Classement automatique par rayon
   (`guessRayon()`, fonction pure testée isolément comme `parseQuick()` : normalise le libellé
   (`normalizeLabel()`), cherche par groupes de mots consécutifs — du plus long au plus court, pour
@@ -596,6 +632,19 @@ de `CLAUDE.md`/`CONVENTIONS.md` avec l'état final de la V2 est prévue au Lot V
   `body.capture-open`, posée par `go()` selon `CAPTURE_SCREENS`. `go()` mémorise aussi la position de
   défilement quittée sur chaque écran (`_scrollPos{}` / `scrollPosFor()`, `js/ui.js`) et la restaure
   au retour, sauf en retapant l'onglet déjà actif (remonte en haut, convention iOS).
+- **V2-3 — « Aujourd'hui » v3** (Bêta 2.3) : ✅ Fait. Maquettes d'abord
+  (`maquettes/today-v2.html`, `maquettes/today-v2-vide.html`), validées, puis codées. Cinq
+  changements et rien d'autre : **le prénom** entre dans le sur-titre et dans l'état vide
+  (`todayOverline()`/`userFirstName()`, audit C1 + §3.6 — pas de salutation selon l'heure, pas
+  d'emoji, et la date seule si aucun prénom n'est posé) ; **les soins de plantes ne tombent plus
+  sous le plafond** (`todayShown()`, jusqu'à 3 places réservées à la tête du bloc, audit B3) ;
+  **cocher est annulable et une ligne cochée se décoche** (`todayDone()` pose un cliché et appelle
+  `undoable()`, `todayUndone()` le restitue, la case n'est plus `disabled`, audit A2) ; **la saisie
+  d'habitude** passe au pas adapté à l'objectif et au bouton « Fait » (`habStep()`/`reachHabit()`,
+  audit B8 — le champ numérique et `HAB_STEP_MAX` disparaissent) ; **la barre de saisie collée**
+  du Lot V2-2 est enfin dessinée sur cet écran. Un défaut trouvé en dessinant et corrigé au passage :
+  le toast était caché derrière la barre de saisie collée depuis le Lot V2-2, donc l'« Annuler »
+  inatteignable — `body.capture-open .toast` le relève.
 
 ## Cycle V1 clos — dettes sciemment laissées pour la V2
 Le Lot 12 a fermé le cycle V1. Rien ci-dessous n'est un oubli : chaque point a été examiné et

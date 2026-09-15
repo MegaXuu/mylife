@@ -423,6 +423,18 @@ scenario('Aujourd’hui — état vide : il le dit, et ne propose RIEN d’autre
   win.go('today');
   const el = win.document.getElementById('s-today');
   if(!/C’est bon pour aujourd’hui\./.test(el.textContent)) throw new Error('l’état vide devrait le dire clairement');
+  // Le prénom s'y invite aussi (arbitrage §3.6), et rien de plus : ni
+  // récapitulatif nommé, ni emoji.
+  const nomAvant = S.settings.userName;
+  S.settings.userName = 'Florian';
+  win.go('today');
+  const elP = win.document.getElementById('s-today');
+  if(!/C’est bon pour aujourd’hui, Florian\./.test(elP.textContent))
+    throw new Error('l’état vide devrait se personnaliser, obtenu : ' + elP.querySelector('.empty-title').textContent);
+  if(elP.querySelectorAll('.check, .more, .row').length)
+    throw new Error('l’état vide personnalisé ne gagne aucune cible tactile');
+  S.settings.userName = nomAvant;
+  win.go('today');
   if(/10 minutes|Entretien|Pas mûr|Frais/.test(el.textContent)) throw new Error('l’état vide ne doit rien proposer d’autre');
   if(el.querySelectorAll('.check, .more, .row').length)
     throw new Error('aucune cible tactile hors navigation sur l’état vide');
@@ -445,6 +457,103 @@ scenario('Aujourd’hui — plafond todayCap et « + N autres »', () => {
     throw new Error('déplier devrait montrer les 5 tâches');
   win.toggleTodayMore();
   S.settings.todayCap = 7;
+});
+
+// 6 quinquies) Lot V2-3 — les trois décisions de l'écran « Aujourd'hui » v3.
+// todayShown() est PURE (une liste d'entrées, un plafond) : on l'attaque
+// directement, sans DOM ni plantes réelles, exactement comme parseQuick().
+call('Aujourd’hui — réserve de places pour les soins sous le plafond (audit B3, todayShown())', () => {
+  const mixte = (nt, ns) => {
+    const a = [];
+    for(let i = 0; i < nt; i++) a.push({id: 't' + i, kind: 'task'});
+    for(let i = 0; i < ns; i++) a.push({id: 's' + i, kind: 'soin'});
+    return a; // l'ordre de todayBuckets() : les soins CONCATÉNÉS après les tâches
+  };
+  const soins = l => l.filter(e => e.kind === 'soin').length;
+
+  // Le cas exact de l'audit du 14/08/2026 : 7 tâches, 4 soins dus, plafond à 7.
+  // En V1, les QUATRE soins tombaient dans « + 4 autres ».
+  const a = win.todayShown(mixte(7, 4), 7);
+  if(a.length !== 7) throw new Error('le plafond reste un plafond : 7 lignes attendues, obtenu ' + a.length);
+  if(soins(a) !== 3) throw new Error('3 places réservées aux soins attendues, obtenu ' + soins(a));
+  if(a[0].kind !== 'soin') throw new Error('les soins prennent la tête du bloc, pas la queue de la file');
+
+  // La réserve est un minimum garanti, pas un maximum : sans tâche, tous passent.
+  if(win.todayShown(mixte(0, 5), 7).length !== 5)
+    throw new Error('5 soins et aucune tâche : les 5 doivent passer');
+  // Elle ne prend jamais plus qu'il n'y a de soins dus.
+  const b = win.todayShown(mixte(10, 1), 7);
+  if(b.length !== 7 || soins(b) !== 1) throw new Error('un seul soin dû : une seule place réservée');
+  if(b[0].kind !== 'soin') throw new Error('ce soin unique doit rester en tête');
+  // Plafond serré : la réserve ne mange jamais plus de la moitié des places.
+  const c = win.todayShown(mixte(3, 4), 2);
+  if(c.length !== 2 || soins(c) !== 1)
+    throw new Error('un plafond à 2 doit rester partagé, obtenu ' + c.map(e => e.kind).join(','));
+  // Aucun soin dû : le plafond se comporte exactement comme en V1.
+  if(win.todayShown(mixte(9, 0), 7).length !== 7)
+    throw new Error('sans soin, rien ne doit changer par rapport à la V1');
+  // Déplié (plafond = total), l'ordre ne bouge pas : les soins restent en tête.
+  // Sans ça, taper « + 4 autres » les renvoyait en queue de liste.
+  const d = win.todayShown(mixte(7, 4), 11);
+  if(d.length !== 11) throw new Error('déplié, les 11 entrées doivent être montrées');
+  if(d.slice(0, 4).some(e => e.kind !== 'soin'))
+    throw new Error('déplier ne doit pas renvoyer les soins en queue de liste');
+});
+
+scenario('Aujourd’hui — cocher est annulable, et une ligne cochée se décoche (audit A2)', () => {
+  const today = win.todayKey();
+  const t = mk({title: 'Relever le compteur', bucket: 'scheduled', start: today, due: today,
+    repeat: {kind: 'day', n: 3, days: [], from: 'due'}});
+  win.go('today');
+  const dueAvant = t.due;
+  // Longueur relative : DEFAUT_TACHE.history est un tableau partagé par tous
+  // les mk() de ce fichier, un scénario antérieur a pu y pousser.
+  const histAvant = (t.history || []).length;
+  win.todayDone(t.id);
+  if(t.due === dueAvant) throw new Error('une tâche récurrente cochée doit voir son échéance avancer');
+  if((t.history || []).length !== histAvant + 1) throw new Error('cocher doit historiser la réalisation');
+
+  // La case de la ligne barrée n'est plus morte : c'est tout le sujet de A2.
+  const check = win.document.querySelector('#s-today .row.done .check');
+  if(!check) throw new Error('la ligne cochée devrait être rendue barrée');
+  if(check.disabled) throw new Error('la case d’une ligne cochée ne doit plus être disabled (audit A2)');
+  if(check.getAttribute('aria-label') !== 'Marquer non fait')
+    throw new Error('la case devrait s’annoncer comme un décochage, obtenu ' + check.getAttribute('aria-label'));
+
+  // Le toast porte l'annulation immédiate, et elle restitue l'état d'AVANT —
+  // pas l'échéance suivante, pas une réalisation de trop dans l'historique.
+  if(!/Annuler/.test(win.document.getElementById('toast').textContent))
+    throw new Error('cocher devrait offrir « Annuler » (undoable(), Lot V2-1)');
+  win._runToastAct();
+  if(t.due !== dueAvant) throw new Error('annuler doit restituer l’échéance d’avant, pas la suivante');
+  if((t.history || []).length !== histAvant) throw new Error('annuler doit retirer la réalisation de l’historique');
+  let b = win.todayBuckets();
+  if(!has(b.scheduled, t)) throw new Error('la tâche annulée doit redevenir à faire');
+  if(has(b.done, t)) throw new Error('la tâche annulée ne doit plus figurer parmi les cochées');
+
+  // Plus tard dans la journée : le décochage passe par la case elle-même.
+  win.todayDone(t.id);
+  win.document.querySelector('#s-today .row.done .check').click();
+  if(t.due !== dueAvant) throw new Error('décocher à la case doit restituer l’échéance d’avant');
+  b = win.todayBuckets();
+  if(has(b.done, t) || !has(b.scheduled, t)) throw new Error('décocher à la case doit rendre la tâche à faire');
+});
+
+call('Aujourd’hui — le prénom entre dans le sur-titre, et seulement s’il y en a un (audit C1, §3.6)', () => {
+  const avant = S.settings.userName;
+  S.settings.userName = null;
+  if(win.todayOverline() !== win.longDate())
+    throw new Error('sans prénom, le sur-titre est la date seule');
+  S.settings.userName = 'Florian';
+  if(win.todayOverline() !== 'Bonjour Florian · ' + win.longDate())
+    throw new Error('avec prénom : « Bonjour Florian · <date> », obtenu ' + win.todayOverline());
+  win.go('today');
+  if(!new RegExp('Bonjour Florian · ').test(win.document.querySelector('#s-today .head-over').textContent))
+    throw new Error('le sur-titre rendu devrait porter le prénom');
+  S.settings.userName = '   '; // blanc : traité comme absent, jamais un « Bonjour » orphelin
+  if(win.todayOverline() !== win.longDate())
+    throw new Error('un prénom blanc ne doit produire ni « Bonjour » orphelin ni virgule qui pend');
+  S.settings.userName = avant;
 });
 
 // 6 quater) parseQuick() (Lot V1-6, js/nlp.js) : le parseur est une fonction
@@ -830,6 +939,98 @@ habitScenario('Habitudes — stepHabit()/skipHabit() écrivent dans habitLog ; c
   win.stepHabit(h.id, 1); // change d'avis : une habitude sautée reste actionnable
   if(win.habitSkippedOn(h, today)) throw new Error('reprendre après un saut devrait écraser le skip');
   if(win.habitValueOn(h, today) !== 1) throw new Error('la valeur devrait être posée après le changement d’avis');
+});
+
+// Lot V2-3 (audit B8) — la saisie du bloc du jour. habStep() est pure : on
+// l'attaque directement, comme parseQuick() ou guessRayon().
+call('Habitudes — habStep() : le pas s’adapte à l’objectif (audit B8)', () => {
+  const h = (unit, target) => ({unit, target});
+  if(win.habStep(h('', 1)) !== 1) throw new Error('coche simple : le pas vaut l’objectif');
+  if(win.habStep(h('', 3)) !== 3) throw new Error('coche simple : un tap pose l’objectif, quel qu’il soit');
+  if(win.habStep(h('L', 6)) !== 1) throw new Error('objectif ≤ 10 : pas de 1');
+  if(win.habStep(h('pages', 20)) !== 5) throw new Error('objectif ≤ 25 : pas de 5');
+  if(win.habStep(h('min', 30)) !== 10) throw new Error('objectif ≤ 60 : pas de 10');
+  if(win.habStep(h('fois', 100)) !== 25) throw new Error('au-delà de 60 : pas de 25');
+});
+
+habitScenario('Habitudes — le pas ne saute jamais par-dessus l’objectif, « Fait » le pose en un geste', () => {
+  const h = win.stamp({name: 'Marche', unit: 'min', target: 30, sched: {kind: 'days', days: [1,2,3,4,5,6,7]}, sort: 0});
+  S.habits.push(h);
+  const k = win.todayKey();
+  // Le cas de l'audit : 30 minutes de marche, trois taps au lieu du clavier.
+  win.stepHabit(h.id, 1);
+  if(win.habitValueOn(h, k) !== 10) throw new Error('un tap devrait poser 10, obtenu ' + win.habitValueOn(h, k));
+  win.stepHabit(h.id, 1); win.stepHabit(h.id, 1);
+  if(win.habitValueOn(h, k) !== 30) throw new Error('trois taps devraient poser exactement 30');
+  // De 25 à 30 : le pas se rabat sur l'objectif, il ne le dépasse pas.
+  win.setHabitLogValue(h.id, 25);
+  win.stepHabit(h.id, 1);
+  if(win.habitValueOn(h, k) !== 30) throw new Error('« +10 » depuis 25 devrait poser 30, pas 35');
+  // Objectif franchi : le pas reprend sa valeur pleine (règle du Lot V1-8 —
+  // on peut toujours boire un septième verre).
+  win.stepHabit(h.id, 1);
+  if(win.habitValueOn(h, k) !== 40) throw new Error('au-delà de l’objectif, le pas reprend sa valeur pleine');
+  // « Fait » depuis zéro, et son annulation.
+  win.setHabitLogValue(h.id, 0);
+  win.reachHabit(h.id);
+  if(win.habitValueOn(h, k) !== 30) throw new Error('« Fait » devrait poser l’objectif en un geste');
+  if(!win.habitReachedOn(h, k)) throw new Error('« Fait » devrait marquer l’objectif atteint');
+  if(!/Annuler/.test(win.document.getElementById('toast').textContent))
+    throw new Error('« Fait » devrait être annulable (checklist V2 §6)');
+  win._runToastAct();
+  if(win.habitValueOn(h, k) !== 0) throw new Error('annuler « Fait » devrait revenir à la valeur d’avant');
+});
+
+habitScenario('Habitudes — bloc du jour : ligne de contrôles, et jamais « Sauter » avec les deux boutons d’ajout', () => {
+  const h = win.stamp({name: 'Lecture', unit: 'pages', target: 20, sched: {kind: 'days', days: [1,2,3,4,5,6,7]}, sort: 0});
+  S.habits.push(h);
+  win.go('today');
+  let card = win.document.querySelector('#s-today .card.t-habitudes');
+  if(!card) throw new Error('le bloc « Habitudes du jour » devrait être rendu');
+  if(card.querySelector('.hab-num'))
+    throw new Error('le champ numérique du Lot V1-8 ne doit plus exister (audit B8)');
+  const plus = card.querySelector('.hab-ctrl .step.num');
+  if(!plus || plus.textContent !== '+5')
+    throw new Error('le bouton d’ajout devrait dire « +5 », obtenu ' + (plus && plus.textContent));
+  const fait = card.querySelector('.hab-ctrl .step.wide');
+  if(!fait || fait.textContent !== 'Fait') throw new Error('« Fait » devrait être posé dans la ligne de contrôles');
+  // La règle du Lot V1-8, vérifiée par la structure : « Sauter » vit sur la
+  // ligne du titre, jamais sur celle des deux boutons d'ajout.
+  const head = card.querySelector('.row-head');
+  if(!head || !head.querySelector('.skip')) throw new Error('« Sauter » devrait vivre sur la ligne du titre');
+  if(card.querySelector('.hab-ctrl .skip'))
+    throw new Error('jamais « Sauter » et deux boutons d’ajout sur la même ligne (règle du Lot V1-8)');
+  // Une valeur posée : « Sauter » n'a plus de sens, « − » prend sa place.
+  win.stepHabit(h.id, 1);
+  card = win.document.querySelector('#s-today .card.t-habitudes');
+  if(card.querySelector('.skip')) throw new Error('une habitude entamée ne propose plus de sauter la journée');
+  if(card.querySelectorAll('.hab-ctrl .step').length !== 3)
+    throw new Error('ligne de contrôles attendue à trois boutons (−, +5, Fait)');
+  // Objectif atteint : la ligne retombe compacte (la carte rétrécit dans la journée).
+  win.reachHabit(h.id);
+  card = win.document.querySelector('#s-today .card.t-habitudes');
+  if(card.querySelector('.hab-ctrl')) throw new Error('une habitude au quota doit retomber à la ligne compacte');
+  if(!card.querySelector('.row-soft')) throw new Error('une habitude au quota reste posée, en retrait');
+  if(!/6 \/ 6|20 \/ 20/.test(card.textContent))
+    throw new Error('la ligne compacte reprend la valeur dans sa méta, obtenu : ' + card.textContent.trim());
+});
+
+habitScenario('Habitudes — une habitude sans unité dit « Fait », jamais « + » (audit B8)', () => {
+  const h = win.stamp({name: 'Étirements', unit: '', target: 1, sched: {kind: 'days', days: [1,2,3,4,5,6,7]}, sort: 0});
+  S.habits.push(h);
+  win.go('today');
+  const card = win.document.querySelector('#s-today .card.t-habitudes');
+  if(card.querySelector('.hab-ctrl'))
+    throw new Error('une coche simple n’a rien à composer : pas de ligne de contrôles');
+  const boutons = [...card.querySelectorAll('.step, .skip')].map(b => b.textContent);
+  if(boutons.join('|') !== 'Sauter|Fait')
+    throw new Error('attendu « Sauter » puis « Fait », obtenu ' + boutons.join('|'));
+  win.reachHabit(h.id);
+  if(!win.habitReachedOn(h, win.todayKey())) throw new Error('« Fait » devrait atteindre l’objectif d’une coche simple');
+  const apres = win.document.querySelector('#s-today .card.t-habitudes');
+  if(!apres.querySelector('.row-soft')) throw new Error('une coche simple faite passe en retrait');
+  if([...apres.querySelectorAll('.step')].map(b => b.textContent).join('|') !== '−')
+    throw new Error('une coche simple faite n’offre plus qu’un « − » pour se dédire');
 });
 
 // Fiche habitude (création/édition/suppression via l’UI, comme taskSheet/plantSheet) —
@@ -1230,12 +1431,15 @@ if(fails.length){
               '  socle d’interaction V2-1 (gestures.js chargé, undoable(), rowAttrs()),\n' +
               '  navigation & saisie V2-2 (cinq onglets, Habitudes atteignable à zéro,\n' +
               '  mémorisation du défilement, barre de saisie collée par écran),\n' +
+              '  « Aujourd’hui » v3 V2-3 (prénom dans le sur-titre et l’état vide, réserve\n' +
+              '  de places des soins sous le plafond, cochage annulable et décochable),\n' +
               '  récurrence, Maison, algorithme d’« Aujourd’hui » (blocs, seuil d’entretien,\n' +
               '  cochage de session, plafond, état vide, pastille), parseQuick (' + nlpCases.length + ' cas\n' +
               '  + mécanisme d’ignorance), plantes (saison, soins réutilisant recur.js,\n' +
               '  intégration Maison et bloc du jour, fiche), habitudes (série/quota, jour\n' +
-              '  sauté neutre, progression partielle, mode quota hebdomadaire, intégration\n' +
-              '  Aujourd’hui, fiche), courses (guessRayon, fréquents, correction mémorisée,\n' +
+              '  sauté neutre, progression partielle, mode quota hebdomadaire, pas adapté\n' +
+              '  à l’objectif et « Fait » en un geste, intégration Aujourd’hui, fiche),\n' +
+              '  courses (guessRayon, fréquents, correction mémorisée,\n' +
               '  vidage en tombstone, ordre des rayons, intégration Aujourd’hui), revue\n' +
               '  hebdomadaire (candidats, déclenchement, flux complet, lastReview),\n' +
               '  célébrations sobres (record de série, entretien annuel), Réglages (bienvenue\n' +

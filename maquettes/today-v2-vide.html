@@ -3,14 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>MyLife</title>
-<meta name="description" content="Qu'est-ce que je dois faire maintenant ? Tâches, entretien, plantes, habitudes, courses — hors-ligne.">
+<title>MyLife — maquette « Aujourd'hui » v3, état vide (Lot V2-3)</title>
 <meta name="theme-color" content="#F3EEE5">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="MyLife">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png">
+<!-- ==========================================================================
+     MAQUETTE STATIQUE — Lot V2-3, premier temps. Aucun script, aucune donnée
+     réelle, aucun fichier de js/ ni index.html touché.
+
+     Le CSS ci-dessous est celui d'index.html à l'état Bêta 2.2 (Lot V2-2),
+     recopié À L'IDENTIQUE, suivi du seul bloc que ce lot propose d'ajouter,
+     puis d'un cadre de maquette qui ne partira pas dans l'app.
+
+     Scénario : tout est fait, y compris la tâche du soir. C'est le pendant de
+     maquettes/today-vide.html (Lot V1-5) — l'app doit savoir dire « c'est
+     bon » et ne rien proposer d'autre (CONVENTIONS.md §3, principe 6).
+     ========================================================================== -->
 <style>
 /* ==========================================================================
    MyLife — design system « Canopée » (Lot V1-2). Tout le CSS de l'app vit ici.
@@ -474,6 +480,10 @@ svg{display:block;}
 }
 .habits-head .card-title{margin:0;}
 
+/* Clavier numérique au-delà de HAB_STEP_MAX (js/habits.js) : un .field étroit
+   à la place des boutons ±. */
+.hab-num{flex:none; width:64px; height:44px; padding:0; text-align:center;}
+
 /* Calendrier mensuel de régularité (écran Habitudes) : quatre traitements
    visuels distincts — fait / partiel / sauté / inactif. */
 .hab-cal{display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; margin-top:var(--s3);}
@@ -565,98 +575,214 @@ svg{display:block;}
    via captureBarHtml(), shopping.js) portent cette classe, posée par go(). */
 body.capture-open .app{padding-bottom:calc(158px + env(safe-area-inset-bottom));}
 
-/* ==========================================================================
-   Lot V2-3 — « Aujourd'hui » v3. Maquettes de référence validées :
-   maquettes/today-v2.html et maquettes/today-v2-vide.html.
-
-   Trois des cinq changements du lot n'ont demandé AUCUNE règle ici : le
-   sur-titre personnalisé (audit C1) est du contenu, la réserve de places des
-   soins (B3) est de l'ordre, et le décochage (A2) est un attribut retiré à la
-   case — le vert plein de .check.on disait déjà « un doigt peut agir ici ».
-   ========================================================================== */
-
-/* ---------- Saisie d'habitude : pas adapté et « Fait » (audit B8) ----------
-   Au-delà de l'ancien HAB_STEP_MAX, noter 30 minutes de marche demandait un
-   champ de 64 px et le clavier iOS (.hab-num, retirée par ce lot). La ligne
-   d'une habitude chiffrée encore à faire grandit donc d'un cran : titre et
-   « Sauter », puis la série, puis une ligne de contrôles de 44 px.
-
-   Pourquoi les contrôles ne tiennent pas sur la ligne du titre : la règle du
-   Lot V1-8 (« jamais Sauter et deux boutons d'ajout sur la même ligne ») vaut
-   toujours, et « +10 » et « Fait » sont deux boutons d'ajout. Ils descendent
-   ensemble sur leur propre ligne, où « Sauter » n'est pas. */
-.row-head{display:flex; align-items:baseline; gap:var(--s3);}
-.row-head .row-title{flex:1; min-width:0;}
-/* « Sauter » garde ses 44 px de cible sans épaissir la ligne du titre : marge
-   négative, la technique déjà employée par .gear et .habits-head
-   (CONVENTIONS.md §3 — étendre la zone, pas grossir l'élément). Sans elle, la
-   ligne du titre passait à 44 px et la première habitude du bloc mesurait
-   20 px de plus que la deuxième. */
-.row-head .skip{margin:-11px -6px;}
-.hab-ctrl{display:flex; align-items:center; gap:var(--s2); margin-top:var(--s2);}
-.hab-count{flex:1; min-width:0; font-size:var(--fs-low); color:var(--ink2);}
-/* Deux modificateurs de .step (Lot V1-8 : 44 px, fond --card, glyphe --act,
-   une élévation), pas un composant de plus : le pas chiffré perd la taille du
-   glyphe, et « Fait » s'élargit au texte. Aucune couleur nouvelle. */
-.step.num{font-size:15.5px;}
-.step.wide{width:auto; padding:0 14px; font-size:15px;}
-
-/* ---------- Le toast passe au-dessus de la barre de saisie collée ----------
-   Constat du Lot V2-3 : depuis le V2-2, .capture occupe 76 → 138 px du bas de
-   l'écran et .toast était posé à 96 px. Sur les trois écrans qui portent une
-   barre de saisie, un toast était donc caché derrière elle — et l'« Annuler »
-   d'un cochage, inatteignable. Piloté par la classe que go() pose déjà. */
-body.capture-open .toast{bottom:calc(150px + env(safe-area-inset-bottom));}
-
 /* ---------- Au-delà de 900 px : colonne centrée plafonnée (desktop en V2) ---------- */
 @media (min-width:900px){
   .app{max-width:560px; margin:0 auto;}
   .tabbar{padding-left:calc((100vw - 560px)/2); padding-right:calc((100vw - 560px)/2);}
 }
+
+/* ==========================================================================
+   PROPOSITION Lot V2-3 — « Aujourd'hui » v3. Ce bloc est le SEUL ajout au CSS
+   de l'app (tout ce qui précède est index.html à l'identique, Bêta 2.2).
+
+   Cinq changements, et rien d'autre :
+     1. Sur-titre personnalisé « Bonjour Florian · Vendredi 14 août » (C1, §3.6)
+     2. Les soins de plantes ne tombent plus sous le plafond (B3)
+     3. Une ligne cochée peut être décochée (A2)
+     4. Bloc Habitudes : pas adapté à l'objectif + « Fait » en un geste (B8)
+     5. La barre de saisie est dessinée à sa place du Lot V2-2 (au-dessus de
+        la tab bar) — déjà codée, jamais encore dessinée sur cet écran.
+
+   Les points 1, 2 et 3 ne demandent AUCUNE règle CSS nouvelle : ce sont des
+   changements de contenu (sur-titre), d'ordre (cascade) et d'attribut
+   (`disabled` retiré de la case). Seuls les points 4 et 5 ajoutent du style,
+   et le point 4 le fait en deux modificateurs sur .step, pas en un composant.
+   ========================================================================== */
+
+/* ---------- 4. Habitude : ligne de contrôle sous la série ----------
+   Le problème (audit B8) : au-delà de HAB_STEP_MAX, noter 30 minutes de
+   marche demandait un champ de 64 px et le clavier iOS. La ligne grandit donc
+   d'un cran : titre + « Sauter » sur la première ligne, la série sur la
+   deuxième, et une ligne de contrôles de 44 px sur la troisième — la valeur,
+   le pas adapté à l'objectif, et « Fait ».
+
+   Pourquoi les contrôles ne tiennent pas sur la ligne du titre : la règle du
+   Lot V1-8 (« jamais Sauter et deux boutons d'ajout sur la même ligne ») vaut
+   toujours, et « + » et « Fait » sont deux boutons d'ajout. Ils descendent
+   donc ensemble sur leur propre ligne, où « Sauter » n'est pas — la règle est
+   tenue à la lettre, et le geste neutre reste loin du geste positif.
+
+   Densité : une habitude encore à faire occupe ~100 px, contre 56 en V1.
+   C'est le prix d'une saisie en un geste, et il se rembourse dans la journée :
+   dès qu'elle est atteinte ou sautée, la ligne retombe à 56 px (.row-soft,
+   inchangé depuis le Lot V1-8). Une carte de 4 habitudes rétrécit à mesure
+   qu'on la traite. */
+.row-head{display:flex; align-items:baseline; gap:var(--s3);}
+.row-head .row-title{flex:1; min-width:0;}
+/* « Sauter » garde ses 44 px de cible sans épaissir la ligne du titre :
+   marge négative, la technique déjà employée par .gear et .habits-head
+   (CONVENTIONS.md §3 — « étendre la zone par padding + margin négative, pas
+   en grossissant l'élément »). Sans elle, la ligne du titre passait à 44 px
+   et la première habitude du bloc mesurait 20 px de plus que la deuxième. */
+.row-head .skip{margin:-11px -6px;}
+.hab-ctrl{display:flex; align-items:center; gap:var(--s2); margin-top:var(--s2);}
+.hab-count{flex:1; min-width:0; font-size:var(--fs-low); color:var(--ink2);}
+
+/* Deux modificateurs de .step (déjà posé au Lot V1-8 : 44 px, fond --card,
+   glyphe --act, une élévation) : le pas chiffré (« +5 », « +10 ») perd la
+   taille du glyphe, et « Fait » s'élargit au texte. Aucune couleur nouvelle —
+   le vert dit « un doigt peut agir ici », jamais « réussi ». */
+.step.num{font-size:15.5px;}
+.step.wide{width:auto; padding:0 14px; font-size:15px;}
+
+/* ---------- 5. Le toast passe au-dessus de la barre collée ----------
+   Constat en dessinant : depuis le Lot V2-2, .capture occupe 76 → 138 px du
+   bas de l'écran et .toast est posé à 96 px. Sur les trois écrans qui portent
+   une barre de saisie, un toast était donc caché derrière elle — ce qui rend
+   l'« Annuler » du point 3 inatteignable. Un décalage piloté par la classe
+   que go() pose déjà suffit. */
+body.capture-open .toast{bottom:calc(150px + env(safe-area-inset-bottom));}
+
+/* ==========================================================================
+   CADRE DE MAQUETTE — NE PART PAS DANS index.html.
+   Uniquement là pour regarder l'écran à la taille d'un iPhone sur un grand
+   écran : cadre de 390 × 844, contenu qui défile SOUS une barre de saisie et
+   une tab bar épinglées. Rien ici ne décrit l'app. Sous 430 px de large (donc
+   sur l'iPhone), tout ce bloc s'efface et la page redevient exactement l'app.
+
+   Seule différence avec le cadre des maquettes du Lot V1-5 : le défilement
+   vit désormais dans un .mock-scroll intérieur, pour que .capture et .tabbar
+   puissent rester collées au bas du cadre comme elles le sont au bas de
+   l'écran depuis le Lot V2-2. Corollaire : dans la maquette, .capture est
+   posée en frère de .app et non dans l'écran — position:fixed ignore la place
+   dans le DOM, l'app la rend donc bien, elle, en fin de renderToday().
+   ========================================================================== */
+body{background:#DED7C8;}
+.mock-cap{
+  width:390px; margin:26px auto 10px; padding:0 4px;
+  font-family:var(--f); font-size:12.5px; font-weight:600; color:#6E6558; letter-spacing:.02em;
+}
+.mock-page{
+  position:relative; width:390px; height:844px; margin:0 auto 44px;
+  background:var(--bg); border-radius:34px; overflow:hidden;
+  box-shadow:0 24px 70px rgba(60,45,20,.22);
+}
+.mock-scroll{position:absolute; inset:0; overflow-y:auto;}
+.mock-page .app{min-height:0; padding:22px 18px 150px;}
+/* La tab bar du cadre est un peu plus basse que sur l'iPhone (pas de zone
+   sûre à réserver) : la barre de saisie se pose donc à 64 px et non à 76. */
+.mock-page .capture{position:absolute; bottom:64px; padding:var(--s3) 18px 0;}
+.mock-page .tabbar{position:absolute; padding-left:0; padding-right:0;}
+.mock-page .tab{padding-bottom:12px;}
+.mock-page .toast{position:absolute; bottom:150px;}
+
+@media (max-width:430px){
+  body{background:var(--bg);}
+  .mock-cap{display:none;}
+  .mock-page{
+    width:auto; height:auto; min-height:100vh;
+    margin:0; border-radius:0; box-shadow:none; overflow:visible;
+  }
+  .mock-scroll{position:static; overflow:visible;}
+  .mock-page .app{padding:max(18px, env(safe-area-inset-top)) 18px calc(158px + env(safe-area-inset-bottom));}
+  .mock-page .capture{position:fixed; bottom:calc(76px + env(safe-area-inset-bottom)); padding:var(--s3) var(--s5) 0;}
+  .mock-page .tabbar{position:fixed;}
+  .mock-page .tab{padding-bottom:20px;}
+  .mock-page .toast{position:fixed; bottom:calc(150px + env(safe-area-inset-bottom));}
+}
 </style>
 </head>
-<body>
+<body class="capture-open">
+
+<p class="mock-cap">Maquette Lot V2-3 — tout est fait</p>
+
+<div class="mock-page">
+<div class="mock-scroll">
 <div class="app">
-  <section id="s-today" class="screen active"></section>
-  <section id="s-tasks" class="screen"></section>
-  <section id="s-maison" class="screen"></section>
-  <section id="s-shopping" class="screen"></section>
-  <section id="s-habits" class="screen"></section>
-  <section id="s-settings" class="screen"></section>
+<section class="screen active">
+
+  <!-- ===== CHANGEMENT 1 — le même sur-titre personnalisé =================
+       L'écran ne change pas de nom parce qu'il est vide, et il ne change pas
+       de salutation non plus : « Bonjour Florian · Vendredi 14 août », la
+       même ligne que sur la journée chargée. Rien ne signale un état
+       particulier. ===================================================== -->
+  <header class="head">
+    <div>
+      <div class="head-over">Bonjour Florian · Vendredi 14 août</div>
+      <h1 class="head-title">Aujourd'hui</h1>
+    </div>
+    <button class="gear" aria-label="Réglages"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.5 1.5M16.5 16.5L18 18M18 6l-1.5 1.5M7.5 16.5L6 18"></path></svg></button>
+  </header>
+
+  <!-- ===== L'état vide, personnalisé lui aussi (arbitrage §3.6) ===========
+       emptyState() du Lot V1-2, structure inchangée : perchoir, oiseau,
+       phrase, sous-ligne, l'oiseau à 140 px du haut. Un seul mot change —
+       le prénom en fin de phrase : « C'est bon pour aujourd'hui, Florian. »
+       L'arbitrage §3.6 le prévoit explicitement et en fixe la limite dans la
+       même phrase : rien d'autre, ni récapitulatif nommé, ni emoji.
+       Sans prénom posé, la phrase redevient « C'est bon pour aujourd'hui. » —
+       mot pour mot celle du Lot V1-5.
+
+       La sous-ligne est la deuxième des deux variantes tranchées au Lot V1-12
+       (la réserve laissée ouverte au Lot V1-5 est donc fermée) : ici la tâche
+       du soir est faite elle aussi, donc « Il ne reste rien à faire
+       aujourd'hui. » et non « Rien ne demande ton attention avant ce soir. »
+
+       Ce qu'il n'y a PAS ici, et c'est tout le sujet (principe 6) :
+         · aucun entretien à proposer, même si une jauge descend encore ;
+         · aucune habitude, même non atteinte ;
+         · aucune ligne de courses ;
+         · aucun « si tu as 10 minutes » — c'est le moment où il serait le
+           plus tentant de le montrer, donc précisément celui où il ne faut
+           pas ;
+         · aucun récapitulatif de la journée.
+
+       UN SEUL CHANGEMENT RÉEL par rapport au Lot V1-5, et il vient du Lot
+       V2-2 : la barre de saisie est là, collée en bas. L'écran a donc
+       désormais une cible tactile hors navigation. Elle ne contredit pas le
+       principe 6 : l'app ne PROPOSE rien de plus, elle laisse un outil à
+       portée de pouce. La différence entre « voilà ce que tu pourrais faire »
+       et « si quelque chose te vient, note-le ». ====================== -->
+  <div class="empty">
+    <div class="empty-perch">
+      <svg class="bird" viewBox="0 0 120 160" aria-hidden="true" focusable="false" style="width:64px;height:85px;bottom:calc(100% - 16px);left:50%;margin-left:-32px;">
+        <path d="M66 104 L80 146 L68 149 L56 112 Z" fill="#9AA0AA"/>
+        <path d="M52 120 L52 130 M62 120 L62 130" fill="none" stroke="#8A7A62" stroke-width="3" stroke-linecap="round"/>
+        <path d="M46 20 C44 8 54 2 62 6 C56 7 52 11 52 16 Z" fill="#F4CDD3"/>
+        <path d="M52 18 C52 5 64 1 70 7 C64 7 58 11 58 17 Z" fill="#F4CDD3"/>
+        <path d="M58 18 C60 7 72 6 75 13 C69 12 63 15 62 20 Z" fill="#F4CDD3"/>
+        <path d="M56 16 C74 16 85 32 85 54 C85 80 76 104 62 116 C51 123 40 117 38 103 C35 82 37 48 43 32 C47 21 50 16 56 16 Z" fill="#E77E8E"/>
+        <path d="M62 44 C77 42 84 56 80 77 C76 95 62 103 55 94 C49 83 51 52 62 44 Z" fill="#B9BEC6"/>
+        <path d="M41 19 C30 20 26 31 35 37 C37 38.5 39.5 38.5 41 37 C36.5 32 37 24 42 21.5 Z" fill="#D8CFC3"/>
+        <path d="M35 36 C37 41 43 42 46 38.5 L41 33.5 Z" fill="#C4B8A8"/>
+        <circle cx="51" cy="26" r="4" fill="#FFFFFF"/><circle cx="50.4" cy="26" r="2" fill="#2A251E"/>
+      </svg>
+    </div>
+    <p class="empty-title">C'est bon pour aujourd'hui, Florian.</p>
+    <p class="empty-sub">Il ne reste rien à faire aujourd'hui.</p>
+  </div>
+
+</section>
+</div>
 </div>
 
-<nav class="tabbar" id="tabbar">
-  <button class="tab on" data-s="today" onclick="go('today')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 1.8"></path></svg>Aujourd'hui</button>
-  <button class="tab" data-s="tasks" onclick="go('tasks')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"></path></svg>Tâches</button>
-  <button class="tab" data-s="maison" onclick="go('maison')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"></path></svg>Maison</button>
-  <button class="tab" data-s="shopping" onclick="go('shopping')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11H6.2z"></path><path d="M9 8V6a3 3 0 0 1 6 0v2"></path></svg>Courses</button>
-  <button class="tab" data-s="habits" onclick="go('habits')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"></path><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><path d="M7 22l-4-4 4-4"></path><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>Habitudes</button>
+<!-- ===== CHANGEMENT 5 — la barre de saisie, ici aussi ===================== -->
+<div class="capture">
+  <div class="addbar">
+    <input class="field" type="text" placeholder="Ajouter une tâche…" autocomplete="off" autocapitalize="sentences">
+    <button class="add-btn" aria-label="Ajouter"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
+  </div>
+  <div></div>
+</div>
+
+<nav class="tabbar">
+  <button class="tab on"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 1.8"></path></svg>Aujourd'hui</button>
+  <button class="tab"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"></path></svg>Tâches</button>
+  <button class="tab"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"></path></svg>Maison</button>
+  <button class="tab"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11H6.2z"></path><path d="M9 8V6a3 3 0 0 1 6 0v2"></path></svg>Courses</button>
+  <button class="tab"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"></path><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><path d="M7 22l-4-4 4-4"></path><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>Habitudes</button>
 </nav>
+</div>
 
-<div class="sheet-bg" id="sheet-bg"><div class="sheet" id="sheet"></div></div>
-<div class="toast" id="toast"></div>
-
-<!-- Application en scripts <script> classiques, portée globale unique, aucun
-     bundler. ORDRE DE CHARGEMENT IMPÉRATIF (CONVENTIONS.md §1) : les 3
-     catalogues d'abord, puis state.js (socle), puis boot.js en dernier.
-     Miroir obligatoire dans sw.js (ASSETS) et test.mjs (FILES). -->
-<script src="data/rayons.js"></script>
-<script src="data/plantes.js"></script>
-<script src="data/entretien.js"></script>
-<script src="data/oiseaux.js"></script>
-<script src="js/state.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/gestures.js"></script>
-<script src="js/recur.js"></script>
-<script src="js/nlp.js"></script>
-<script src="js/today.js"></script>
-<script src="js/tasks.js"></script>
-<script src="js/maison.js"></script>
-<script src="js/plants.js"></script>
-<script src="js/habits.js"></script>
-<script src="js/shopping.js"></script>
-<script src="js/review.js"></script>
-<script src="js/settings.js"></script>
-<script src="js/boot.js"></script>
 </body>
 </html>

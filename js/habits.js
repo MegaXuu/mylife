@@ -14,13 +14,17 @@
    progression partielle (valeur < objectif) n'est ni un échec ni une
    réussite : seule l'atteinte de l'objectif alimente la série (point ㉓).
 
+   Depuis le Lot V2-3 (audit B8), la saisie du bloc d'Aujourd'hui ne passe plus
+   par un champ numérique et le clavier iOS : le pas d'incrémentation s'adapte
+   à l'objectif (habStep(), pure et testée) et le bouton dit ce qu'il ajoute
+   (« +5 », « +10 »), doublé d'un « Fait » qui pose l'objectif en un geste.
+
    Ce fichier expose aussi le bloc permanent d'Aujourd'hui (getTodayHabits(),
    appelé depuis js/today.js — today.js est plus tôt dans l'ordre de
    chargement mais ce n'est qu'une déclaration, comme getPlantCareItems()) et
    l'écran secondaire go('habits') : définitions, séries, calendrier mensuel.
    ========================================================================== */
 
-const HAB_STEP_MAX = 10; // au-delà, clavier numérique plutôt que ± (ROADMAP §6.4)
 const UNIT_ORDER = ['', 'min', 'fois', 'L', 'pages'];
 const UNIT_LABELS = {'': 'Simple (coche)', min: 'Minutes', fois: 'Fois', L: 'Litres', pages: 'Pages'};
 
@@ -189,46 +193,116 @@ function habitsPendingCount(list, k){
   return list.filter(h=>!habitRowSoft(h, k)).length;
 }
 
-function habitMeta(h, k){
+/* Pas d'incrémentation adapté à l'objectif (Lot V2-3, audit B8) — fonction
+   pure, testée isolément. Noter 30 minutes de marche passait par un champ de
+   64 px et le clavier iOS ; trois taps de « +10 » suffisent désormais, ou un
+   seul sur « Fait ». Une habitude sans unité n'a rien à compter : son pas est
+   l'objectif lui-même, un tap le pose (et un « − » le retire). */
+function habStep(h){
+  if(!h.unit) return h.target || 1;
+  const t = h.target || 1;
+  if(t <= 10) return 1;
+  if(t <= 25) return 5;
+  if(t <= 60) return 10;
+  return 25;
+}
+
+// Le bouton d'ajout DIT ce qu'il ajoute : « + » quand le pas vaut 1,
+// « +5 »/« +10 » sinon. On lit avant d'appuyer.
+function habPlusHtml(h){
+  const step = habStep(h);
+  const big = step > 1;
+  return '<button class="step'+(big ? ' num' : '')+'" aria-label="'+esc('Ajouter '+step+(h.unit ? ' '+h.unit : ''))+'" '+
+    'onclick="stepHabit(\''+h.id+'\',1)">'+(big ? '+'+step : '+')+'</button>';
+}
+function habMinusHtml(h){
+  return '<button class="step" aria-label="'+esc('Retirer '+habStep(h)+(h.unit ? ' '+h.unit : ''))+'" '+
+    'onclick="stepHabit(\''+h.id+'\',-1)">−</button>';
+}
+// « Fait » pose l'objectif en un geste : c'est le cas le plus fréquent, on a
+// marché ses 30 minutes et on ne veut pas compter. Vert parce qu'un doigt agit
+// dessus, jamais parce que c'est bien (discipline chromatique).
+function habDoneHtml(h, aria){
+  return '<button class="step wide" aria-label="'+esc(aria)+'" onclick="reachHabit(\''+h.id+'\')">Fait</button>';
+}
+
+// `ctrl` dit si la ligne porte une ligne de contrôles : la valeur du jour y est
+// déjà affichée, la méta ne la répète pas.
+function habitMeta(h, k, ctrl){
   const skip = habitSkippedOn(h, k);
   const streakUnit = h.sched.kind === 'week' ? ' sem.' : ' j';
   const streakTxt = 'Série ' + habitStreak(h, k) + streakUnit;
   if(skip) return 'Sautée aujourd’hui · ' + streakTxt;
+  const bits = [];
   if(h.sched.kind === 'week'){
-    const done = habitWeekDone(h, habitWeekStart(k));
-    return '<b class="hab-val">' + done + '</b> / ' + (h.sched.perWeek || 1) + ' cette semaine · ' + streakTxt;
+    bits.push('<b class="hab-val">' + habitWeekDone(h, habitWeekStart(k)) + '</b> / ' +
+      (h.sched.perWeek || 1) + ' cette semaine');
+  } else if(!h.unit){
+    bits.push(habitReachedOn(h, k) ? 'Fait' : 'À faire');
+  } else if(!ctrl){
+    bits.push('<b class="hab-val">' + habitValueOn(h, k) + '</b> / ' + (h.target || 1) + ' ' + esc(h.unit));
   }
-  if(!h.unit) return (habitReachedOn(h, k) ? 'Fait' : 'À faire') + ' · ' + streakTxt;
-  return '<b class="hab-val">' + habitValueOn(h, k) + '</b> / ' + (h.target || 1) + ' ' + esc(h.unit) + ' · ' + streakTxt;
+  bits.push(streakTxt);
+  return bits.join(' · ');
 }
 
-// ± pour les petits objectifs, clavier numérique au-delà de HAB_STEP_MAX
-// (ROADMAP §6.4). Jamais « Sauter » et deux boutons sur la même ligne : à
-// zéro, Sauter + un seul contrôle d'ajout ; sinon, un seul contrôle (le champ
-// numérique remplace à lui seul + et −, sinon − apparaît à côté de +).
-function habitButtonsHtml(h, k, soft){
+/* Ligne de contrôles d'une habitude chiffrée encore à faire : la valeur, le
+   pas adapté, et « Fait ». Les DEUX boutons d'ajout vivent ici, jamais sur la
+   ligne du titre où se trouve « Sauter » — la règle du Lot V1-8 tient à la
+   lettre (« jamais Sauter et deux boutons d'ajout sur la même ligne »), et le
+   geste neutre reste loin du geste positif. Aucune barre de quota : une
+   habitude se mesure en série et en quota, jamais en jauge (CONVENTIONS.md
+   §6) — la barre --g-hab vit sur l'écran Habitudes. */
+function habitCtrlHtml(h, k){
   const val = habitValueOn(h, k);
-  const skip = habitSkippedOn(h, k);
-  const big = (h.target || 1) > HAB_STEP_MAX;
-  const ctrl = big
-    ? '<input class="field hab-num" type="number" min="0" inputmode="numeric" value="'+val+'" onchange="setHabitValue(\''+h.id+'\',this.value)">'
-    : '<button class="step" aria-label="Ajouter" onclick="stepHabit(\''+h.id+'\',1)">+</button>';
-  if(skip) return ctrl;
-  if(val > 0 || soft){
-    const sub = big ? '' : '<button class="step" aria-label="Retirer" onclick="stepHabit(\''+h.id+'\',-1)">−</button>';
-    return sub + ctrl;
-  }
-  return '<button class="skip" onclick="skipHabit(\''+h.id+'\')">Sauter</button>' + ctrl;
+  return '<div class="hab-ctrl">'+
+    (val > 0 ? habMinusHtml(h) : '')+
+    '<span class="hab-count"><b class="hab-val">'+val+'</b> / '+(h.target || 1)+' '+esc(h.unit)+'</span>'+
+    habPlusHtml(h)+
+    habDoneHtml(h, 'Objectif atteint')+
+  '</div>';
 }
 
+// Contrôles compacts, à droite de la ligne (disposition du Lot V1-8, gardée
+// telle quelle) : la ligne est sautée, ou déjà au quota, ou sans unité — dans
+// les trois cas il n'y a pas de valeur à composer.
+function habitButtonsHtml(h, k, soft){
+  const plus = h.unit ? habPlusHtml(h) : habDoneHtml(h, 'Marquer fait');
+  if(habitSkippedOn(h, k)) return plus;           // changer d'avis reste possible
+  if(soft){
+    // Au quota : plus rien à pousser, mais toujours de quoi se dédire. Sur une
+    // coche simple le « − » retire l'objectif entier (habStep), donc il suffit.
+    if(!h.unit) return '<button class="step" aria-label="Marquer non fait" '+
+      'onclick="stepHabit(\''+h.id+'\',-1)">−</button>';
+    return habMinusHtml(h) + plus;
+  }
+  return '<button class="skip" onclick="skipHabit(\''+h.id+'\')">Sauter</button>' + plus;
+}
+
+/* Une habitude chiffrée encore à faire prend une ligne de contrôles (~122 px) ;
+   dès qu'elle est atteinte ou sautée, elle retombe à la ligne compacte du Lot
+   V1-8 (~70 px). La carte rétrécit donc à mesure que la journée avance — c'est
+   le remboursement de la densité que coûte la saisie en un geste. */
 function habitRowHtml(h){
   const k = todayKey();
   const soft = habitRowSoft(h, k);
-  return '<li class="row'+(soft ? ' row-soft' : '')+'">'+
-    '<div class="row-main"><div class="row-title">'+esc(h.name)+'</div>'+
-      '<div class="row-meta">'+habitMeta(h, k)+'</div>'+
+  const ctrl = (h.unit && !soft && !habitSkippedOn(h, k)) ? habitCtrlHtml(h, k) : '';
+  if(!ctrl){
+    return '<li class="row'+(soft ? ' row-soft' : '')+'">'+
+      '<div class="row-main"><div class="row-title">'+esc(h.name)+'</div>'+
+        '<div class="row-meta">'+habitMeta(h, k, false)+'</div>'+
+      '</div>'+
+      habitButtonsHtml(h, k, soft)+
+    '</li>';
+  }
+  return '<li class="row">'+
+    '<div class="row-main">'+
+      '<div class="row-head"><div class="row-title">'+esc(h.name)+'</div>'+
+        (habitValueOn(h, k) > 0 ? '' : '<button class="skip" onclick="skipHabit(\''+h.id+'\')">Sauter</button>')+
+      '</div>'+
+      '<div class="row-meta">'+habitMeta(h, k, true)+'</div>'+
+      ctrl+
     '</div>'+
-    habitButtonsHtml(h, k, soft)+
   '</li>';
 }
 
@@ -247,36 +321,58 @@ function todayHabitsCard(list, i, n){
 // toast sobre quand la série dépasse son record précédent — jamais sur le
 // tout premier jour d'une habitude (prevBest à 0, ce serait un « record »
 // systématique et donc un bruit). Aucun point, aucun rang, aucune monnaie.
+// Renvoie true s'il a effectivement parlé : reachHabit() s'en sert pour ne
+// pas empiler son toast d'annulation par-dessus celui du record.
 function celebrateHabitRecord(h, prevBest){
-  if(!prevBest) return;
+  if(!prevBest) return false;
   const cur = habitStreak(h, todayKey());
-  if(cur <= prevBest) return;
+  if(cur <= prevBest) return false;
   const unit = h.sched.kind === 'week' ? (cur>1?' semaines':' semaine') : (cur>1?' jours':' jour');
   toast('Record de série pour ' + h.name + ' : ' + cur + unit + '.');
+  return true;
 }
 
 function stepHabit(id, delta){
   const h = S.habits.find(x=>x.id === id);
   if(!h) return;
-  const step = h.unit === '' ? (h.target || 1) : 1; // coche simple : le tap atteint l'objectif directement
+  const k = todayKey();
+  const cur = habitValueOn(h, k);
+  const target = h.target || 1;
   const prevBest = habitBestStreak(h);
-  const v = Math.max(0, habitValueOn(h, todayKey()) + delta * step);
+  let v = Math.max(0, cur + delta * habStep(h));
+  // Le pas ne saute jamais PAR-DESSUS l'objectif : de 25 à 30, « +10 » pose 30.
+  // Une fois l'objectif franchi il reprend sa valeur pleine — on peut toujours
+  // boire un septième verre (règle du Lot V1-8, intacte).
+  if(delta > 0 && cur < target && v > target) v = target;
   setHabitLogValue(h.id, v);
   celebrateHabitRecord(h, prevBest);
+  rerender();
+}
+
+/* « Fait » : la valeur du jour devient l'objectif, en un geste (audit B8).
+   Annulable — checklist V2 §6, « toute action de complétion ajoutée est
+   annulable » — mais jamais deux toasts à la fois : quand la série bat son
+   record, c'est ce toast-là qui parle, et le retour arrière reste sous le
+   doigt, dans le « − » de la ligne devenue compacte. */
+function reachHabit(id){
+  const h = S.habits.find(x=>x.id === id);
+  if(!h) return;
+  const k = todayKey();
+  const before = habitLogEntry(k, h.id);
+  const prevBest = habitBestStreak(h);
+  setHabitLogValue(h.id, h.target || 1);
+  const dit = celebrateHabitRecord(h, prevBest);
+  if(!dit) undoable(h.name + ' : fait.', ()=>{
+    setHabitLogValue(h.id, before === undefined ? 0 : before);
+    hideToast();
+    rerender();
+  });
   rerender();
 }
 function skipHabit(id){
   const h = S.habits.find(x=>x.id === id);
   if(!h) return;
   setHabitLogValue(h.id, 'skip');
-  rerender();
-}
-function setHabitValue(id, raw){
-  const h = S.habits.find(x=>x.id === id);
-  if(!h) return;
-  const prevBest = habitBestStreak(h);
-  setHabitLogValue(h.id, Math.max(0, parseInt(raw, 10) || 0));
-  celebrateHabitRecord(h, prevBest);
   rerender();
 }
 

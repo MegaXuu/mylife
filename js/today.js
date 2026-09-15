@@ -20,6 +20,13 @@
    getTodayHabits()) rejoignent la sélection — un domaine à part, jamais mêlé
    aux tâches (une série ne se compte pas comme une jauge, CONVENTIONS.md §6).
 
+   Depuis le Lot V2-3, trois changements (maquettes/today-v2.html) :
+     · le sur-titre porte le prénom (audit C1) ;
+     · les soins de plantes ne tombent plus sous le plafond : ils ont des
+       places réservées à la tête du bloc du jour (audit B3, todayShown()) ;
+     · une ligne cochée est annulable au toast ET décochable à la case
+       (audit A2, todayUndone()).
+
    Mise en forme : la maquette fait foi (cf. le bloc Lot V1-5 du <style>).
    Le bloc du jour est le seul à ne pas être une carte : c'est ce qui le rend
    dominant, il respire pleine largeur pendant que le reste est boîté.
@@ -28,12 +35,29 @@
 const TODAY_CARE_MAX = 3;      // au plus 3 entretiens (ROADMAP §6.3)
 const TODAY_CARE_SEUIL = 0.4;  // … et seulement ceux qui approchent d'« à faire »
 const TODAY_QUICK_MAX = 3;     // « si tu as 10 minutes » : 1 à 3 tâches (§6.7)
+const TODAY_SOIN_RESERVE = 3;  // places réservées aux soins dans le bloc du jour (Lot V2-3)
 
 // Sur-titre de l'écran : « Dimanche 26 juillet ». La casse de phrase impose
 // la majuscule initiale que toLocaleDateString ne met pas en français.
 function longDate(d){
   const s = (d || new Date()).toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// Le prénom demandé à la bienvenue depuis le Lot V1-11, enfin lu (audit C1).
+// Vide, blanc ou absent : tout ce qui le mentionne doit retomber sur sa forme
+// sans prénom — jamais un « Bonjour » orphelin, jamais une virgule qui pend.
+function userFirstName(){
+  return (S.settings.userName || '').trim();
+}
+
+// Sur-titre de l'écran : « Bonjour Florian · Vendredi 14 août », ou la date
+// seule sans prénom. Arbitrage ROADMAP-V2 §3.6, et sa limite dans la même
+// phrase : pas de salutation selon l'heure, pas d'emoji, pas de phrase.
+function todayOverline(d){
+  const n = userFirstName();
+  const date = longDate(d);
+  return n ? 'Bonjour ' + n + ' · ' + date : date;
 }
 
 /* ==========================================================================
@@ -43,15 +67,22 @@ function longDate(d){
    journal : rien n'est persisté, et le tableau se vide au changement de jour.
    ========================================================================== */
 let _tickDay = null;
-let _ticked = [];
+let _ticked = {};   // id → cliché des champs que completeTask() a modifiés
 
-function tickToday(id){
+// Le cliché vit dans le cochage lui-même (Lot V2-3) : une ligne barrée et son
+// moyen de la décocher ont exactement la même durée de vie, celle de la
+// session. Impossible d'afficher l'une sans l'autre.
+function tickToday(id, snap){
   const k = todayKey();
-  if(_tickDay !== k){ _tickDay = k; _ticked = []; }
-  if(_ticked.indexOf(id) === -1) _ticked.push(id);
+  if(_tickDay !== k){ _tickDay = k; _ticked = {}; }
+  _ticked[id] = snap || null;
 }
+function untickToday(id){ delete _ticked[id]; }
 function tickedToday(){
-  return _tickDay === todayKey() ? _ticked : [];
+  return _tickDay === todayKey() ? Object.keys(_ticked) : [];
+}
+function tickSnapshot(id){
+  return _tickDay === todayKey() ? (_ticked[id] || null) : null;
 }
 
 let _todayMore = false; // « + N autres » déplié ?
@@ -179,9 +210,15 @@ function todayPlantRow(s){
   '</li>';
 }
 
+// Ligne cochée dans la session (audit A2). Elle n'est plus `disabled` : le
+// vert plein de .check.on dit déjà « un doigt peut agir ici » (première phrase
+// de la discipline chromatique) — c'était l'attribut qui mentait, pas le
+// dessin. Aucun libellé « décocher » ajouté : ce serait un deuxième chemin
+// visible vers la même action (CONVENTIONS.md §3, principe 5).
 function todayDoneRow(t){
   return '<li class="row done">'+
-    '<button class="check on" role="checkbox" aria-checked="true" aria-label="Fait" disabled></button>'+
+    '<button class="check on" role="checkbox" aria-checked="true" aria-label="Marquer non fait" '+
+      'onclick="todayUndone(\''+t.id+'\')"></button>'+
     '<div class="row-main"><div class="row-title">'+esc(t.title)+'</div></div>'+
   '</li>';
 }
@@ -200,9 +237,37 @@ function overdueCard(list, i, n){
   '</div>';
 }
 
+/* Quelles entrées du bloc du jour sont montrées sous le plafond (audit B3).
+
+   Ce qui se passait : todayBuckets() concatène les soins APRÈS les tâches, et
+   un simple slice(0, cap) les rendait donc structurellement les premiers
+   évincés — avec 7 tâches et 4 soins dus, les quatre soins, et eux seuls,
+   tombaient dans « + 4 autres ». Un arrosage n'attend pas un dépliage.
+
+   L'arbitrage : le plafond reste un plafond — il protège du mur — mais les
+   soins ne sont plus une queue de file. Ils prennent jusqu'à
+   TODAY_SOIN_RESERVE places à la TÊTE du bloc, et les tâches se partagent le
+   reste. Deux garde-fous : la réserve ne dépasse jamais le plafond lui-même
+   (todayCap peut descendre à 1), et jamais la moitié du plafond quand il y a
+   aussi des tâches — sinon un plafond serré n'afficherait plus que des
+   plantes. Ce qui reste de place au-delà des tâches montrées revient aux
+   soins : la réserve est un minimum garanti, pas un maximum. */
+function todayShown(scheduled, cap){
+  const soins = scheduled.filter(e=>e.kind === 'soin');
+  const tasks = scheduled.filter(e=>e.kind !== 'soin');
+  const reserve = Math.min(soins.length, TODAY_SOIN_RESERVE, cap,
+    tasks.length ? Math.ceil(cap / 2) : cap);
+  const t = tasks.slice(0, Math.max(0, cap - reserve));
+  const s = soins.slice(0, Math.max(reserve, cap - t.length));
+  return s.concat(t);
+}
+
 function todaySection(b){
   const cap = S.settings.todayCap || 7;
-  const shown = _todayMore ? b.scheduled : b.scheduled.slice(0, cap);
+  // Déplié, le plafond devient le total : todayShown() reste le seul endroit
+  // qui décide de l'ORDRE, sinon les soins repasseraient en queue de liste au
+  // moment du dépliage (ils sont concaténés là par todayBuckets()).
+  const shown = todayShown(b.scheduled, _todayMore ? b.scheduled.length : cap);
   const hidden = b.scheduled.length - shown.length;
   return '<div class="sec"><h2 class="sec-title">Aujourd’hui</h2>'+
       '<span class="sec-count">'+b.scheduled.length+'</span></div>'+
@@ -274,7 +339,10 @@ function renderToday(){
     const sousEmpty = b.evening.length
       ? 'Rien ne demande ton attention avant ce soir.'
       : 'Il ne reste rien à faire aujourd’hui.';
-    html = emptyState('C’est bon pour aujourd’hui.', sousEmpty);
+    // Le prénom entre aussi ici (arbitrage ROADMAP-V2 §3.6, « l'état vide se
+    // personnalise »), et rien de plus : ni récapitulatif nommé, ni emoji.
+    const n = userFirstName();
+    html = emptyState('C’est bon pour aujourd’hui' + (n ? ', ' + n : '') + '.', sousEmpty);
   } else {
     const nCards = (b.overdue.length ? 1 : 0) + (b.soins.length ? 1 : 0) + (b.habits.length ? 1 : 0);
     let i = 0;
@@ -289,19 +357,47 @@ function renderToday(){
   if(!vide && b.quick.length) html += softSection('Si tu as 10 minutes', b.quick);
 
   document.getElementById('s-today').innerHTML =
-    screenHead(longDate(), 'Aujourd\'hui') + html + captureBarHtml();
+    screenHead(todayOverline(), 'Aujourd\'hui') + html + captureBarHtml();
 }
 
 /* ---------- Actions ---------- */
 
 function toggleTodayMore(){ _todayMore = !_todayMore; renderToday(); }
 
+/* Cocher, et pouvoir s'en dédire (audit A2) — deux retours arrière, et c'est
+   voulu : le toast « Annuler » dans la seconde (on s'est trompé de ligne), la
+   case jusqu'au prochain démarrage (on s'est trompé de journée).
+
+   Le cliché porte exactement les champs que completeTask() modifie
+   (js/recur.js) : sans lui, décocher une tâche récurrente la laisserait avec
+   l'échéance SUIVANTE, et une réalisation de trop dans son historique. */
 function todayDone(id){
   const t = S.tasks.find(x=>x.id === id);
   if(!t) return;
-  tickToday(id);      // la ligne reste posée, barrée, jusqu'au prochain démarrage
+  tickToday(id, {       // la ligne reste posée, barrée, jusqu'au prochain démarrage
+    doneAt: t.doneAt, due: t.due, postponed: t.postponed || 0,
+    history: (t.history || []).slice()
+  });
   completeTask(t);    // recalcule l'échéance si récurrente (js/recur.js)
   save();
+  renderToday();
+  undoable(t.title + ' : fait.', ()=>todayUndone(id));
+}
+
+function todayUndone(id){
+  const t = S.tasks.find(x=>x.id === id);
+  if(!t) return;
+  const snap = tickSnapshot(id);
+  if(snap){
+    t.doneAt = snap.doneAt; t.due = snap.due;
+    t.postponed = snap.postponed; t.history = snap.history;
+  } else {
+    t.doneAt = null;  // cliché perdu : on relâche au moins la tâche
+  }
+  touch(t);
+  untickToday(id);
+  save();
+  hideToast();
   renderToday();
 }
 

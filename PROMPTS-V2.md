@@ -14,8 +14,8 @@
 | Lot | Titre | Modèle | Validation | Statut |
 |---|---|---|---|---|
 | V2-1 | Socle d'interaction | Sonnet | — | fait |
-| V2-2 | Navigation & saisie | Sonnet | — | à faire |
-| V2-3 | « Aujourd'hui » v3 | Opus puis Sonnet | ⚑ | à faire |
+| V2-2 | Navigation & saisie | Sonnet | — | fait |
+| V2-3 | « Aujourd'hui » v3 | Opus puis Sonnet | ⚑ | fait |
 | V2-4 | Tâches v2 | Sonnet | — | à faire |
 | V2-5 | Maison & plantes v2 | Sonnet | — | à faire |
 | V2-6 | Courses v2 | Sonnet | — | à faire |
@@ -253,11 +253,15 @@ CACHE = 'mylife-b2-3', APP_VERSION = 'Bêta 2.3'. Checklist §6, puis compte ren
 ```
 
 ### Critères d'acceptation
-- [ ] Avec 12 tâches du jour et 3 soins dus, les soins sont visibles sans déplier « + N autres ».
-- [ ] Cocher puis décocher une tâche récurrente rend exactement l'état d'avant (`history`, `due`, `doneAt`).
-- [ ] Sans prénom posé, le sur-titre est la date seule.
-- [ ] Noter 30 min de marche se fait sans ouvrir le clavier.
-- [ ] Le test de non-doublon de `todayBuckets()` passe toujours.
+- [x] Avec 12 tâches du jour et 3 soins dus, les soins sont visibles sans déplier « + N autres ».
+      Vérifié à tous les plafonds réglables : `todayShown()` leur réserve 3 places à la tête du
+      bloc (1 seule si le plafond descend à 1 ou 2), et ne dépasse jamais le plafond.
+- [x] Cocher puis décocher une tâche récurrente rend exactement l'état d'avant (`history`, `due`, `doneAt`).
+      Plus `postponed`. Le cliché est posé par `todayDone()` et vit dans `_ticked`, donc aussi
+      longtemps que la ligne barrée qu'il sert à décocher.
+- [x] Sans prénom posé, le sur-titre est la date seule. Un prénom blanc est traité comme absent.
+- [x] Noter 30 min de marche se fait sans ouvrir le clavier : trois taps sur « +10 », ou un sur « Fait ».
+- [x] Le test de non-doublon de `todayBuckets()` passe toujours.
 
 ---
 
