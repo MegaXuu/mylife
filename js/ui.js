@@ -19,16 +19,32 @@ const RENDERERS = {
 
 let CURRENT_SCREEN = 'today'; // écran en cours de rendu — lu par birdOnCard/birdOnPerch
 
+// Mémorisation du défilement par écran (Lot V2-2) : go() restaure la
+// position quittée en dernier sur l'écran demandé, sauf en retapant l'onglet
+// DÉJÀ actif — convention iOS, on remonte alors en haut. jsdom ne défile pas
+// (test.mjs) : la valeur stockée est donc vérifiée via scrollPosFor(), pas
+// en lisant le DOM.
+let _scrollPos = {};
+function scrollPosFor(name){ return _scrollPos[name] || 0; }
+
+// Écrans qui posent une barre de saisie collée en bas (§3.2) : pilote la
+// classe body.capture-open qui réserve la place nécessaire dans .app (voir
+// <style>) pour que le dernier élément de liste ne passe jamais dessous.
+const CAPTURE_SCREENS = ['today','tasks','shopping'];
+
 function go(name){
   if(SCREENS.indexOf(name) === -1) return;
+  const sameTab = name === CURRENT_SCREEN;
+  if(!sameTab) _scrollPos[CURRENT_SCREEN] = window.scrollY;
   CURRENT_SCREEN = name;
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   const el = document.getElementById('s-'+name);
   if(el) el.classList.add('active');
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.s === name));
-  window.scrollTo(0,0);
+  document.body.classList.toggle('capture-open', CAPTURE_SCREENS.indexOf(name) !== -1);
   const render = RENDERERS[name];
   if(render) render();
+  window.scrollTo(0, sameTab ? 0 : scrollPosFor(name));
 }
 
 // Re-rend l'écran affiché, quel qu'il soit. Depuis le Lot V1-5, la fiche

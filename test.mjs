@@ -163,6 +163,53 @@ call('Réglages — six groupes dans l’ordre attendu', () => {
   call(`go('${scr}')`, () => win.go(scr))
 );
 
+// 1 bis) Navigation & saisie (Lot V2-2) : cinq onglets, écran Habitudes
+// atteignable à zéro habitude, mémorisation du défilement par écran.
+call('Tab bar — cinq onglets (§3.1)', () => {
+  const tabs = win.document.querySelectorAll('#tabbar .tab');
+  if(tabs.length !== 5) throw new Error('la tab bar devrait avoir 5 onglets, obtenu ' + tabs.length);
+  if(![...tabs].some(t => t.dataset.s === 'habits'))
+    throw new Error('un onglet Habitudes devrait exister dans la tab bar');
+});
+call('go(\'habits\') fonctionne avec S.habits vide et rend un état vide (audit A3)', () => {
+  const backup = S.habits.slice();
+  S.habits.length = 0;
+  try{
+    win.go('habits');
+    const el = win.document.getElementById('s-habits');
+    if(!/Aucune habitude/.test(el.textContent)) throw new Error('un état vide devrait inviter à créer une habitude');
+    const btn = [...el.querySelectorAll('button')].find(b => /Ajouter une habitude/.test(b.textContent));
+    if(!btn) throw new Error('le bouton « Ajouter une habitude » devrait être présent même à zéro habitude');
+  } finally {
+    S.habits.length = 0; backup.forEach(h => S.habits.push(h));
+  }
+});
+call('go() — mémorise et restaure la position de défilement par écran, remonte en haut sur l’onglet déjà actif', () => {
+  // jsdom ne défile pas : window.scrollY reste 0 et scrollTo() est un no-op
+  // (voir beforeParse plus haut) — on vérifie donc la valeur stockée via
+  // scrollPosFor(), pas un vrai déplacement du DOM.
+  win.go('tasks');
+  if(win.scrollPosFor('maison') !== 0) throw new Error('un écran jamais quitté devrait avoir une position à 0');
+  Object.defineProperty(win, 'scrollY', {value: 640, configurable: true});
+  win.go('maison'); // quitte Tâches à 640 : doit être mémorisé
+  if(win.scrollPosFor('tasks') !== 640)
+    throw new Error('la position quittée sur Tâches (640) devrait être mémorisée, obtenu ' + win.scrollPosFor('tasks'));
+  Object.defineProperty(win, 'scrollY', {value: 0, configurable: true});
+  win.go('tasks'); // y revient : devrait restaurer 640 (vérifié indirectement, scrollTo est un no-op sous jsdom)
+  win.go('tasks'); // retape l'onglet déjà actif : convention iOS, remonte en haut
+  if(win.scrollPosFor('tasks') !== 640)
+    throw new Error('retaper l’onglet déjà actif ne doit pas effacer la position mémorisée des AUTRES écrans');
+});
+call('go() — pilote body.capture-open selon la barre de saisie collée de l’écran (§3.2)', () => {
+  win.go('today');
+  if(!win.document.body.classList.contains('capture-open')) throw new Error('Aujourd’hui pose une barre de capture : capture-open attendu');
+  win.go('maison');
+  if(win.document.body.classList.contains('capture-open')) throw new Error('Maison n’a pas de barre de saisie collée : capture-open ne devrait pas être posé');
+  win.go('shopping');
+  if(!win.document.body.classList.contains('capture-open')) throw new Error('Courses pose un champ d’ajout collé : capture-open attendu');
+  win.go('today');
+});
+
 // 2) Cycle de vie d'une tâche : créer (barre de capture, Lot V1-6), cocher,
 //    supprimer (tombstone, jamais retirée du tableau).
 call('commitCapture', () => {
@@ -1181,6 +1228,8 @@ if(fails.length){
 } else {
   console.log('✓ Test fumée OK — 6 écrans, cycle de vie d’une tâche, oiseaux, casse,\n' +
               '  socle d’interaction V2-1 (gestures.js chargé, undoable(), rowAttrs()),\n' +
+              '  navigation & saisie V2-2 (cinq onglets, Habitudes atteignable à zéro,\n' +
+              '  mémorisation du défilement, barre de saisie collée par écran),\n' +
               '  récurrence, Maison, algorithme d’« Aujourd’hui » (blocs, seuil d’entretien,\n' +
               '  cochage de session, plafond, état vide, pastille), parseQuick (' + nlpCases.length + ' cas\n' +
               '  + mécanisme d’ignorance), plantes (saison, soins réutilisant recur.js,\n' +

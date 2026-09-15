@@ -190,12 +190,12 @@ function renderShopping(){
       '<button class="chip'+(_shopStore ? ' on' : '')+'" onclick="setShopMode(true)">Mode magasin</button>'+
     '</div>'+
     body+
-    '<div class="addbar">'+
+    '<div class="capture"><div class="addbar">'+
       '<input id="shop-input" class="field" type="text" placeholder="Ajouter un article…" '+
         'autocomplete="off" autocapitalize="sentences" enterkeyhint="done" '+
         'onkeydown="if(event.key===\'Enter\')commitShopItem()">'+
       '<button class="add-btn" aria-label="Ajouter" onclick="commitShopItem()">'+icon('<path d="M12 5v14M5 12h14"></path>', 24)+'</button>'+
-    '</div>'+
+    '</div></div>'+
     shopFrequentsHtml()+
     (done.length ? '<button class="btn quiet btn-full" onclick="clearCheckedShopping()">Vider les articles cochés ('+done.length+')</button>' : '')+
     '<button class="btn quiet btn-full" onclick="rayonOrderSheet()">Réordonner les rayons</button>';

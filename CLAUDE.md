@@ -117,8 +117,8 @@ uniquement des déclarations.
 
 - `index.html` — squelette + **tout le CSS** (`<style>` : discipline chromatique en commentaire,
   `:root` complet « Canopée », puis les composants partagés) + conteneurs d'écrans `#s-today
-  #s-tasks #s-maison #s-shopping #s-habits #s-settings` + tab bar 4 onglets (Aujourd'hui · Tâches ·
-  Maison · Courses, icônes SVG inline, zone sûre iOS) + feuille modale (`#sheet-bg`/`#sheet`) +
+  #s-tasks #s-maison #s-shopping #s-habits #s-settings` + tab bar **5 onglets depuis le Lot V2-2**
+  (Aujourd'hui · Tâches · Maison · Courses · Habitudes, icônes SVG inline, zone sûre iOS) + feuille modale (`#sheet-bg`/`#sheet`) +
   toast. Classes disponibles : `.head/.head-over/.head-title/.gear`, `.overline`,
   `.card` + `.t-plantes/.t-maison/.t-habitudes/.t-courses`, `.btn` +
   `.primary/.secondary/.danger/.quiet/.btn-full`, `.chip/.chips`, `.gauge/.gauge-fill(.hab)`,
@@ -141,7 +141,11 @@ uniquement des déclarations.
   `.row-qty` (quantité à droite d'un article), `.rayon-left` (compteur restant d'un rayon, mode
   magasin), `.shop-store` (gros libellés du mode magasin, ne change que la taille des `.row`/`.check`
   déjà en place), `:disabled` sur `.row-postpone`/`.row-del` (flèches de `rayonOrderSheet()` en haut
-  et en bas de liste). Au-delà de **900 px** : colonne centrée plafonnée à 560 px (desktop V2).
+  et en bas de liste), et depuis le **Lot V2-2** : `.capture` n'est plus posée en flux normal mais
+  **fixée juste au-dessus de la tab bar** (§3.2 de `ROADMAP-V2.md`) — même classe réutilisée telle
+  quelle par le champ d'ajout de `js/shopping.js` — sous `.sheet-bg` (`z-index:30` < 50), et
+  `body.capture-open` (posée par `go()`, `js/ui.js`) qui augmente le `padding-bottom` de `.app` pour
+  qu'aucune liste ne passe dessous. Au-delà de **900 px** : colonne centrée plafonnée à 560 px (desktop V2).
 - `js/state.js` — **socle**, aucun rendu DOM : `APP_VERSION`, IndexedDB (`openDb`/`idbGet`/`idbSet`,
   + `idbPutPhoto`/`idbGetPhoto`/`idbDelPhoto`/`idbClearPhotos` — ce dernier posé au Lot 11 pour la
   réinitialisation — pour le store `photos`), `defaults()`/`migrate()`, `let S`, `save()` (débounce
@@ -163,6 +167,12 @@ uniquement des déclarations.
   `toast()` avec une action « Annuler » déjà câblée) et `rowAttrs(onTap, opts)` (attributs communs
   d'une ligne cliquable — `role="button"`, `tabindex="0"`, `onclick`, Entrée/Espace — posés sur les
   `.row`/`.row-main` cliquables de `today.js`/`tasks.js`/`maison.js`/`shopping.js`, audit D3).
+  Depuis le **Lot V2-2**, `go()` fait deux choses de plus qu'avant : il mémorise la position de
+  défilement de l'écran qu'on quitte (`_scrollPos{}`, lue par `scrollPosFor(name)` — exposée en
+  fonction exprès pour rester testable sous jsdom, qui ne défile pas) et la restaure en y revenant,
+  sauf en retapant l'onglet **déjà actif** (convention iOS : on remonte alors en haut) ; et il pose
+  `body.capture-open` selon `CAPTURE_SCREENS` (`today`, `tasks`, `shopping` — les écrans qui posent
+  une barre de saisie collée en bas), classe lue par `.app` dans le `<style>` d'`index.html`.
 - `js/gestures.js` — **nouveau au Lot V2-1**, socle de balayage horizontal consommé par les Lots
   V2-4/5/6, sans écran propre. Une ligne devient balayable en portant `data-swipe-left="fn(...)"`
   et/ou `data-swipe-right="fn(...)"` (nom de fonction évalué comme un `onclick=` l'est déjà,
@@ -576,6 +586,16 @@ de `CLAUDE.md`/`CONVENTIONS.md` avec l'état final de la V2 est prévue au Lot V
   sur aucune ligne — c'est aux Lots V2-4/5/6), `undoable()`/`rowAttrs()` dans `js/ui.js`, `role`/
   `tabindex`/Entrée-Espace posés sur les 7 lignes cliquables existantes (audit D3), correctifs D1
   (`textarea`/`select` en `font:inherit`) et D2 (`theme-color` suit `applyTheme()`).
+- **V2-2 — Navigation & saisie** (Bêta 2.2) : ✅ Fait. Cinquième onglet **Habitudes** dans la tab bar
+  (icône « répéter », même style que les quatre autres) : `go('habits')` était jusqu'ici inatteignable
+  à zéro habitude (audit A3), `renderHabits()` savait déjà rendre un état vide + le bouton « Ajouter
+  une habitude » sans défiler (posé au Lot 8) — seule la porte d'entrée manquait. La barre de capture
+  (`.capture`, Aujourd'hui/Tâches) et le champ d'ajout de Courses (même classe, réutilisée telle
+  quelle par `js/shopping.js`) sont désormais **fixés juste au-dessus de la tab bar** (audit A1),
+  sous `.sheet-bg` (z-index 30 < 50) ; `.app` gagne un `padding-bottom` supplémentaire piloté par
+  `body.capture-open`, posée par `go()` selon `CAPTURE_SCREENS`. `go()` mémorise aussi la position de
+  défilement quittée sur chaque écran (`_scrollPos{}` / `scrollPosFor()`, `js/ui.js`) et la restaure
+  au retour, sauf en retapant l'onglet déjà actif (remonte en haut, convention iOS).
 
 ## Cycle V1 clos — dettes sciemment laissées pour la V2
 Le Lot 12 a fermé le cycle V1. Rien ci-dessous n'est un oubli : chaque point a été examiné et
