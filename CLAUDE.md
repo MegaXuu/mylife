@@ -134,7 +134,8 @@ uniquement des déclarations.
   `.repeat-n` (fiche tâche, Lot 4), et le bloc **Lot 5** : `.sec(.soft)/.sec-title/.sec-count`
   (titre de section 18 px + compteur, remplace l'emploi de `.overline` comme titre de groupe),
   `.card-title`, `.list-page` (liste posée hors carte), `.row-low` (registre bas), `.more`,
-  `.row-care`, `.gauge-side/.gauge-cell/.gauge-cap`, `.room-head`, `.group-toggle`, et le bloc
+  `.row-care`, `.gauge-side/.gauge-cell` (`.gauge-cap` retirée au Lot V2-5, orpheline), `.room-head`,
+  `.group-toggle`, et le bloc
   **Lot 6** : `.capture`, `.cap-chips`, `.cap-chip`, `.cap-details` (barre de capture — réutilisent
   `.addbar/.field/.add-btn/.chip/.btn.quiet` déjà en place), le bloc **Lot 7** : `.plant-photo`,
   `.file-input` (photo de plante — le reste de la fiche et des lignes de soin réutilise
@@ -162,6 +163,12 @@ uniquement des déclarations.
   `.more-toggle` (respiration propre au bouton « Plus d'options », qui n'est pas un `.field-group`).
   Aucune classe nouvelle pour le balayage lui-même : `.row[data-swipe-left]`/`.swipe-content`/
   `.swipe-bg` du Lot V2-1 suffisaient, posés sur de vraies lignes pour la première fois ici.
+  Puis le bloc **Lot V2-5** : `.row-act` (bouton d'action à droite d'une ligne d'entretien/de soin —
+  du texte `--act`, comme `.more`/`.group-toggle`, pas de fond) et `.room-count` (remplace la jauge
+  agrégée de pièce dans `.room-head`, retirée avec elle : `.room-head .gauge-cell{width:120px}`).
+  `.gauge-side` (jauge seule, sans légende) est désormais partagée par Aujourd'hui ET Maison — sa
+  légende « Aujourd'hui » d'origine n'était qu'une question de premier usage, pas de portée. Aucune
+  classe nouvelle pour la fiche plante allégée (point 6) : `.more-toggle` du Lot V2-4 suffisait.
   Au-delà de **900 px** : colonne centrée plafonnée à 560 px (desktop V2).
 - `js/state.js` — **socle**, aucun rendu DOM : `APP_VERSION`, IndexedDB (`openDb`/`idbGet`/`idbSet`,
   + `idbPutPhoto`/`idbGetPhoto`/`idbDelPhoto`/`idbClearPhotos` — ce dernier posé au Lot 11 pour la
@@ -190,6 +197,11 @@ uniquement des déclarations.
   sauf en retapant l'onglet **déjà actif** (convention iOS : on remonte alors en haut) ; et il pose
   `body.capture-open` selon `CAPTURE_SCREENS` (`today`, `tasks`, `shopping` — les écrans qui posent
   une barre de saisie collée en bas), classe lue par `.app` dans le `<style>` d'`index.html`.
+  Depuis le **Lot V2-5** (audit B1), `gaugeWidth(f)` accepte aussi un `f` négatif (`rawFreshness
+  (doneAt, days)`, posée ici : même calcul que `freshness()`/`js/recur.js`, sans son clampage,
+  réservée à l'affichage) — la largeur décroît alors sous son plancher de 4 % vers une asymptote à
+  1 %, pour distinguer les degrés de retard là où `freshness()` clampait tout à 0. `gaugeColor(f)`
+  n'a pas eu besoin de changer : sa formule sature déjà proprement pour `f < 0`.
 - `js/gestures.js` — **nouveau au Lot V2-1**, socle de balayage horizontal consommé par les Lots
   V2-4/5/6, sans écran propre. Une ligne devient balayable en portant `data-swipe-left="fn(...)"`
   et/ou `data-swipe-right="fn(...)"` (nom de fonction évalué comme un `onclick=` l'est déjà,
@@ -324,24 +336,27 @@ uniquement des déclarations.
   sous le champ d'ajout, les plus utilisés d'abord — pas un objet synchro-ready comme `tasks[]`,
   c'est un compteur d'usage recalculable par libellé, pas un objet du domaine. `addShoppingItem()`
   est le chemin unique de création, qu'il vienne du champ ou d'un fréquent en un tap.
-- `js/maison.js` — écran Maison, **vue par pièce posée au Lot 4** : `getMaisonItems()` regroupe les
-  tâches d'entretien (`room` posé + `repeat.from:'done'`, glossaire `CONVENTIONS.md` §6) par pièce ;
-  jauge agrégée par pièce (la plus basse de ses éléments, `freshLabel()` pour le texte à côté —
-  jamais « en retard ») + jauge de fraîcheur continue par élément ; tap sur une ligne
-  (`tapMaisonItem()`) appelle `completeTask()`, avec un retour visuel immédiat (largeur de la jauge
-  posée à 100 % avant le rendu complet) que `prefers-reduced-motion` supprime. **Depuis le Lot 10**,
-  la toute première réalisation d'un entretien `repeat.kind:'year'` (`history` encore vide juste
-  avant `completeTask()`) déclenche un toast sobre, une fois pour toutes — même geste dans
-  `tapTodayCare()` (`js/today.js`), qui complète les mêmes tâches depuis Aujourd'hui. `entretienSheet()` :
-  feuille d'ajout — on choisit une pièce puis on coche des modèles du catalogue
-  `data/entretien.js`, créés en une fois comme tâches récurrentes `'done'` (`doneAt` posé à
-  l'instant de la création). Les tâches d'entretien ont toujours un `doneAt`, donc elles
-  n'apparaissent plus dans l'écran Tâches (filtré sur `!doneAt`) : elles vivent uniquement ici.
-  Depuis le **Lot V1-7**, `renderMaison()` mêle ces tâches et les soins de plantes de la même pièce
-  (`getPlantCareItems()`, `js/plants.js`) en une seule liste triée par fraîcheur croissante
-  (`careRowHtml()` unifie les deux types de ligne) : un tap sur une tâche la marque faite
-  (`tapMaisonItem()`), un tap sur un soin de plante ouvre sa fiche (`plantSheet()`) — c'est là que
-  vit le bouton « arrosé ». Bouton « Ajouter une plante » posé à côté de « Ajouter un entretien ».
+- `js/maison.js` — écran Maison, **vue par pièce posée au Lot 4**, refondue au **Lot V2-5** (audits
+  A4/B1/B2/B4/C4, ROADMAP-V2.md §3.7) : `getMaisonItems()` regroupe les tâches d'entretien (`room`
+  posé + `repeat.from:'done'`, glossaire `CONVENTIONS.md` §6) par pièce, mêlées depuis le **Lot
+  V1-7** aux soins de plantes de la même pièce (`getPlantCareItems()`, `js/plants.js`) en une seule
+  liste triée par fraîcheur croissante — `careRowHtml()` unifie les deux types de ligne. Un tap sur
+  le corps de la ligne (`row-main`) ouvre toujours le détail (`taskSheet()` pour un entretien —
+  balayage à gauche vers `delTask()` pour le supprimer, réutilisé tel quel de `js/tasks.js`, C4 ;
+  `plantSheet()` pour un soin) ; un bouton d'action à droite (`.row-act` : « Fait », « Arrosé »,
+  « Engrais », « Rempoté ») agit immédiatement et s'annule (point 1, audit A4) — c'en était fini de
+  l'ancien tap sur toute la ligne qui complétait un entretien sans confirmation ni retour arrière.
+  `tapMaisonItem()` est ce bouton pour un entretien : il historise un cliché (`doneAt`/`due`/
+  `postponed`/`history`) avant `completeTask()`, comme `doneTask()`/`todayDone()`, et pose
+  `undoable()` — y compris pour le message de célébration d'un entretien annuel (**Lot 10**), qui
+  n'empêche plus l'annulation. `freshCue(f, days)` remplace l'ancien `maisonAgo()`/`careAgo()` dans
+  la légende (audit B2) : « À faire »/« Dans N j »/« Dans N semaines », dérivé de la même fraction
+  que la jauge — jamais l'un sans l'autre. La jauge elle-même (`rawFreshness()`, `js/ui.js`)
+  discrimine enfin les degrés de retard (audit B1). Le compte « N élément(s) à faire »/« Tout est
+  frais » de l'en-tête de pièce remplace l'ancienne jauge agrégée (audit B4, `freshLabel()` retirée
+  : minimum de ses éléments, elle était rouge dès qu'un seul était dû et redondante avec la ligne du
+  dessous). `entretienSheet()` (inchangée) reste réservée à la création ; `maisonAgo()` reste vivante
+  pour `today.js` (`careCard()`), qui l'affiche encore telle quelle dans son propre bloc Entretien.
 - `js/settings.js` — écran Réglages, **rempli au Lot 11** : six cartes dans cet ordre, chacune un
   groupe. **Profil** : prénom (`setUserName()`, `cap()` posé, vide autorisé), apparence
   (`setTheme('light'|'dark'|'auto')` → `S.settings.theme`, posé sur `data-mode` de `<html>` par
@@ -397,10 +412,21 @@ uniquement des déclarations.
   repeat:{kind:'day', n, from:'done'}}` passé tel quel à `freshness()`/`completeTask()` de
   `js/recur.js` — **le moteur du Lot 4 n'est pas dupliqué**. `getPlantCareItems()` expose les soins
   actifs à `js/maison.js` et `js/today.js` (un `feed` à `cold:0` est suspendu et n'est jamais
-  proposé). `plantSheet()` : fiche unique création/édition — identité, pièce obligatoire, espèce du
-  catalogue `data/plantes.js` (pré-remplit les intervalles, modifiables ensuite par plante), photo,
-  jauge des trois soins avec l'intervalle appliqué en clair, historique d'arrosage, boutons
-  « Arrosé » / « Fait l'engrais » / « Rempoté » en action immédiate (comme `tapMaisonItem()`).
+  proposé) ; depuis le **Lot V2-5**, chaque soin porte aussi `kind`/`days` (type et intervalle
+  appliqué, pour le bouton d'action et la légende de `js/maison.js`) et son `f` est
+  `rawFreshness(lastAt, days)` (`js/ui.js`) plutôt que `careFreshness()`/`freshness()` — non bornée
+  à 0, pour que la jauge de Maison distingue les degrés de retard (audit B1) ; `today.js` en hérite
+  automatiquement (même filtre `f <= 0`, inchangé). `doPlantCare()`/`repotPlantAction()` sont
+  annulables depuis le Lot V2-5 (`undoable()`, snapshot de `lastAt` et de `history` avant
+  `completeTask()`, comme `tapMaisonItem()`). `plantSheet()` : fiche unique création/édition —
+  identité, pièce obligatoire, espèce du catalogue `data/plantes.js` (pré-remplit les intervalles,
+  modifiables ensuite par plante), photo, jauge des trois soins avec boutons « Arrosé » / « Fait
+  l'engrais » / « Rempoté » en action immédiate, historique d'arrosage. **Depuis le Lot V2-5**
+  (point 6), divulgation progressive comme la fiche tâche (Lot V2-4) : ce qui sert au quotidien
+  (identité, les trois jauges/boutons, historique, notes) reste visible d'emblée, le réglage des six
+  champs d'intervalle (`careField()`) vit derrière « Plus de réglages » (`_pSheet._more`,
+  `togglePMore()`), toujours replié par défaut — un intervalle n'a pas de valeur « par défaut » qui
+  justifierait de déplier automatiquement comme le fait `tsHasExtras()` pour la fiche tâche.
   Photos : `resizePhoto()` (canvas, 1000 px max, JPEG 0,8) puis `idbPutPhoto()` (store `photos`,
   jamais dans `S`), chargement paresseux (`idbGetPhoto()` seulement à l'ouverture de la fiche), URL
   objet révoquée à la fermeture via le hook `_onSheetClose` posé dans `js/ui.js`.
@@ -531,7 +557,13 @@ uniquement des déclarations.
   n'est pas vide ; recherche et filtres n'apparaissent dans le DOM qu'au-delà de `TASK_FILTER_MIN`.
   Le balayage lui-même ne se simule pas sous jsdom (comme au Lot V2-1) — vérifié en conditions
   réelles de clic dans le panneau de prévisualisation, ce qui a d'ailleurs révélé et fait corriger
-  le défaut de `js/gestures.js` documenté plus haut.
+  le défaut de `js/gestures.js` documenté plus haut. Depuis le Lot V2-5, **Maison v2** : le bouton
+  « Fait »/« Arrosé » est annulable et restaure exactement `doneAt`/`history` d'avant (entretien via
+  `tapMaisonItem()`, soin via `waterPlantAction()`) ; le corps de la ligne ouvre le détail
+  (`taskSheet()`/`plantSheet()`, jamais une complétion directe) et un entretien reste supprimable
+  (`data-swipe-left` vers `delTask()`) ; la légende d'un soin suspendu (`cold:0`) n'affiche toujours
+  rien, puisque le soin lui-même n'atteint jamais le rendu ; enregistrer une fiche tâche ouverte
+  depuis Maison rafraîchit bien Maison (`rerender()`), jamais Tâches en dur.
 - **À chaque release** : incrémenter `CACHE` (`sw.js`) **et** `APP_VERSION` (`js/state.js`), même
   numéro (`mylife-b1-N` / `'Bêta 1.N'`).
 
@@ -707,6 +739,28 @@ de `CLAUDE.md`/`CONVENTIONS.md` avec l'état final de la V2 est prévue au Lot V
   `swipePrepareRow()` du `pointerdown` au premier `pointermove` qui verrouille le balayage
   horizontal : un tap qui ne bouge pas ne touche plus jamais au DOM, un vrai balayage se comporte
   à l'identique. À surveiller aux Lots V2-5/V2-6, qui posent `data-swipe-*` sur d'autres écrans.
+- **V2-5 — Maison & plantes v2** (Bêta 2.5) : ✅ Fait. `js/maison.js`, `js/plants.js`,
+  `gaugeWidth()`/`gaugeColor()` (`js/ui.js`) et leur CSS seuls touchés (ROADMAP-V2.md §3.7, audits
+  A4/B1/B2/B4/C4). **Un bouton d'action explicite par ligne** (point 1, audit A4) : `.row-act` à
+  droite (« Fait », « Arrosé », « Engrais », « Rempoté ») agit immédiatement et s'annule
+  (`undoable()`, restaure `doneAt`/`history` exacts) ; le corps de la ligne (`row-main`) ouvre
+  toujours le détail — c'en est fini du tap sur toute la ligne qui complétait un entretien sans
+  confirmation. **La légende dit ce qu'il faut faire** (point 2, audit B2) : `freshCue(f, days)`
+  remplace « il y a N jours » par « À faire »/« Dans N j »/« Dans N semaines », dérivé de la même
+  fraction que la jauge. **La jauge redevient discriminante** (point 3, audit B1) :
+  `rawFreshness(doneAt, days)` (`js/ui.js`) n'est plus bornée à 0 comme `freshness()` — la largeur
+  décroît sous son plancher de 4 % vers une asymptote à 1 % au lieu de s'y figer, pour que « dû
+  depuis 1 jour » se distingue de « dû depuis 30 jours ». **La jauge agrégée de pièce** (point 4,
+  audit B4) cède la place à un simple compte (« N élément(s) à faire »/« Tout est frais ») :
+  minimum de ses éléments, elle était rouge dès qu'un seul était dû et redondante avec la ligne du
+  dessous. **Édition et suppression d'un entretien** (point 5, dette V1/C4) : le détail réutilise
+  `taskSheet()` tel quel (édite, y compris la récurrence), un balayage à gauche vers `delTask()` le
+  supprime (réutilisé de `js/tasks.js`, jamais dupliqué) — vérifié que l'enregistrement depuis
+  Maison rafraîchit bien Maison (`rerender()`), pas Tâches en dur. **Fiche plante allégée**
+  (point 6) : divulgation progressive comme la fiche tâche du Lot V2-4, le réglage des intervalles
+  derrière « Plus de réglages » (`.more-toggle`, réutilisée telle quelle). `maisonAgo()`/
+  `freshLabel()` : la première reste vivante pour `today.js` (`careCard()`), la seconde est retirée
+  (orpheline).
 
 ## Cycle V1 clos — dettes sciemment laissées pour la V2
 Le Lot 12 a fermé le cycle V1. Rien ci-dessous n'est un oubli : chaque point a été examiné et

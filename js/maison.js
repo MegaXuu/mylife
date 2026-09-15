@@ -2,25 +2,41 @@
    maison.js — écran Maison : vue par pièce (ROADMAP-V1.md §6 bis). Réunit les
    tâches d'entretien (repeat.from:'done' rattachée à une pièce, glossaire
    CONVENTIONS.md §6) ET, depuis le Lot V1-7, les soins de plantes de la même
-   pièce (js/plants.js, même moteur de fraîcheur ⑯) sous une jauge continue
-   par élément et une jauge agrégée par pièce (la plus basse de ses éléments).
-   Un tap sur une tâche la marque faite ; un tap sur un soin de plante ouvre
-   sa fiche (ROADMAP §6 bis) — c'est là que vit le bouton « arrosé ».
+   pièce (js/plants.js, même moteur de fraîcheur) sous une jauge continue par
+   élément.
+
+   Lot V2-5 (audit A4/B1/B2/B4/C4, ROADMAP-V2.md §3.7) : une ligne d'entretien
+   tapait au corps entier pour COMPLÉTER, sans confirmation ni retour arrière
+   — un frôlement effaçait la vraie date du dernier passage — quand la même
+   ligne pour une plante ouvrait une fiche de 700 px pour trouver « Arrosé ».
+   Règle unique désormais : un bouton d'action à droite agit (et s'annule),
+   le reste de la ligne ouvre le détail — la fiche tâche (taskSheet(), Lot
+   V1-3, qui sait déjà tout éditer y compris la récurrence) pour un entretien,
+   la fiche plante pour un soin. La légende ne montre plus « il y a N jours »
+   (illisible sans connaître l'intervalle) mais « À faire »/« Dans N j » ; la
+   jauge distingue enfin les degrés de retard (rawFreshness(), js/ui.js) ; la
+   jauge agrégée de pièce, redondante et toujours rouge dès qu'un élément est
+   dû, cède la place à un simple compte.
    ========================================================================== */
 
-// Textuel neutre à côté de la jauge agrégée d'une pièce — jamais « en retard »,
-// jamais « manqué » (CONVENTIONS.md §3).
-function freshLabel(f){
-  if(f <= 0) return 'À faire';
-  if(f < 0.4) return 'Bientôt';
-  if(f < 0.7) return 'Soin moyen';
-  return 'Frais';
-}
+// Un entretien créé par erreur se supprime désormais d'un balayage à gauche,
+// comme sur Tâches (delTask(), js/tasks.js — réutilisé tel quel, pas dupliqué :
+// confirmation, tombstone et annulation par toast lui appartiennent déjà).
+// Jamais posé sur une ligne de plante : supprimer une plante entière passe par
+// sa fiche (deletePlant()), « supprimer un soin » n'a pas de sens isolément.
+const PLANT_ACTION = {
+  water: {label:'Arrosé', fn:'waterPlantAction'},
+  feed: {label:'Engrais', fn:'feedPlantAction'},
+  repot: {label:'Rempoté', fn:'repotPlantAction'}
+};
 
 function getMaisonItems(){
   return live(S.tasks).filter(t=>t.room && t.repeat && t.repeat.from === 'done');
 }
 
+// Conservée pour today.js (careCard()), qui l'affiche encore telle quelle
+// dans son propre bloc Entretien — un contexte différent de celui audité ici
+// (une seule ligne à la fois, pas une comparaison de plusieurs jauges).
 function maisonAgo(t){
   if(!t.doneAt) return 'Jamais faite';
   const n = daysBetween(dayKey(new Date(t.doneAt)), todayKey());
@@ -28,47 +44,81 @@ function maisonAgo(t){
   return 'Il y a '+n+(n>1 ? ' jours' : ' jour');
 }
 
-// Ligne générique — jauge posée à droite, sa légende dessous (disposition de
-// la maquette). `e` unifie une tâche d'entretien et un soin de plante :
-// {title, f, ago, onTap, fillId}. `fillId` n'existe que pour les tâches, dont
-// tapMaisonItem() fait remonter la jauge à 100 % avant le rendu complet.
+// Légende tournée vers l'action (audit B2), à la place de maisonAgo()/
+// careAgo() dans cette vue : « il y a 300 jours » en vert juste au-dessus de
+// « il y a 6 jours » en rouge ne se lit pas sans connaître l'intervalle
+// attendu de chacun. Dérivée de la même fraction que la jauge (f × jours de
+// l'intervalle) : les deux ne peuvent jamais se contredire, par construction.
+// La date réelle du dernier passage n'est pas perdue : elle reste dans le
+// détail (fiche plante ; l'entretien réutilise taskSheet(), point 5).
+function freshCue(f, days){
+  if(!days || f <= 0) return 'À faire';
+  const rem = Math.round(f * days);
+  if(rem <= 0) return 'À faire';
+  if(rem < 14) return 'Dans '+rem+' j';
+  const sem = Math.round(rem/7);
+  return 'Dans '+sem+(sem > 1 ? ' semaines' : ' semaine');
+}
+
+// Ligne générique — jauge seule à droite (sans légende, elle est montée dans
+// row-meta), puis le bouton d'action. `e` unifie une tâche d'entretien et un
+// soin de plante : {title, f, cue, onTap, actLabel, actFn, fillId, swipeLeft}.
+// `fillId` (entretien seul) : tapMaisonItem() fait remonter la jauge à 100 %
+// avant le rendu complet. `swipeLeft` (entretien seul) : voir PLANT_ACTION.
 function careRowHtml(e){
-  return '<li class="row row-care"'+rowAttrs(e.onTap)+'>'+
-    '<div class="row-main"><div class="row-title">'+esc(e.title)+'</div></div>'+
-    '<div class="gauge-cell">'+
-      '<div class="gauge"><div class="gauge-fill"'+(e.fillId ? ' id="'+e.fillId+'"' : '')+' '+
-        'style="width:'+gaugeWidth(e.f)+';background:'+gaugeColor(e.f)+'"></div></div>'+
-      '<div class="gauge-cap">'+esc(e.ago)+'</div>'+
+  return '<li class="row row-care"'+(e.swipeLeft ? ' data-swipe-left="'+e.swipeLeft+'"' : '')+'>'+
+    '<div class="row-main"'+rowAttrs(e.onTap)+'>'+
+      '<div class="row-title">'+esc(e.title)+'</div>'+
+      '<div class="row-meta">'+esc(e.cue)+'</div>'+
     '</div>'+
+    '<div class="gauge gauge-side"><div class="gauge-fill"'+(e.fillId ? ' id="'+e.fillId+'"' : '')+' '+
+      'style="width:'+gaugeWidth(e.f)+';background:'+gaugeColor(e.f)+'"></div></div>'+
+    '<button class="row-act" onclick="'+e.actFn+'">'+esc(e.actLabel)+'</button>'+
   '</li>';
 }
 
-// Carte blanche, nom de pièce en 18 px/700, jauge agrégée à droite sous un
-// filet. La jauge de la pièce est plus large que celles des lignes : c'est la
-// seule différence de largeur qui porte un sens. `taskItems` (entretien) et
-// `plantItems` (soins, js/plants.js) sont mêlés puis triés ensemble par
-// fraîcheur croissante : une seule liste par pièce, comme le veut la maquette.
+// Carte blanche, nom de pièce en 18 px/700, compte à droite sous un filet.
+// `taskItems` (entretien) et `plantItems` (soins, js/plants.js) sont mêlés
+// puis triés ensemble par fraîcheur croissante — le plus dû en tête, la
+// jauge signée (rawFreshness()) trie désormais correctement même entre deux
+// éléments en retard, plutôt que de les départager arbitrairement à f=0.
 function maisonRoomSection(room, taskItems, plantItems, i, n){
-  const entries = taskItems.map(t=>({
-    title:t.title, f:freshness(t, Date.now()), ago:maisonAgo(t),
-    onTap:"tapMaisonItem('"+t.id+"')", fillId:'mfill-'+t.id
-  })).concat(plantItems.map(s=>({
-    title:s.title, f:s.f, ago:s.ago, onTap:"plantSheet('"+s.plantId+"')", fillId:null
-  })));
-  const f = entries.reduce((min, e)=>Math.min(min, e.f), 1);
+  const entries = taskItems.map(t=>{
+    const days = intervalDays(t.repeat);
+    const f = rawFreshness(t.doneAt, days);
+    return {
+      title:t.title, f, cue:freshCue(f, days),
+      onTap:"taskSheet('"+t.id+"')", actLabel:'Fait', actFn:"tapMaisonItem('"+t.id+"')",
+      fillId:'mfill-'+t.id, swipeLeft:"delTask('"+t.id+"')"
+    };
+  }).concat(plantItems.map(s=>{
+    const act = PLANT_ACTION[s.kind];
+    return {
+      title:s.title, f:s.f, cue:freshCue(s.f, s.days),
+      onTap:"plantSheet('"+s.plantId+"')", actLabel:act.label, actFn:act.fn+"('"+s.plantId+"')",
+      fillId:null, swipeLeft:null
+    };
+  }));
   const sorted = entries.slice().sort((a, b)=>a.f - b.f);
+  // Remplace l'ancienne jauge agrégée (audit B4) : minimum de ses éléments,
+  // donc rouge dès qu'un seul était dû et redondante avec la ligne du dessous
+  // — elle ne disait jamais rien que la première ligne triée ne disait déjà.
+  // Un compte reste utile d'un coup d'œil sans rien répéter.
+  const due = entries.filter(e=>e.f <= 0).length;
+  const count = due ? due+(due>1 ? ' éléments à faire' : ' élément à faire') : 'Tout est frais';
   return '<div class="card">'+birdOnCard(i, n)+
     '<div class="room-head">'+
       '<h2 class="card-title">'+esc(ROOM_LABELS[room] || room)+'</h2>'+
-      '<div class="gauge-cell">'+
-        '<div class="gauge"><div class="gauge-fill" style="width:'+gaugeWidth(f)+';background:'+gaugeColor(f)+'"></div></div>'+
-        '<div class="gauge-cap">'+esc(freshLabel(f))+'</div>'+
-      '</div>'+
+      '<span class="room-count">'+esc(count)+'</span>'+
     '</div>'+
     '<ul class="list room-list">'+sorted.map(careRowHtml).join('')+'</ul>'+
   '</div>';
 }
 
+// Bouton d'action (« Fait ») d'une ligne d'entretien — immédiat, annulable
+// (point 1) : annuler restaure exactement le doneAt/due/postponed d'avant ET
+// retire l'entrée que completeTask() vient d'ajouter à history, même
+// discipline que doneTask()/todayDone() (js/tasks.js, js/today.js).
 function tapMaisonItem(id){
   const t = S.tasks.find(x=>x.id === id);
   if(!t) return;
@@ -76,12 +126,24 @@ function tapMaisonItem(id){
   if(fill) fill.style.width = '100%'; // retour visuel immédiat : la jauge remonte avant le rendu complet
   // Motivation légère (Lot 10) : la toute première réalisation d'un entretien
   // annuel mérite un mot sobre — après ça, history n'est plus vide, ça ne se
-  // reproduit plus jamais pour cette tâche.
+  // reproduit plus jamais pour cette tâche. Le message passe désormais par
+  // undoable() comme les autres : rien n'empêche de se raviser sur un jalon.
   const firstAnnual = t.repeat && t.repeat.kind === 'year' && !(t.history && t.history.length);
+  const snap = {doneAt:t.doneAt, due:t.due, postponed:t.postponed||0, history:(t.history||[]).slice()};
   completeTask(t);
   save();
-  if(firstAnnual) toast('Entretien annuel réalisé pour la première fois : « ' + t.title + ' ».');
   setTimeout(renderMaison, reduceMotion() ? 0 : 260);
+  const msg = firstAnnual
+    ? 'Entretien annuel réalisé pour la première fois : « ' + t.title + ' ».'
+    : t.title + ' : fait.';
+  undoable(msg, ()=>{
+    const x = S.tasks.find(y=>y.id === id);
+    if(!x) return;
+    x.doneAt = snap.doneAt; x.due = snap.due; x.postponed = snap.postponed; x.history = snap.history;
+    touch(x);
+    save();
+    renderMaison();
+  });
 }
 
 function renderMaison(){
@@ -107,6 +169,9 @@ function renderMaison(){
 /* ==========================================================================
    Feuille d'ajout : on choisit une pièce, on coche des modèles du catalogue
    (data/entretien.js), créés en une fois comme tâches récurrentes 'done'.
+   L'édition et la suppression d'un entretien déjà créé passent désormais par
+   sa ligne dans Maison (taskSheet() au tap, balayage pour supprimer, point 5)
+   — cette feuille reste réservée à la création.
    ========================================================================== */
 let _entSheet = null;
 

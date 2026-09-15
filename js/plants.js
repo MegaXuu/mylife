@@ -47,33 +47,49 @@ function careAgo(lastAt){
    Intégration Maison / Aujourd'hui — un soin par plante par type (arrosage,
    engrais si actif cette saison, rempotage), jamais un par plante seule :
    c'est ce qui permet de le mêler ligne à ligne avec l'entretien maison.
+   `f` est depuis le Lot V2-5 une fraction NON bornée à 0 (rawFreshness(),
+   js/ui.js, audit B1) : un soin très en retard reste `f <= 0` (le filtre
+   « vraiment dû » d'Aujourd'hui n'y voit que du feu), mais la vue Maison peut
+   désormais distinguer un jour de retard de trente. `kind`/`days` exposent le
+   type de soin et l'intervalle appliqué, pour le bouton d'action et la
+   légende de js/maison.js (careRowHtml()).
    ========================================================================== */
 function getPlantCareItems(){
   const season = plantSeason();
-  const now = Date.now();
   const out = [];
   live(S.plants).forEach(p=>{
     if(!p.room) return; // une plante vit forcément dans une pièce (sinon aucun écran ne l'affiche)
     ['water','feed'].forEach(kind=>{
       const f = careFreshness(p.care[kind], season);
       if(f === null) return; // suspendu cette saison : l'app ne le propose pas du tout
-      out.push({id:p.id+'-'+kind, plantId:p.id, room:p.room, f, ago:careAgo(p.care[kind].lastAt), title:p.name+' ('+CARE_LABELS[kind]+')'});
+      const days = careInterval(p.care[kind], season);
+      out.push({
+        id:p.id+'-'+kind, plantId:p.id, room:p.room, kind, days,
+        f:rawFreshness(p.care[kind].lastAt, days), ago:careAgo(p.care[kind].lastAt),
+        title:p.name+' ('+CARE_LABELS[kind]+')'
+      });
     });
     const repot = p.care.repot;
     const days = (repot.months || 12) * 30;
-    const f = freshness({doneAt:repot.lastAt, repeat:{kind:'day', n:days}}, now);
-    out.push({id:p.id+'-repot', plantId:p.id, room:p.room, f, ago:careAgo(repot.lastAt), title:p.name+' ('+CARE_LABELS.repot+')'});
+    out.push({
+      id:p.id+'-repot', plantId:p.id, room:p.room, kind:'repot', days,
+      f:rawFreshness(repot.lastAt, days), ago:careAgo(repot.lastAt),
+      title:p.name+' ('+CARE_LABELS.repot+')'
+    });
   });
   return out;
 }
 
-/* ---------- Actions de soin — immédiates, comme tapMaisonItem()/tapTodayCare() ---------- */
+/* ---------- Actions de soin — immédiates et annulables (Lot V2-5, point 1) :
+   comme tapMaisonItem()/tapTodayCare(), annuler doit restaurer le lastAt
+   d'avant ET retirer l'entrée que completeTask() vient d'ajouter à history. */
 function doPlantCare(id, kind){
   const p = S.plants.find(x=>x.id === id);
   if(!p) return;
   const season = plantSeason();
   const care = p.care[kind];
   const days = careInterval(care, season) || 1;
+  const prevLastAt = care.lastAt;
   const adapter = {doneAt:care.lastAt, due:null, repeat:{kind:'day', n:days, from:'done'}, history:care.history || (care.history = []), postponed:0};
   completeTask(adapter); // réutilise le moteur du Lot V1-4, sans le dupliquer
   care.lastAt = adapter.doneAt;
@@ -81,7 +97,17 @@ function doPlantCare(id, kind){
   save();
   refreshPlantDraftFrom(id);
   rerender();
-  toast(kind === 'water' ? 'Arrosage enregistré' : 'Engrais enregistré');
+  undoable((kind === 'water' ? 'Arrosage' : 'Engrais') + ' enregistré.', ()=>{
+    const x = S.plants.find(y=>y.id === id);
+    if(!x) return;
+    const c = x.care[kind];
+    if(c.history && c.history.length) c.history.pop();
+    c.lastAt = prevLastAt;
+    touch(x);
+    save();
+    refreshPlantDraftFrom(id);
+    rerender();
+  });
 }
 function waterPlantAction(id){ doPlantCare(id, 'water'); }
 function feedPlantAction(id){ doPlantCare(id, 'feed'); }
@@ -89,12 +115,21 @@ function feedPlantAction(id){ doPlantCare(id, 'feed'); }
 function repotPlantAction(id){
   const p = S.plants.find(x=>x.id === id);
   if(!p) return;
+  const prevLastAt = p.care.repot.lastAt;
   p.care.repot.lastAt = Date.now();
   touch(p);
   save();
   refreshPlantDraftFrom(id);
   rerender();
-  toast('Rempotage enregistré');
+  undoable('Rempotage enregistré.', ()=>{
+    const x = S.plants.find(y=>y.id === id);
+    if(!x) return;
+    x.care.repot.lastAt = prevLastAt;
+    touch(x);
+    save();
+    refreshPlantDraftFrom(id);
+    rerender();
+  });
 }
 
 // Rafraîchit les soins affichés dans la feuille ouverte après une action,
@@ -157,6 +192,14 @@ function onPlantPhoto(input){
 /* ==========================================================================
    Fiche plante — identité, pièce, photo, les trois soins et leur jauge,
    historique d'arrosage, bouton « arrosé » (l'action quotidienne).
+
+   Lot V2-5 (point 6) : divulgation progressive comme la fiche tâche (Lot
+   V2-4, tsHasExtras()) — ce qui sert au quotidien (identité, les trois
+   jauges et leurs boutons, historique, notes) reste visible d'emblée ; le
+   réglage des intervalles (deux par soin + rempotage, six champs pour une
+   action qu'on ne fait presque jamais) vit derrière « Plus de réglages »,
+   toujours replié par défaut : un intervalle n'a pas de valeur « par défaut »
+   qui justifierait de déplier automatiquement comme le fait la fiche tâche.
    ========================================================================== */
 let _pSheet = null;
 
@@ -173,6 +216,7 @@ function plantSheet(id){
     id:null, _isNew:true, name:'', species:'', room:ROOM_ORDER[0],
     water:{warm:7, cold:14}, feed:{warm:30, cold:0}, repot:{months:12}, notes:''
   };
+  _pSheet._more = false;
   openSheet(plantSheetHtml());
   _onSheetClose = revokePlantPhoto;
   if(p && p.photoId){
@@ -189,6 +233,8 @@ function plantSheet(id){
 }
 
 function refreshPlantSheet(){ openSheet(plantSheetHtml()); }
+
+function togglePMore(){ _pSheet._more = !_pSheet._more; refreshPlantSheet(); }
 
 function setPRoom(r){ _pSheet.room = r; refreshPlantSheet(); }
 function setPSpecies(key){
@@ -268,6 +314,14 @@ function plantSheetHtml(){
         '<p class="sheet-msg">'+esc(hist.map(fmtDateShort).join(', '))+'</p></div>';
     }
   }
+  // Le réglage des intervalles (point 6) : jamais nécessaire au jour le
+  // jour, toujours replié par défaut (_pSheet._more).
+  const settingsBlock = !d._more ? '' :
+    careField('water', 'Arrosage')+
+    careField('feed', 'Engrais')+
+    '<div class="field-group"><span class="overline">Rempotage</span>'+
+      '<div class="repeat-n"><input class="field" type="number" min="1" inputmode="numeric" value="'+d.repot.months+'" onchange="setPRepotMonths(this.value)"><span>mois</span></div>'+
+    '</div>';
   return '<p class="sheet-title">'+(isNew ? 'Nouvelle plante' : 'Modifier la plante')+'</p>'+
     photoBlock+
     '<div class="field-group">'+
@@ -278,12 +332,9 @@ function plantSheetHtml(){
       '<select class="field field-full" onchange="setPSpecies(this.value)">'+speciesOptionsHtml(d.species)+'</select>'+
     '</div>'+
     '<div class="field-group"><span class="overline">Pièce</span><div class="chips">'+roomChips+'</div></div>'+
-    careField('water', 'Arrosage')+
-    careField('feed', 'Engrais')+
-    '<div class="field-group"><span class="overline">Rempotage</span>'+
-      '<div class="repeat-n"><input class="field" type="number" min="1" inputmode="numeric" value="'+d.repot.months+'" onchange="setPRepotMonths(this.value)"><span>mois</span></div>'+
-    '</div>'+
     soinsBlock+
+    '<button class="btn quiet btn-full more-toggle" onclick="togglePMore()">'+(d._more?'Moins de réglages':'Plus de réglages')+'</button>'+
+    settingsBlock+
     '<div class="field-group">'+
       '<textarea class="field area field-full" placeholder="Notes" autocapitalize="sentences" oninput="_pSheet.notes=this.value">'+esc(d.notes)+'</textarea>'+
     '</div>'+

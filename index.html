@@ -313,6 +313,16 @@ svg{display:block;}
   font-size:14.5px; font-weight:600; text-align:left;
 }
 
+/* ==========================================================================
+   Lot V2-5 — Maison & plantes v2 (ROADMAP-V2.md §3.7, audits A4/B1/B2/B4).
+   Trois des cinq points du lot n'ajoutent aucune règle ici : la légende
+   tournée vers l'action (B2) et la jauge qui redevient discriminante (B1)
+   sont du contenu et du calcul (freshCue()/rawFreshness(), js/maison.js et
+   js/ui.js), et la fiche plante allégée (point 6) réutilise .more-toggle du
+   Lot V2-4 tel quel. Restent .row-act (le bouton d'action, point 1) et
+   .room-count (remplace la jauge agrégée de pièce, point 4).
+   ========================================================================== */
+
 /* ---------- Ligne d'entretien : jauge de fraîcheur posée À DROITE ----------
    Disposition de la maquette, sur Aujourd'hui comme sur Maison. Remplace les
    jauges pleine largeur sous le titre posées au Lot 4. */
@@ -323,17 +333,26 @@ svg{display:block;}
    à des tâches de 17 px, il s'allège. */
 .room-list .row-care .row-title{font-weight:500;}
 
-.gauge-side{flex:none; width:110px;}                   /* jauge seule (Aujourd'hui) */
-.gauge-cell{flex:none; width:110px; text-align:right;} /* jauge + légende (Maison) */
+.gauge-side{flex:none; width:110px;}                   /* jauge seule, sans légende (Aujourd'hui ET Maison, Lot V2-5) */
+.gauge-cell{flex:none; width:110px; text-align:right;} /* jauge + légende (fiche plante) */
 .gauge-cell .gauge{width:100%;}
-.gauge-cap{font-size:12px; color:var(--ink2); margin-top:4px;}
 
-/* En-tête de pièce (Maison) : nom à gauche, jauge agrégée à droite, un filet
-   dessous. La jauge agrégée est plus large que celles des lignes — c'est la
-   seule différence de largeur qui porte un sens. */
+/* Bouton d'action à droite d'une ligne d'entretien/de soin (« Fait »,
+   « Arrosé »…, Lot V2-5 point 1) : du texte --act, comme .more/.group-toggle
+   — le vert dit déjà « un doigt peut agir ici », inutile d'ajouter un fond. */
+.row-act{
+  flex:none; min-height:44px; padding:0 10px; margin:-10px -8px -10px 0;
+  background:none; border:0; border-radius:var(--r-btn);
+  color:var(--act); font-size:14.5px; font-weight:700; white-space:nowrap;
+}
+
+/* En-tête de pièce (Maison) : nom à gauche, un compte à droite, un filet
+   dessous. Remplace la jauge agrégée du Lot 5 (audit B4, Lot V2-5) : minimum
+   de ses éléments, elle était rouge dès qu'un seul était dû et ne disait
+   jamais rien que la première ligne triée en dessous ne disait déjà. */
 .room-head{display:flex; align-items:center; gap:var(--s3); padding-bottom:10px; border-bottom:1px solid var(--line);}
 .room-head .card-title{flex:1; margin:0;}
-.room-head .gauge-cell{width:120px;}
+.room-head .room-count{flex:none; font-size:13px; font-weight:600; color:var(--ink2);}
 
 /* ---------- Feuilles modales ---------- */
 .sheet-bg{

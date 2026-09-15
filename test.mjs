@@ -344,6 +344,58 @@ call('Maison — entretien créé, visible en Maison, absent des tâches ouverte
   if(t.doneAt <= before) throw new Error('tapMaisonItem devrait rafraîchir doneAt');
 });
 
+// 6 bis bis) Maison v2 (Lot V2-5, audits A4/B2/B4/C4) : un bouton d'action
+// explicite (annulable) à droite, le reste de la ligne ouvre le détail
+// (taskSheet(), qui édite ET supprime — balayage, comme sur Tâches), la
+// légende dit ce qu'il faut faire, l'enregistrement rafraîchit Maison.
+call('Maison — bouton « Fait » annulable, détail via taskSheet(), rafraîchissement (Lot V2-5)', () => {
+  win.go('maison');
+  const t = win.stamp({
+    title: 'Nettoyer la hotte', notes: '', cat: 'entretien', room: 'cuisine', bucket: 'anytime',
+    start: null, due: null, evening: false, prio: 0, effort: 2,
+    repeat: {kind: 'day', n: 30, days: [], from: 'done'},
+    doneAt: Date.now() - 40 * 86400000, history: ['2026-01-01'], postponed: 0, touchedAt: Date.now()
+  });
+  S.tasks.push(t);
+  win.go('maison');
+  const html = win.document.getElementById('s-maison').innerHTML;
+  if(!new RegExp("taskSheet\\('" + t.id + "'\\)").test(html))
+    throw new Error('le reste de la ligne devrait ouvrir le détail via taskSheet(), pas compléter directement');
+  if(!new RegExp("data-swipe-left=\"delTask\\('" + t.id + "'\\)\"").test(html))
+    throw new Error('un entretien devrait rester supprimable (balayage vers delTask(), point 5/C4)');
+  if(!/Dans \d+ (j|semaines?)|>À faire</.test(html))
+    throw new Error('la légende devrait être tournée vers l’action (« Dans N j »/« À faire »), pas « il y a N jours »');
+
+  // Bouton « Fait » : immédiat, annulable — restaure doneAt ET history (point 1).
+  const doneAtAvant = t.doneAt, histAvant = t.history.length;
+  win.tapMaisonItem(t.id);
+  if(t.doneAt <= doneAtAvant) throw new Error('le bouton « Fait » devrait rafraîchir doneAt');
+  if(t.history.length !== histAvant + 1) throw new Error('le bouton « Fait » devrait historiser la réalisation (completeTask())');
+  if(!/Annuler/.test(win.document.getElementById('toast').textContent))
+    throw new Error('le bouton « Fait » devrait offrir « Annuler » (undoable())');
+  win._runToastAct();
+  if(t.doneAt !== doneAtAvant) throw new Error('annuler doit restituer le doneAt d’avant');
+  if(t.history.length !== histAvant) throw new Error('annuler doit retirer l’entrée ajoutée à history par completeTask()');
+
+  // Éditer depuis Maison doit rafraîchir Maison, jamais Tâches en dur (point 5).
+  win.taskSheet(t.id);
+  const calls = [];
+  const origMaison = win.renderMaison, origTasks = win.renderTasks;
+  win.renderMaison = () => { calls.push('maison'); origMaison(); };
+  win.renderTasks = () => { calls.push('tasks'); origTasks(); };
+  try{
+    win.saveTaskSheet();
+    if(calls.indexOf('maison') === -1)
+      throw new Error('enregistrer une fiche ouverte depuis Maison devrait rafraîchir Maison (rerender())');
+    if(calls.indexOf('tasks') !== -1)
+      throw new Error('enregistrer une fiche ouverte depuis Maison ne devrait pas rafraîchir Tâches');
+  } finally {
+    win.renderMaison = origMaison;
+    win.renderTasks = origTasks;
+  }
+  t.deletedAt = Date.now(); // tombstone : ne pollue pas les scénarios suivants
+});
+
 // 6 ter) Écran « Aujourd'hui » (Lot V1-5) : l'algorithme de la roadmap §6. C'est
 // l'écran qu'il est cher de rater, donc la répartition des blocs est testée
 // directement sur todayBuckets(), pas seulement par ricochet via le rendu.
@@ -810,6 +862,29 @@ call('Maison — les soins de plante rejoignent la vue par pièce, à côté de 
   if(!html.includes('Ficus du salon (arrosage)'))
     throw new Error('le soin d’arrosage du Ficus devrait apparaître dans la vue Maison');
   if(!/plantSheet\('/.test(html)) throw new Error('un tap sur une plante devrait ouvrir sa fiche (plantSheet), pas la compléter directement');
+  // Bouton d'action (point 1) : « Arrosé », annulable, restaure lastAt ET history.
+  const p = S.plants.find(x => x.id === plantId);
+  const lastAtAvant = p.care.water.lastAt, histAvant = (p.care.water.history || []).length;
+  win.waterPlantAction(p.id);
+  if(p.care.water.lastAt <= lastAtAvant) throw new Error('« Arrosé » depuis Maison devrait rafraîchir lastAt');
+  if(p.care.water.history.length !== histAvant + 1) throw new Error('« Arrosé » devrait historiser l’arrosage');
+  if(!/Annuler/.test(win.document.getElementById('toast').textContent))
+    throw new Error('« Arrosé » devrait être annulable (point 1, Lot V2-5)');
+  win._runToastAct();
+  if(p.care.water.lastAt !== lastAtAvant) throw new Error('annuler doit restituer le lastAt d’avant');
+  if(p.care.water.history.length !== histAvant) throw new Error('annuler doit retirer l’entrée ajoutée à history');
+});
+
+// Point 2 (audit B2) : la légende d'un soin suspendu (cold:0) n'affiche
+// toujours rien, puisque le soin lui-même n'apparaît nulle part (getPlant-
+// CareItems() l'exclut avant même d'atteindre la légende ou la jauge).
+call('Maison — un soin suspendu (cold:0) n’affiche aucune légende, aucune ligne (Lot V2-5)', () => {
+  S.settings.coldFrom = 1; S.settings.coldTo = 12; // saison froide forcée : l’engrais (cold:0) se suspend
+  win.go('maison');
+  const html = win.document.getElementById('s-maison').innerHTML;
+  S.settings.coldFrom = 10; S.settings.coldTo = 2; // restitue le réglage par défaut des scénarios suivants
+  if(html.includes('Ficus du salon (engrais)'))
+    throw new Error('un soin suspendu (cold:0) ne devrait apparaître nulle part dans Maison, légende comprise');
 });
 
 call('Aujourd’hui — un soin de plante vraiment dû rejoint le bloc du jour, jamais le bloc Entretien', () => {
@@ -1291,8 +1366,12 @@ call('Maison — célébration sobre à la première réalisation d’un entreti
     win.tapMaisonItem(t.id);
     if(calls.length !== 1 || !/Entretien annuel réalisé pour la première fois/.test(calls[0]))
       throw new Error('la première réalisation d’un entretien annuel devrait fêter l’occasion sobrement, obtenu : ' + JSON.stringify(calls));
+    // Depuis le Lot V2-5, chaque « Fait » est annulable (undoable() → un
+    // second appel à toast()) : la deuxième réalisation produit donc bien un
+    // toast, juste pas une deuxième célébration.
     win.tapMaisonItem(t.id); // deuxième réalisation : ne doit plus jamais se reproduire
-    if(calls.length !== 1) throw new Error('la célébration ne doit avoir lieu qu’une seule fois, pas à chaque réalisation');
+    const celebrations = calls.filter(m => /Entretien annuel réalisé pour la première fois/.test(m));
+    if(celebrations.length !== 1) throw new Error('la célébration ne doit avoir lieu qu’une seule fois, pas à chaque réalisation');
   } finally {
     win.toast = origToast;
     t.deletedAt = Date.now(); // tombstone : ne pollue pas les scénarios suivants
@@ -1379,8 +1458,11 @@ call('rowAttrs() — appliqué aux lignes cliquables de Aujourd’hui, Tâches, 
     throw new Error('Tâches — les .row-main cliquables devraient porter role="button"/tabindex="0"');
   win.go('maison');
   const maisonHtml = win.document.getElementById('s-maison').innerHTML;
-  if(maisonHtml.includes('class="row row-care"') && !/class="row row-care" role="button" tabindex="0"/.test(maisonHtml))
-    throw new Error('Maison — les lignes d’entretien/soin cliquables devraient porter role="button"/tabindex="0"');
+  // Depuis le Lot V2-5, le corps de la ligne (row-main) ouvre le détail — le
+  // bouton d'action et la jauge, hors de row-main, ne le sont plus : même
+  // convention que sur les trois autres écrans ci-dessus.
+  if(maisonHtml.includes('class="row row-care"') && !/class="row-main" role="button" tabindex="0"/.test(maisonHtml))
+    throw new Error('Maison — les .row-main d’entretien/soin cliquables devraient porter role="button"/tabindex="0"');
   win.go('shopping');
   win.addShoppingItem('Test rowAttrs');
   win.go('shopping');

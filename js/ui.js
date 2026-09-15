@@ -166,18 +166,41 @@ function emptyState(titre, sous){
 /* ---------- Jauge de fraîcheur : la seule couleur calculée de l'app ----------
    f ∈ [0,1] : 1 = frais, 0 = à faire. Le remplissage glisse du vert vers
    l'argile à l'approche de « à faire ». Les quotas d'habitudes n'utilisent
-   JAMAIS cette rampe : ils gardent --g-hab (classe .gauge-fill.hab). */
+   JAMAIS cette rampe : ils gardent --g-hab (classe .gauge-fill.hab).
+   Depuis le Lot V2-5, f peut aussi être négatif (rawFreshness() ci-dessous,
+   audit B1) : la formule sature simplement au maximum d'argile, ce qui est
+   déjà le comportement voulu pour « très en retard ». */
 function gaugeColor(f){
   const p = f >= 0.7 ? 0 : Math.min(100, Math.round((0.7 - f) * 150));
   return p === 0 ? 'var(--g-ok)' : 'color-mix(in oklab, var(--g-low) '+p+'%, var(--g-ok))';
 }
 
-// Largeur du remplissage. Plancher à 4 % : à zéro, une jauge de fraîcheur doit
-// se lire « au bout », pas « absente » — une pilule entièrement vide passe pour
-// une donnée manquante. Réservé à la fraîcheur : un quota d'habitude à zéro
-// (Lot 10) doit bien afficher zéro.
+// Largeur du remplissage. Pour f ≥ 0, plancher à 4 % : à zéro, une jauge de
+// fraîcheur doit se lire « au bout », pas « absente » — une pilule entièrement
+// vide passe pour une donnée manquante. Réservé à la fraîcheur : un quota
+// d'habitude à zéro (Lot 10) doit bien afficher zéro.
+// Pour f < 0 (Lot V2-5, audit B1) : freshness() (js/recur.js) clampe
+// volontairement à 0 côté domaine — jamais de jauge « négative » dans un
+// calcul métier — mais ça écrasait toute distinction à l'écran entre « dû
+// depuis 1 jour » et « dû depuis 30 jours » : trois entretiens en retard
+// affichaient le même pixel. rawFreshness() ci-dessous ne clampe pas : la
+// largeur continue alors de décroître sous le plancher, vers une asymptote à
+// 1 % — jamais 0, pour la même raison que le plancher existe déjà.
 function gaugeWidth(f){
-  return Math.max(4, Math.round(f * 100)) + '%';
+  if(f >= 0) return Math.max(4, Math.round(f * 100)) + '%';
+  return Math.max(1, Math.round(4 / (1 - f))) + '%';
+}
+
+// Fraction de fraîcheur NON bornée à 0 (Lot V2-5, audit B1), pour l'affichage
+// seulement : même calcul que freshness() (js/recur.js) mais sans son
+// clampage. Ce n'est pas dupliquer le moteur — freshness() reste l'unique
+// source de vérité pour tout calcul métier (échéances, seuils) — juste ne pas
+// hériter d'un clampage qui n'a de sens que pour le domaine, pas pour dessiner
+// une jauge qui doit rester lisible degré par degré de retard.
+function rawFreshness(doneAt, days){
+  if(!days) return doneAt ? 1 : 0;
+  if(!doneAt) return 0;
+  return 1 - (Date.now() - doneAt) / (days*86400000);
 }
 
 /* ---------- Toast : carte posée, une seule action facultative ---------- */
