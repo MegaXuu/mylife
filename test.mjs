@@ -1132,6 +1132,50 @@ call('Habitudes — fiche : création via l’UI, casse posée par cap(), tombst
   if(!S.habits.some(x => x.id === h.id)) throw new Error('l’habitude supprimée doit rester dans le tableau (tombstone)');
 });
 
+// Lot V2-7 (audit B6) — habitCalendarHtml() est appelée directement, comme
+// une fonction pure de rendu, en substituant todayKey() pour deux mois aux
+// formes très différentes (28 jours sans jour de tête, 31 jours avec) :
+// la grille doit toujours compter 42 cases (6 semaines), jamais varier.
+habitScenario('Habitudes — calendrier : hauteur constante (42 cases) quel que soit le mois (audit B6)', () => {
+  const h = win.stamp({name: 'Lecture', unit: 'pages', target: 20, sched: {kind: 'days', days: [1,2,3,4,5,6,7]}, sort: 0});
+  S.habits.push(h);
+  const origTodayKey = win.todayKey;
+  const counts = [];
+  try{
+    ['2027-02-01', '2028-10-01'].forEach(k => {
+      win.todayKey = () => k;
+      const div = win.document.createElement('div');
+      div.innerHTML = win.habitCalendarHtml(h);
+      counts.push(div.querySelectorAll('.hab-day').length);
+    });
+  } finally { win.todayKey = origTodayKey; }
+  if(counts[0] !== 42 || counts[1] !== 42)
+    throw new Error('le calendrier devrait toujours compter 42 cases, obtenu ' + counts.join(' et '));
+});
+
+// Lot V2-7 (audit B8) — le pas adapté à l'objectif n'est pas réimplémenté
+// pour l'écran Habitudes : c'est la même ligne (habitRowHtml) que le bloc
+// d'Aujourd'hui, simplement sans répéter le titre déjà posé par la carte.
+habitScenario('Habitudes — écran go(\'habits\') : même geste de saisie que le bloc d’Aujourd’hui (Lot V2-7)', () => {
+  const h = win.stamp({name: 'Marche', unit: 'min', target: 30, sched: {kind: 'days', days: [1,2,3,4,5,6,7]}, sort: 0});
+  S.habits.push(h);
+  win.go('habits');
+  let card = [...win.document.querySelectorAll('#s-habits .card')].find(c => /Marche/.test(c.textContent));
+  if(!card) throw new Error('la carte de l’habitude devrait être rendue');
+  if(card.querySelectorAll('.card-title').length !== 1 || card.querySelectorAll('.row-title').length !== 0)
+    throw new Error('le nom ne devrait vivre qu’une fois, dans l’en-tête de la carte — pas répété par la ligne réutilisée');
+  const plus = card.querySelector('.hab-ctrl .step.num');
+  if(!plus || plus.textContent !== '+10')
+    throw new Error('le pas devrait suivre l’objectif ici aussi (30 min → +10), obtenu ' + (plus && plus.textContent));
+  if(!card.querySelector('.hab-ctrl .step.wide'))
+    throw new Error('« Fait » devrait être posé ici aussi, comme sur Aujourd’hui');
+  win.stepHabit(h.id, 1);
+  win.go('habits');
+  card = [...win.document.querySelectorAll('#s-habits .card')].find(c => /Marche/.test(c.textContent));
+  if(!/10 \/ 30/.test(card.textContent))
+    throw new Error('la saisie sur l’écran Habitudes devrait écrire dans le même journal que celle d’Aujourd’hui, obtenu : ' + card.textContent.trim());
+});
+
 // 6 septies) Courses (Lot V1-9, js/shopping.js) : classement automatique par
 // rayon (guessRayon(), pure), fréquents, correction mémorisée, mode magasin
 // et intégration au bloc 5 d'« Aujourd'hui ». Chaque scénario part d'une
@@ -1686,7 +1730,9 @@ if(fails.length){
               '  vidage en tombstone, ordre des rayons, intégration Aujourd’hui), Courses v2\n' +
               '  V2-6 (liste continue sans carte par rayon, balayage supprimer/cocher\n' +
               '  annulable, rayon entièrement coché et progression globale signalés,\n' +
-              '  dictionnaire « pâtes » corrigé), revue\n' +
+              '  dictionnaire « pâtes » corrigé), Habitudes v2 V2-7 (calendrier à hauteur\n' +
+              '  constante quel que soit le mois, même geste de saisie sur l’écran Habitudes\n' +
+              '  et le bloc d’Aujourd’hui), revue\n' +
               '  hebdomadaire (candidats, déclenchement, flux complet, lastReview),\n' +
               '  célébrations sobres (record de série, entretien annuel), Réglages (bienvenue\n' +
               '  au premier lancement, thème, export/import validé avant écriture,\n' +

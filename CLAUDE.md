@@ -174,6 +174,14 @@ uniquement des déclarations.
   `.card-title` pour son texte, ne vit plus dans `.room-head`, resté propre à Maison). Aucune classe
   nouvelle pour le balayage des lignes de courses : `.row[data-swipe-left]`/`.swipe-content`/
   `.swipe-bg` du Lot V2-1 suffisaient, comme au Lot V2-4.
+  Puis le bloc **Lot V2-7** : `.hab-cal-wrap/.hab-cal-month/.hab-cal-head/.hab-cal-dow` (nom du mois,
+  en-tête « L M M J V S D » — le calendrier lui-même, `.hab-cal`/`.hab-day`, reste défini avec le
+  reste du Lot V1-8, seulement complété d'un `display:flex` pour centrer le numéro désormais visible
+  dans chaque case, et d'un état `.hab-day.future` distinct de `.blank`) et `.hab-plan`/`.hab-stats`/
+  `.hab-stat` (méta éclatée en deux blocs — planification/objectif d'un côté, Série/Record/30 jours
+  en trois colonnes égales de l'autre — remplace l'usage de `.sheet-msg` sur cet écran). Aucune
+  classe nouvelle pour la saisie du jour posée sur l'écran Habitudes : `.hab-ctrl`/`.step`/`.skip`
+  du Lot V1-8/V2-3 suffisaient, `habitRowHtml(h, {title:false})` y est rejouée telle quelle.
   Au-delà de **900 px** : colonne centrée plafonnée à 560 px (desktop V2).
 - `js/state.js` — **socle**, aucun rendu DOM : `APP_VERSION`, IndexedDB (`openDb`/`idbGet`/`idbSet`,
   + `idbPutPhoto`/`idbGetPhoto`/`idbDelPhoto`/`idbClearPhotos` — ce dernier posé au Lot 11 pour la
@@ -323,6 +331,21 @@ uniquement des déclarations.
   ce serait un « record » systématique). Appelé depuis `stepHabit()` et `reachHabit()`, jamais
   `skipHabit()` (un jour sauté ne peut pas battre un record). Depuis le Lot V2-3 il **renvoie** s'il
   a parlé, pour que `reachHabit()` n'empile pas son toast d'annulation par-dessus celui du record.
+  **Refondu au Lot V2-7** (audits B5/B6/B8) : `habitCalendarHtml()` pose désormais le nom du mois,
+  l'en-tête des sept jours et un numéro dans chaque case, et fige toujours `HAB_CAL_CELLS` (42, 6
+  semaines) cases — les cases avant le 1er et après le dernier jour du mois restent vides, la carte
+  ne bouge donc plus ni du 1er au 31 ni d'un mois à l'autre. `habitCardHtml()` éclate l'ancienne
+  phrase de trois lignes en deux blocs : `habitPlanTxt()` (planification + objectif, une ligne) et
+  `habitStatsHtml()` (Série/Record/30 jours, trois colonnes avec leur libellé court) — mêmes trois
+  chiffres qu'avant, aucun score de plus. Chaque carte pose enfin la même ligne de saisie que le
+  bloc d'Aujourd'hui (`habitRowHtml(h, {title:false})` — le paramètre ne fait que taire le titre,
+  déjà posé par l'en-tête de la carte : la décision « ligne de contrôles ou ligne compacte » et les
+  boutons eux-mêmes restent la même fonction, jamais réimplémentés pour cet écran). Enfin,
+  `habitBestStreak()` cherche désormais depuis le plus tôt de `createdAt` et du premier jour déjà
+  présent dans `habitLog` (`habitEarliestLogDay()`) : un import de données peut porter des jours
+  antérieurs à la création de l'habitude, que `habitStreak()` (non bornée par `createdAt`) prenait
+  déjà en compte sans que le record ne les voie jamais — cas rare, corrigé en quelques lignes plutôt
+  que noté en dette.
 - `js/shopping.js` — écran Courses, **rempli au Lot 9**. Classement automatique par rayon
   (`guessRayon()`, fonction pure testée isolément comme `parseQuick()` : normalise le libellé
   (`normalizeLabel()`), cherche par groupes de mots consécutifs — du plus long au plus court, pour
@@ -580,7 +603,13 @@ uniquement des déclarations.
   (`taskSheet()`/`plantSheet()`, jamais une complétion directe) et un entretien reste supprimable
   (`data-swipe-left` vers `delTask()`) ; la légende d'un soin suspendu (`cold:0`) n'affiche toujours
   rien, puisque le soin lui-même n'atteint jamais le rendu ; enregistrer une fiche tâche ouverte
-  depuis Maison rafraîchit bien Maison (`rerender()`), jamais Tâches en dur.
+  depuis Maison rafraîchit bien Maison (`rerender()`), jamais Tâches en dur. Depuis le Lot V2-7,
+  **Habitudes v2** : `habitCalendarHtml()` attaquée directement pour deux mois de formes très
+  différentes (28 jours sans jour de tête, 31 jours avec) — toujours 42 cases, jamais une de plus ou
+  de moins ; et l'écran `go('habits')` vérifié en conditions réelles de rendu (pas seulement le bloc
+  d'Aujourd'hui) : le titre ne vit qu'une fois (en-tête de carte), le pas d'ajout y suit bien
+  l'objectif (« +10 » pour 30 min), et une saisie posée sur cet écran se relit bien depuis le même
+  journal que celle du bloc d'Aujourd'hui.
 - **À chaque release** : incrémenter `CACHE` (`sw.js`) **et** `APP_VERSION` (`js/state.js`), même
   numéro (`mylife-b1-N` / `'Bêta 1.N'`).
 
@@ -798,6 +827,27 @@ de `CLAUDE.md`/`CONVENTIONS.md` avec l'état final de la V2 est prévue au Lot V
   désormais les deux mots, `pates fraiches`. Revue du reste du dictionnaire à la recherche du même
   travers (un mot générique ayant perdu son sens courant au profit d'un cas particulier) : aucun
   autre cas trouvé, le reste distingue déjà correctement le générique de ses variantes.
+- **V2-7 — Habitudes v2** (Bêta 2.7) : ✅ Fait. `js/habits.js` et son CSS seuls touchés
+  (ROADMAP-V2.md §2, audits B5/B6/B8). **Calendrier lisible** (point 1, audit B6) : nom du mois,
+  en-tête « L M M J V S D », numéro dans chaque case, et toujours 42 cases (`HAB_CAL_CELLS`, 6
+  semaines — le maximum qu'un mois puisse jamais demander) : la carte ne bouge plus ni du 1er au 31,
+  ni d'un mois à l'autre. Toujours **quatre** traitements — fait / partiel / sauté / inactif — pas un
+  cinquième : un jour à venir (`future`) reste de la chronologie, pas un jugement. **Méta éclatée**
+  (point 2, audit B5) : `habitPlanTxt()` (planification + objectif) et `habitStatsHtml()` (Série /
+  Record / 30 jours, trois colonnes avec leur libellé court) remplacent la phrase de trois lignes —
+  mêmes trois chiffres qu'avant, aucun score de plus. **Saisie par pas adapté** (point 3, audit B8) :
+  le pas adapté à l'objectif et le bouton « Fait » existaient déjà depuis le Lot V2-3 pour le bloc
+  d'Aujourd'hui ; ce lot les pose aussi sur l'écran Habitudes, **en rejouant la même fonction**
+  (`habitRowHtml(h, {title:false})`, le paramètre ne fait que taire le titre déjà posé par l'en-tête
+  de la carte) plutôt que de réimplémenter la décision « ligne de contrôles ou ligne compacte ».
+  **Écran vérifié** (point 4) : état vide déjà utile, bouton d'ajout déjà accessible sans défiler à
+  zéro habitude — rien à corriger. Balayage écarté sciemment : les actions (Sauter/±/Fait) sont déjà
+  des taps directs et immédiats, contrairement à Tâches/Maison/Courses où le balayage économise un
+  aller-retour vers la fiche ; l'ajouter ici aurait doublé un geste déjà à un tap, pas simplifié un
+  chemin. **Note du prompt** (point 5) : `habitBestStreak()` corrigée — elle cherchait depuis
+  `createdAt` seul, alors que `habitStreak()` (la série en cours) ne l'est pas ; un import de données
+  portant des jours de journal antérieurs à la création pouvait donc afficher un record inférieur à
+  la série en cours. Corrigé en quelques lignes (`habitEarliestLogDay()`) plutôt que noté en dette.
 
 ## Cycle V1 clos — dettes sciemment laissées pour la V2
 Le Lot 12 a fermé le cycle V1. Rien ci-dessous n'est un oubli : chaque point a été examiné et

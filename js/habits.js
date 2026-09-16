@@ -23,6 +23,14 @@
    appelé depuis js/today.js — today.js est plus tôt dans l'ordre de
    chargement mais ce n'est qu'une déclaration, comme getPlantCareItems()) et
    l'écran secondaire go('habits') : définitions, séries, calendrier mensuel.
+
+   Depuis le Lot V2-7 (audit B5/B6/B8), l'écran go('habits') pose la même
+   ligne de saisie du jour que le bloc d'Aujourd'hui (habitRowHtml(h,
+   {title:false}) — jamais une deuxième implémentation du geste), un
+   calendrier lisible (mois, en-tête de jours, numéros, hauteur figée à 6
+   semaines quel que soit le mois — habitCalendarHtml()) et une méta éclatée
+   en planification/objectif (habitPlanTxt()) + trois chiffres de régularité
+   nommés (habitStatsHtml()) plutôt qu'une phrase de trois lignes.
    ========================================================================== */
 
 const UNIT_ORDER = ['', 'min', 'fois', 'L', 'pages'];
@@ -121,12 +129,29 @@ function habitStreak(h, ref){
   return h.sched.kind === 'week' ? habitStreakWeeks(h, ref) : habitStreakDays(h, ref);
 }
 
+// Le journal peut porter des jours antérieurs à createdAt (import de
+// données, cas rare) : sans ce garde-fou, habitBestStreak() commencerait sa
+// simulation trop tard et pourrait afficher un record inférieur à la série
+// en cours, que habitStreak() (lui non borné par createdAt) voit déjà.
+function habitEarliestLogDay(h){
+  let earliest = null;
+  for(const k in S.habitLog){
+    if(S.habitLog[k][h.id] === undefined) continue;
+    if(earliest === null || k < earliest) earliest = k;
+  }
+  return earliest;
+}
+
 // Record : plus longue série jamais atteinte, simulée en avançant depuis la
-// création de l'habitude. Bornée (10 ans) pour rester un calcul, pas une boucle infinie.
+// création de l'habitude (ou depuis le premier jour du journal si plus tôt).
+// Bornée (10 ans) pour rester un calcul, pas une boucle infinie.
 function habitBestStreak(h){
   const today = todayKey();
+  const createdKey = dayKey(new Date(h.createdAt));
+  const earliestLog = habitEarliestLogDay(h);
+  const startKey = earliestLog && earliestLog < createdKey ? earliestLog : createdKey;
   if(h.sched.kind === 'week'){
-    let ws = habitWeekStart(dayKey(new Date(h.createdAt)));
+    let ws = habitWeekStart(startKey);
     const endWs = habitWeekStart(today);
     let best = 0, cur = 0;
     for(let guard=0; guard<520; guard++){
@@ -137,7 +162,7 @@ function habitBestStreak(h){
     }
     return best;
   }
-  let k = dayKey(new Date(h.createdAt)), best = 0, cur = 0;
+  let k = startKey, best = 0, cur = 0;
   for(let guard=0; guard<3660; guard++){
     if(habitActiveOn(h, k) && !habitSkippedOn(h, k)){
       if(habitReachedOn(h, k)){ cur++; best = Math.max(best, cur); }
@@ -282,14 +307,21 @@ function habitButtonsHtml(h, k, soft){
 /* Une habitude chiffrée encore à faire prend une ligne de contrôles (~122 px) ;
    dès qu'elle est atteinte ou sautée, elle retombe à la ligne compacte du Lot
    V1-8 (~70 px). La carte rétrécit donc à mesure que la journée avance — c'est
-   le remboursement de la densité que coûte la saisie en un geste. */
-function habitRowHtml(h){
+   le remboursement de la densité que coûte la saisie en un geste.
+
+   `opts.title` (vrai par défaut) : l'écran Habitudes (Lot V2-7) affiche déjà
+   le nom en en-tête de sa carte et n'a donc pas besoin de le répéter ici —
+   mais c'est la même ligne, avec le même geste de saisie, qui s'y affiche :
+   pas de deuxième fonction qui redécide « ctrl ou pas » pour ce même jour. */
+function habitRowHtml(h, opts){
+  const showTitle = !opts || opts.title !== false;
   const k = todayKey();
   const soft = habitRowSoft(h, k);
   const ctrl = (h.unit && !soft && !habitSkippedOn(h, k)) ? habitCtrlHtml(h, k) : '';
+  const title = showTitle ? '<div class="row-title">'+esc(h.name)+'</div>' : '';
   if(!ctrl){
     return '<li class="row'+(soft ? ' row-soft' : '')+'">'+
-      '<div class="row-main"><div class="row-title">'+esc(h.name)+'</div>'+
+      '<div class="row-main">'+title+
         '<div class="row-meta">'+habitMeta(h, k, false)+'</div>'+
       '</div>'+
       habitButtonsHtml(h, k, soft)+
@@ -297,7 +329,7 @@ function habitRowHtml(h){
   }
   return '<li class="row">'+
     '<div class="row-main">'+
-      '<div class="row-head"><div class="row-title">'+esc(h.name)+'</div>'+
+      '<div class="row-head">'+title+
         (habitValueOn(h, k) > 0 ? '' : '<button class="skip" onclick="skipHabit(\''+h.id+'\')">Sauter</button>')+
       '</div>'+
       '<div class="row-meta">'+habitMeta(h, k, true)+'</div>'+
@@ -311,7 +343,7 @@ function habitRowHtml(h){
 function todayHabitsCard(list, i, n){
   return '<div class="card t-habitudes">'+birdOnCard(i, n)+
     '<button class="habits-head" onclick="go(\'habits\')"><h2 class="card-title">Habitudes du jour</h2></button>'+
-    '<ul class="list">'+list.map(habitRowHtml).join('')+'</ul>'+
+    '<ul class="list">'+list.map(h=>habitRowHtml(h)).join('')+'</ul>'+
   '</div>';
 }
 
@@ -391,7 +423,9 @@ function schedTxt(sched){
 // fait / partiel / sauté / inactif (ROADMAP §6 bis) — mois courant. Exactement
 // quatre, pas cinq : un jour actif resté sans saisie n'est PAS un état à part
 // (« manqué ») — CONVENTIONS.md §3 proscrit tout ton culpabilisant, un jour
-// silencieux se lit comme « inactif », jamais comme un reproche.
+// silencieux se lit comme « inactif », jamais comme un reproche. Un jour à
+// venir (« future ») n'est pas un cinquième état non plus : ce n'est pas un
+// jugement sur la régularité, juste de la chronologie.
 function habitDayState(h, k, today){
   if(k > today) return 'future';
   if(habitSkippedOn(h, k)) return 'skip';
@@ -399,6 +433,17 @@ function habitDayState(h, k, today){
   if(habitActiveOn(h, k) && habitValueOn(h, k) > 0) return 'partial';
   return 'inactive';
 }
+
+/* Lot V2-7 (audit B6) : le calendrier d'origine n'avait ni nom de mois, ni
+   en-tête de jours, ni numéros — une grille de carrés muets — et sa hauteur
+   suivait le nombre de semaines du mois affiché. HAB_CAL_CELLS fige toujours
+   42 cases (6 semaines pleines, le maximum qu'un mois puisse jamais demander,
+   qu'il commence un lundi avec 31 jours ou tout autre cas) : la carte ne
+   bouge plus ni du 1er au 31, ni d'un mois à l'autre. Les cases avant le 1er
+   et après le dernier jour restent vides et sans numéro — elles n'appartiennent
+   pas au mois, ce n'est pas un cinquième état. */
+const HAB_DOW_LETTERS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+const HAB_CAL_CELLS = 42;
 function habitCalendarHtml(h){
   const today = todayKey();
   const d0 = new Date(today+'T00:00');
@@ -409,23 +454,49 @@ function habitCalendarHtml(h){
   for(let i=0;i<leadBlank;i++) cells += '<div class="hab-day blank" aria-hidden="true"></div>';
   for(let day=1; day<=daysInMonth; day++){
     const k = dayKey(new Date(y, m, day));
-    cells += '<div class="hab-day '+habitDayState(h, k, today)+'" title="'+day+'" aria-hidden="true"></div>';
+    cells += '<div class="hab-day '+habitDayState(h, k, today)+'" aria-hidden="true">'+day+'</div>';
   }
-  return '<div class="hab-cal">'+cells+'</div>';
+  for(let i=leadBlank+daysInMonth; i<HAB_CAL_CELLS; i++) cells += '<div class="hab-day blank" aria-hidden="true"></div>';
+  const head = HAB_DOW_LETTERS.map(l=>'<div class="hab-cal-dow" aria-hidden="true">'+l+'</div>').join('');
+  return '<div class="hab-cal-wrap">'+
+    '<p class="hab-cal-month">'+cap(NLP_MOIS[m])+' '+y+'</p>'+
+    '<div class="hab-cal-head">'+head+'</div>'+
+    '<div class="hab-cal">'+cells+'</div>'+
+  '</div>';
 }
 
-function habitCardHtml(h, i, n){
+/* Lot V2-7 (audit B5) : « Lun, Mar, Mer, Jeu, Ven, Sam, Dim · 2 L / jour ·
+   Série 4 j · Record 0 j · 0 % sur 30 jours » sur trois lignes, illisible.
+   La planification/objectif (habitPlanTxt) et les trois chiffres de
+   régularité (habitStatsHtml) sont désormais deux blocs distincts, chacun
+   avec des libellés courts — mêmes trois chiffres qu'avant, aucun nouveau
+   score ni rang (CONVENTIONS.md §3). */
+function habitPlanTxt(h){
+  const unitTxt = h.unit ? (h.target || 1) + ' ' + esc(h.unit) + ' / jour' : 'Coche simple';
+  return esc(schedTxt(h.sched)) + ' · ' + unitTxt;
+}
+function habitStatsHtml(h){
   const today = todayKey();
   const streakUnit = h.sched.kind === 'week' ? ' sem.' : ' j';
-  const unitTxt = h.unit ? (h.target || 1) + ' ' + esc(h.unit) + ' / jour' : 'Coche simple';
-  const msg = esc(schedTxt(h.sched)) + ' · ' + unitTxt + ' · Série ' + habitStreak(h, today) + streakUnit +
-    ' · Record ' + habitBestStreak(h) + streakUnit + ' · ' + habitRate30(h, today) + ' % sur 30 jours';
+  return '<div class="hab-stats">'+
+    '<div class="hab-stat"><b>'+habitStreak(h, today)+streakUnit+'</b><span>Série</span></div>'+
+    '<div class="hab-stat"><b>'+habitBestStreak(h)+streakUnit+'</b><span>Record</span></div>'+
+    '<div class="hab-stat"><b>'+habitRate30(h, today)+' %</b><span>30 jours</span></div>'+
+  '</div>';
+}
+
+// La ligne du jour (habitRowHtml, sans titre : celui de la carte suffit déjà)
+// pose ici exactement le même geste de saisie que le bloc d'Aujourd'hui —
+// jamais une deuxième implémentation du pas adapté ou du bouton « Fait ».
+function habitCardHtml(h, i, n){
   return '<div class="card">'+birdOnCard(i, n)+
     '<div class="room-head">'+
       '<h2 class="card-title">'+esc(h.name)+'</h2>'+
       '<button class="row-del" aria-label="Modifier l’habitude" onclick="habitSheet(\''+h.id+'\')">'+icon(IC_EDIT, 20)+'</button>'+
     '</div>'+
-    '<p class="sheet-msg">'+msg+'</p>'+
+    '<ul class="list">'+habitRowHtml(h, {title:false})+'</ul>'+
+    '<p class="hab-plan">'+habitPlanTxt(h)+'</p>'+
+    habitStatsHtml(h)+
     habitCalendarHtml(h)+
   '</div>';
 }

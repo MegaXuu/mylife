@@ -528,14 +528,21 @@ svg{display:block;}
 .habits-head .card-title{margin:0;}
 
 /* Calendrier mensuel de régularité (écran Habitudes) : quatre traitements
-   visuels distincts — fait / partiel / sauté / inactif. */
-.hab-cal{display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; margin-top:var(--s3);}
-.hab-day{aspect-ratio:1; border-radius:6px; background:var(--sunken);}
-.hab-day.blank,.hab-day.future{background:none;}
+   visuels distincts — fait / partiel / sauté / inactif. Le nom du mois,
+   l'en-tête des jours et les numéros dans chaque case sont posés au Lot V2-7,
+   voir plus bas (audit B6) — ce bloc ne garde que les couleurs des états. */
+.hab-cal{display:grid; grid-template-columns:repeat(7, 1fr); gap:4px;}
+.hab-day{
+  aspect-ratio:1; border-radius:6px; background:var(--sunken);
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:600; color:var(--ink);
+}
+.hab-day.blank{background:none;}
+.hab-day.future{background:none; color:var(--ink2); opacity:.4;}
 .hab-day.inactive{background:var(--sunken); opacity:.5;}
 .hab-day.partial{background:color-mix(in oklab, var(--g-hab) 45%, var(--sunken));}
-.hab-day.done{background:var(--g-hab);}
-.hab-day.skip{background:none; border:1.5px dashed var(--line);}
+.hab-day.done{background:var(--g-hab); color:var(--on); font-weight:700;}
+.hab-day.skip{background:none; border:1.5px dashed var(--line); color:var(--ink2);}
 
 /* ==========================================================================
    Lot V1-9 — courses. Le bouton d'Aujourd'hui reprend telle quelle
@@ -655,6 +662,33 @@ body.capture-open .app{padding-bottom:calc(158px + env(safe-area-inset-bottom));
    barre de saisie, un toast était donc caché derrière elle — et l'« Annuler »
    d'un cochage, inatteignable. Piloté par la classe que go() pose déjà. */
 body.capture-open .toast{bottom:calc(150px + env(safe-area-inset-bottom));}
+
+/* ==========================================================================
+   Lot V2-7 — Habitudes v2 (ROADMAP-V2.md §2, audits B5/B6/B8). js/habits.js
+   seul touché côté JS ; la saisie par pas adapté (.hab-ctrl, .step.num/.wide)
+   existait déjà depuis le Lot V2-3 et n'est pas reprise ici, seulement posée
+   sur l'écran Habitudes en plus du bloc d'Aujourd'hui (même geste, même CSS).
+   ========================================================================== */
+
+/* ---------- Calendrier lisible (audit B6) ----------
+   Nom du mois, en-tête de jours (L M M J V S D) et numéro dans chaque case —
+   .hab-cal et .hab-day restent définis avec le reste du Lot V1-8, plus haut ;
+   ce bloc n'ajoute que l'habillage autour de la grille. */
+.hab-cal-wrap{margin-top:var(--s3);}
+.hab-cal-month{font-size:var(--fs-low); font-weight:700; color:var(--ink); margin:0 0 var(--s2);}
+.hab-cal-head{display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; margin-bottom:4px;}
+.hab-cal-dow{text-align:center; font-size:12px; font-weight:600; color:var(--ink2);}
+
+/* ---------- Méta éclatée (audit B5) ----------
+   Planification + objectif d'un côté (une ligne neutre, comme .sheet-msg
+   qu'elle remplace ici) ; les trois chiffres de régularité de l'autre, en
+   colonnes égales avec leur libellé court — mêmes trois chiffres qu'avant
+   (Série/Record/30 jours), aucun score de plus. */
+.hab-plan{color:var(--ink2); margin:var(--s3) 0 0;}
+.hab-stats{display:grid; grid-template-columns:repeat(3, 1fr); gap:var(--s2); margin:var(--s3) 0;}
+.hab-stat{text-align:center;}
+.hab-stat b{display:block; font-size:var(--fs-body); font-weight:700; color:var(--ink);}
+.hab-stat span{display:block; font-size:12px; color:var(--ink2); margin-top:2px;}
 
 /* ==========================================================================
    Lot V2-4 — Tâches v2. Le balayage lui-même n'ajoute aucune règle : il
