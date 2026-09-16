@@ -4,6 +4,9 @@
    mode magasin (⑲), produits fréquents (⑳). Cet écran s'utilise debout, une
    main sur le caddie : chaque choix (gros libellés en mode magasin, coché =
    grisé en bas plutôt que disparu, un seul geste pour ajouter) sert ça.
+   Depuis le Lot V2-6, plus aucune carte par rayon : une liste continue dont
+   chaque en-tête de rayon reste collé en haut au défilement (.rayon-head,
+   CSS) — écart assumé vis-à-vis de la maquette Canopée (ROADMAP-V2.md §3.8).
    ========================================================================== */
 
 // RAYON_ORDER_DEFAULT (l'ordre par défaut) vit dans data/rayons.js, chargé
@@ -136,8 +139,14 @@ function setShopMode(store){
    Rendu
    ========================================================================== */
 
+// Balayage (Lot V2-6, point 3) : gauche supprime toujours (deleteShopItem(),
+// déjà annulable), droite cocher/décocher (toggleShopDone(), déjà réversible
+// par construction — recocher défait). Les deux gestes doublent des chemins
+// déjà là (le tap ouvre la fiche, la case coche) : aucun chemin exclusif.
 function shopRowHtml(it){
-  return '<li class="row'+(it.done ? ' done' : '')+'">'+
+  return '<li class="row'+(it.done ? ' done' : '')+'"'+
+      ' data-swipe-left="deleteShopItem(\''+it.id+'\')"'+
+      ' data-swipe-right="toggleShopDone(\''+it.id+'\')" data-swipe-right-label="'+(it.done ? 'Décocher' : 'Cocher')+'">'+
     '<button class="check'+(it.done ? ' on' : '')+'" role="checkbox" aria-checked="'+it.done+'" '+
       'aria-label="'+(it.done ? 'Décocher' : 'Marquer acheté')+'" onclick="toggleShopDone(\''+it.id+'\')"></button>'+
     '<div class="row-main"'+rowAttrs("shopItemSheet('"+it.id+"')")+'><div class="row-title">'+esc(it.label)+'</div></div>'+
@@ -145,20 +154,27 @@ function shopRowHtml(it){
   '</li>';
 }
 
-// Une carte par rayon, blanche (la maquette Canopée ne teinte pas les cartes
-// de Courses — seul le bouton d'Aujourd'hui porte --t-courses). Les articles
+// En-tête de rayon collant (Lot V2-6, point 1/2, audit B7) : remplace le
+// <div class="room-head"> posé à l'intérieur d'une carte — il n'y a plus de
+// carte, l'en-tête est un <li> de plus dans la liste continue, rendu sticky
+// par le CSS (.rayon-head). Un rayon entièrement coché se signale (point 2) ;
+// le reste à prendre ne s'affiche qu'en mode magasin, comme avant ce lot.
+function shopRayonHeadHtml(rayon, open, done){
+  const allDone = !open.length && !!done.length;
+  const right = allDone
+    ? '<span class="rayon-left done">Tout pris</span>'
+    : (_shopStore ? '<span class="rayon-left">'+open.length+(open.length > 1 ? ' restants' : ' restant')+'</span>' : '');
+  return '<li class="rayon-head"><h2 class="card-title">'+esc(RAYON_LABELS[rayon] || rayon)+'</h2>'+right+'</li>';
+}
+
+// Un rayon = un en-tête collant + ses lignes, à même la liste continue
+// (list-page, hors carte — comme le bloc du jour d'Aujourd'hui). Les articles
 // cochés restent dans leur rayon, poussés en bas (jamais retirés : on doit
 // pouvoir décocher une erreur).
-function shopRayonCard(rayon, items, i, n){
+function shopRayonSection(rayon, items){
   const open = items.filter(it => !it.done).sort((a, b) => (a.sort || 0) - (b.sort || 0));
   const done = items.filter(it => it.done).sort((a, b) => (a.sort || 0) - (b.sort || 0));
-  return '<div class="card">'+birdOnCard(i, n)+
-    '<div class="room-head">'+
-      '<h2 class="card-title">'+esc(RAYON_LABELS[rayon] || rayon)+'</h2>'+
-      (_shopStore ? '<span class="rayon-left">'+open.length+(open.length > 1 ? ' restants' : ' restant')+'</span>' : '')+
-    '</div>'+
-    '<ul class="list">'+open.map(shopRowHtml).join('')+done.map(shopRowHtml).join('')+'</ul>'+
-  '</div>';
+  return shopRayonHeadHtml(rayon, open, done)+open.map(shopRowHtml).join('')+done.map(shopRowHtml).join('');
 }
 
 function shopFrequentsHtml(){
@@ -178,16 +194,29 @@ function renderShopping(){
   const byRayon = {};
   items.forEach(it => { (byRayon[it.rayon] = byRayon[it.rayon] || []).push(it); });
   const rayons = order.filter(r => byRayon[r] && byRayon[r].length);
+  // Liste continue à en-têtes collés (Lot V2-6, §3.8, audit B7) : remplace les
+  // 8 cartes par rayon (2,3 écrans pour 14 articles, ~230 px pour un rayon à
+  // un seul produit) par un seul <ul>. Écart ASSUMÉ vis-à-vis de la maquette
+  // Canopée (ROADMAP-V2.md §3.8) — hors carte comme le bloc du jour
+  // d'Aujourd'hui (.list-page), donc plus de bird ici (même raison que
+  // js/tasks.js, qui ne pose déjà aucune carte).
   const body = rayons.length
-    ? '<div class="'+(_shopStore ? 'shop-store' : '')+'">'+
-        rayons.map((r, i) => shopRayonCard(r, byRayon[r], i, rayons.length)).join('')+
-      '</div>'
+    ? '<ul class="list list-page'+(_shopStore ? ' shop-store' : '')+'">'+
+        rayons.map(r => shopRayonSection(r, byRayon[r])).join('')+
+      '</ul>'
     : emptyState('Liste vide.', 'Ajoute ton premier article ci-dessous.');
+  // Progression globale (point 2) : lisible sans défiler puisque .shop-bar
+  // est collée en haut, comme les en-têtes de rayon en dessous d'elle.
+  const progress = (_shopStore && items.length)
+    ? '<span class="shop-progress">'+done.length+' / '+items.length+' pris</span>' : '';
   document.getElementById('s-shopping').innerHTML =
     screenHead(sur, 'Courses')+
-    '<div class="chips filter-chips">'+
-      '<button class="chip'+(!_shopStore ? ' on' : '')+'" onclick="setShopMode(false)">Liste</button>'+
-      '<button class="chip'+(_shopStore ? ' on' : '')+'" onclick="setShopMode(true)">Mode magasin</button>'+
+    '<div class="shop-bar">'+
+      '<div class="chips filter-chips">'+
+        '<button class="chip'+(!_shopStore ? ' on' : '')+'" onclick="setShopMode(false)">Liste</button>'+
+        '<button class="chip'+(_shopStore ? ' on' : '')+'" onclick="setShopMode(true)">Mode magasin</button>'+
+      '</div>'+
+      progress+
     '</div>'+
     body+
     '<div class="capture"><div class="addbar">'+
@@ -313,12 +342,12 @@ function deleteShopItem(id){
     touch(it);
     save();
     renderShopping();
-    toast('Article supprimé', {action:{label:'Annuler', fn:()=>{
+    undoable('Article supprimé', ()=>{
       it.deletedAt = null;
       touch(it);
       save();
       renderShopping();
-    }}});
+    });
   });
 }
 

@@ -1159,6 +1159,13 @@ call('Courses — guessRayon() : clé exacte, mot dans un libellé plus long, ca
   if(win.guessRayon('Truc bidule inconnu') !== null) throw new Error('un libellé absent du dictionnaire devrait rendre null (→ "autre" à l’ajout)');
 });
 
+call('Courses — dictionnaire : « Pâtes » bascule vers l’épicerie salée, « Pâtes fraîches » reste au frais (Lot V2-6, audit D5)', () => {
+  if(win.guessRayon('Pâtes') !== 'epicerie-salee')
+    throw new Error('« Pâtes » (usage courant : pâtes sèches) devrait tomber sur epicerie-salee, obtenu ' + win.guessRayon('Pâtes'));
+  if(win.guessRayon('Pâtes fraîches') !== 'frais')
+    throw new Error('« Pâtes fraîches » devrait rester sur frais, obtenu ' + win.guessRayon('Pâtes fraîches'));
+});
+
 shopScenario('Courses — addShoppingItem() : rayon deviné, discipline synchro-ready, tombe sur "autre" si inconnu', () => {
   const it = win.addShoppingItem('Yaourt nature');
   if(it.rayon !== 'cremerie') throw new Error('rayon attendu cremerie, obtenu ' + it.rayon);
@@ -1572,6 +1579,61 @@ scenario('Tâches — recherche et filtres n’apparaissent qu’au-delà du seu
     throw new Error('au-delà du seuil, la recherche devrait redevenir accessible');
 });
 
+// 6 terdecies) Courses v2 (Lot V2-6) : liste continue à en-têtes collés
+// (§3.8, audit B7) — plus de carte par rayon, un seul <ul> ; le balayage
+// (point 3) double la case et la fiche déjà là ; un rayon entièrement coché
+// et la progression globale se signalent (point 2). Le dictionnaire (point 4)
+// est couvert plus haut, juste après le test de guessRayon().
+shopScenario('Courses — liste continue : plus aucune carte par rayon (point 1, audit B7)', () => {
+  win.addShoppingItem('Lait'); // cremerie
+  win.addShoppingItem('Pomme'); // fruits-legumes
+  win.go('shopping');
+  const el = win.document.getElementById('s-shopping');
+  if(el.querySelectorAll('.card').length) throw new Error('Courses ne devrait plus poser aucune carte par rayon');
+  if(el.querySelectorAll('.rayon-head').length !== 2)
+    throw new Error('un en-tête collant par rayon attendu, obtenu ' + el.querySelectorAll('.rayon-head').length);
+});
+
+shopScenario('Courses — balayage : gauche supprime, droite coche/décoche (point 3)', () => {
+  const it = win.addShoppingItem('Yaourt nature');
+  win.go('shopping');
+  const html = win.document.getElementById('s-shopping').innerHTML;
+  if(!new RegExp('data-swipe-left="deleteShopItem\\(\'' + it.id + '\'\\)"').test(html))
+    throw new Error('la ligne devrait porter data-swipe-left vers deleteShopItem()');
+  if(!new RegExp('data-swipe-right="toggleShopDone\\(\'' + it.id + '\'\\)"').test(html))
+    throw new Error('la ligne devrait porter data-swipe-right vers toggleShopDone()');
+});
+
+shopScenario('Courses — la suppression déclenchée par balayage reste annulable (point 3)', () => {
+  const it = win.addShoppingItem('Article à supprimer');
+  win.deleteShopItem(it.id);
+  win._runConfirm();
+  if(!it.deletedAt) throw new Error('la suppression devrait être un tombstone, jamais un splice()');
+  if(!/Annuler/.test(win.document.getElementById('toast').textContent))
+    throw new Error('la suppression devrait offrir « Annuler »');
+  win._runToastAct();
+  if(it.deletedAt) throw new Error('annuler devrait restituer l’article');
+});
+
+shopScenario('Courses — un rayon entièrement coché se signale (point 2)', () => {
+  const it = win.addShoppingItem('Beurre doux'); // cremerie
+  win.toggleShopDone(it.id);
+  win.go('shopping');
+  const html = win.document.getElementById('s-shopping').innerHTML;
+  if(!/Tout pris/.test(html)) throw new Error('un rayon entièrement coché devrait se signaler (« Tout pris »)');
+});
+
+shopScenario('Courses — mode magasin : reste à prendre par rayon et progression globale lisible sans défiler (point 2)', () => {
+  win.addShoppingItem('Lait'); // cremerie
+  const it2 = win.addShoppingItem('Yaourt nature'); // cremerie
+  win.toggleShopDone(it2.id);
+  win.setShopMode(true);
+  const html = win.document.getElementById('s-shopping').innerHTML;
+  if(!/1 restant/.test(html)) throw new Error('le rayon devrait afficher son reste à prendre en mode magasin');
+  if(!/1 \/ 2 pris/.test(html)) throw new Error('la progression globale (tous rayons confondus) devrait être affichée');
+  win.setShopMode(false);
+});
+
 // 7) Écriture immédiate puis relecture directe dans IndexedDB — équivalent, pour ce
 //    test de fumée, à vérifier la persistance après un rechargement de l'app.
 if(typeof win.saveNow === 'function'){
@@ -1621,7 +1683,10 @@ if(fails.length){
               '  sauté neutre, progression partielle, mode quota hebdomadaire, pas adapté\n' +
               '  à l’objectif et « Fait » en un geste, intégration Aujourd’hui, fiche),\n' +
               '  courses (guessRayon, fréquents, correction mémorisée,\n' +
-              '  vidage en tombstone, ordre des rayons, intégration Aujourd’hui), revue\n' +
+              '  vidage en tombstone, ordre des rayons, intégration Aujourd’hui), Courses v2\n' +
+              '  V2-6 (liste continue sans carte par rayon, balayage supprimer/cocher\n' +
+              '  annulable, rayon entièrement coché et progression globale signalés,\n' +
+              '  dictionnaire « pâtes » corrigé), revue\n' +
               '  hebdomadaire (candidats, déclenchement, flux complet, lastReview),\n' +
               '  célébrations sobres (record de série, entretien annuel), Réglages (bienvenue\n' +
               '  au premier lancement, thème, export/import validé avant écriture,\n' +

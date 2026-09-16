@@ -354,6 +354,40 @@ svg{display:block;}
 .room-head .card-title{flex:1; margin:0;}
 .room-head .room-count{flex:none; font-size:13px; font-weight:600; color:var(--ink2);}
 
+/* ==========================================================================
+   Lot V2-6 — Courses v2 (ROADMAP-V2.md §3.8, audit B7). Remplace les cartes
+   par rayon par une liste continue (.list-page, hors carte — comme le bloc
+   du jour d'Aujourd'hui) dont l'en-tête de chaque rayon reste collé en haut
+   au défilement : on sait toujours dans quel rayon on est. Écart ASSUMÉ vis-
+   à-vis de maquettes/MyLife Canopée.html (amendement §3.8) : ne pas y
+   revenir. .rayon-head réutilise .card-title pour le texte (18 px/700, même
+   poids qu'un titre de section) mais n'est plus posé dans .room-head — cette
+   classe reste propre à Maison, jamais sticky.
+   Le décalage vertical des deux niveaux d'en-tête (.shop-bar puis
+   .rayon-head) est une valeur fixe plutôt que mesurée en JS : le projet
+   n'a pas de mécanisme de mesure de hauteur, et 44 px de chip + son padding
+   ne varient pas d'un rendu à l'autre.
+   ========================================================================== */
+.shop-bar{
+  position:sticky; top:env(safe-area-inset-top, 0px); z-index:3;
+  display:flex; align-items:center; justify-content:space-between; gap:var(--s3);
+  padding:10px 0 var(--s3); margin:0; background:var(--bg);
+}
+.shop-bar .filter-chips{margin-bottom:0;}
+.shop-progress{flex:none; font-size:13px; font-weight:600; color:var(--ink2);}
+
+.rayon-head{
+  position:sticky; top:calc(66px + env(safe-area-inset-top, 0px)); z-index:2;
+  display:flex; align-items:baseline; justify-content:space-between; gap:var(--s3);
+  padding:10px 0; margin:0; background:var(--bg);
+  border-bottom:1px solid var(--line);
+}
+.rayon-head .card-title{margin:0;}
+/* Reste à prendre (mode magasin) ou rayon entièrement coché (les deux
+   modes) : jamais vert — ce n'est pas une action possible, juste un état,
+   et le vert de l'app dit exclusivement « un doigt peut agir ici ». */
+.rayon-head .rayon-left{flex:none; font-size:13px; font-weight:600; color:var(--ink2); white-space:nowrap;}
+
 /* ---------- Feuilles modales ---------- */
 .sheet-bg{
   position:fixed; inset:0; background:var(--scrim);
@@ -506,11 +540,9 @@ svg{display:block;}
 /* ==========================================================================
    Lot V1-9 — courses. Le bouton d'Aujourd'hui reprend telle quelle
    maquettes/today.html (§ « Courses », déjà validée, jamais posée au Lot 5
-   faute de modèle de données). Le reste (cartes par rayon, mode magasin) est
-   nouveau : la maquette Canopée n'y montre que trois rayons et pas de mode
-   magasin. Les cartes de rayon réutilisent .card/.room-head/.card-title/.row
-   déjà en place — seuls la quantité, le compteur de rayon et le mode magasin
-   sont nouveaux ici.
+   faute de modèle de données). Le reste (rayons, mode magasin) était nouveau
+   à ce lot ; la disposition en cartes par rayon d'alors a été remplacée par
+   une liste continue au Lot V2-6, voir plus bas.
    ========================================================================== */
 .shop{
   display:flex; align-items:center; justify-content:space-between; gap:var(--s3);
@@ -524,9 +556,6 @@ svg{display:block;}
 
 /* Quantité d'un article, à droite du titre (« × 6 » dans la maquette). */
 .row-qty{flex:none; font-size:var(--fs-meta); color:var(--ink2); margin-left:var(--s2);}
-
-/* Compteur d'articles restants dans l'en-tête d'un rayon, mode magasin seul. */
-.room-head .rayon-left{flex:none; font-size:13px; font-weight:600; color:var(--ink2);}
 
 /* Mode magasin : gros libellés, cases larges au pouce — une main sur le
    caddie. Ne change que la taille, jamais la structure de la liste. */

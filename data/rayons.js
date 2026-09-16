@@ -15,6 +15,12 @@
    synchrone, à l'exécution même de state.js (`let S = defaults();`), bien
    avant que js/shopping.js n'ait chargé. RAYON_LABELS (les libellés
    affichés), lui, n'est lu qu'au rendu et vit dans js/shopping.js.
+   Revu au Lot V2-6 (audit D5) à la recherche d'un mot générique dont le sens
+   courant aurait été perdu au profit d'un cas particulier : un seul trouvé,
+   « pate » (voir le cluster Frais) — le reste du dictionnaire distingue
+   correctement le générique (fruits, lait…) de ses variantes spécifiques
+   (fruits surgelés, lait infantile…), sans qu'aucune ne vole le sens courant
+   du mot seul.
    ========================================================================== */
 const RAYON_ORDER_DEFAULT = ['fruits-legumes','frais','cremerie','viande-poisson',
   'surgele','epicerie-salee','epicerie-sucree','boisson','hygiene','entretien',
@@ -55,7 +61,10 @@ const RAYONS = {
 
   // — Frais (traiteur, œufs, plats préparés) —
   'oeuf':'frais', 'oeufs':'frais', 'jambon':'frais', 'jambon blanc':'frais',
-  'pate':'frais', 'pates a tartiner':'epicerie-sucree', 'terrine':'frais',
+  // « pate »/« pates », seul, tombe sur epicerie-salee (pâtes sèches, le sens
+  // courant) — voir plus bas, cluster Épicerie salée. Le sens frais (pâtes
+  // fraîches) exige désormais les deux mots (Lot V2-6, audit D5).
+  'pates fraiches':'frais', 'pates a tartiner':'epicerie-sucree', 'terrine':'frais',
   'houmous':'frais', 'taboule':'frais', 'salade composee':'frais', 'quiche':'frais',
   'tofu':'frais', 'tofu fume':'frais', 'seitan':'frais', 'plat prepare':'frais',
   'sushi':'frais', 'gaspacho':'frais',
@@ -101,7 +110,8 @@ const RAYONS = {
   'pate feuilletee surgelee':'surgele',
 
   // — Épicerie salée —
-  'riz':'epicerie-salee', 'riz basmati':'epicerie-salee', 'pates alimentaires':'epicerie-salee',
+  'riz':'epicerie-salee', 'riz basmati':'epicerie-salee',
+  'pate':'epicerie-salee', 'pates alimentaires':'epicerie-salee',
   'spaghetti':'epicerie-salee', 'macaroni':'epicerie-salee', 'farine':'epicerie-salee',
   'semoule':'epicerie-salee', 'couscous':'epicerie-salee', 'lentilles':'epicerie-salee',
   'pois chiches':'epicerie-salee', 'haricots blancs':'epicerie-salee',
