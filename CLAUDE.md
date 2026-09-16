@@ -169,6 +169,11 @@ uniquement des déclarations.
   `.gauge-side` (jauge seule, sans légende) est désormais partagée par Aujourd'hui ET Maison — sa
   légende « Aujourd'hui » d'origine n'était qu'une question de premier usage, pas de portée. Aucune
   classe nouvelle pour la fiche plante allégée (point 6) : `.more-toggle` du Lot V2-4 suffisait.
+  Puis le bloc **Lot V2-6** : `.shop-bar` (bascule Liste/Mode magasin devenue collante, porte aussi
+  `.shop-progress`) et `.rayon-head` (en-tête de rayon collant, remplace `shopRayonCard()` — reprend
+  `.card-title` pour son texte, ne vit plus dans `.room-head`, resté propre à Maison). Aucune classe
+  nouvelle pour le balayage des lignes de courses : `.row[data-swipe-left]`/`.swipe-content`/
+  `.swipe-bg` du Lot V2-1 suffisaient, comme au Lot V2-4.
   Au-delà de **900 px** : colonne centrée plafonnée à 560 px (desktop V2).
 - `js/state.js` — **socle**, aucun rendu DOM : `APP_VERSION`, IndexedDB (`openDb`/`idbGet`/`idbSet`,
   + `idbPutPhoto`/`idbGetPhoto`/`idbDelPhoto`/`idbClearPhotos` — ce dernier posé au Lot 11 pour la
@@ -325,9 +330,8 @@ uniquement des déclarations.
   milieu d'un libellé plus long — puis retombe sur `'autre'`). Une correction de rayon (fiche
   `shopItemSheet()`, un tap) est mémorisée dans `S.settings.rayonOverrides` **pour ce libellé
   précis**, jamais à chaque ajout — sinon le dictionnaire n'aurait plus jamais voix au chapitre sur
-  un produit déjà tapé une fois. Une carte par rayon (`shopRayonCard()`, blanche comme Maison, pas
-  teintée `t-courses` : seul le bouton d'Aujourd'hui l'est), triée selon `S.settings.rayonOrder`
-  (réglable via `rayonOrderSheet()`, flèches haut/bas plutôt qu'un glisser-déposer). Mode magasin
+  un produit déjà tapé une fois. Triée selon `S.settings.rayonOrder` (réglable via
+  `rayonOrderSheet()`, flèches haut/bas plutôt qu'un glisser-déposer). Mode magasin
   (`setShopMode()`, bascule de session) : gros libellés (`.shop-store`), Wake Lock avec garde de
   disponibilité (`acquireWakeLock()`/`releaseWakeLock()`, redemandé au retour visible), coché =
   grisé **en bas** de son rayon (jamais retiré : on doit pouvoir décocher une erreur) —
@@ -336,6 +340,19 @@ uniquement des déclarations.
   sous le champ d'ajout, les plus utilisés d'abord — pas un objet synchro-ready comme `tasks[]`,
   c'est un compteur d'usage recalculable par libellé, pas un objet du domaine. `addShoppingItem()`
   est le chemin unique de création, qu'il vienne du champ ou d'un fréquent en un tap.
+  **Depuis le Lot V2-6** (ROADMAP-V2.md §3.8, audit B7), `shopRayonCard()` a disparu : plus aucune
+  carte par rayon, `shopRayonSection()`/`shopRayonHeadHtml()` posent une liste continue
+  (`.list-page`, hors carte) où l'en-tête de chaque rayon reste collé en haut au défilement
+  (`.rayon-head`, CSS `position:sticky`) — 14 articles tiennent désormais en ~1 écran au lieu de
+  2,3. `.shop-bar` (bascule Liste/Mode magasin) est collée elle aussi, juste au-dessus, et porte la
+  progression globale en mode magasin (« N / M pris ») ; un rayon entièrement coché se signale
+  (« Tout pris », dans les deux modes — jamais en vert, ce n'est pas une action). Balayage
+  (`js/gestures.js`, Lot V2-1) sur chaque ligne : gauche `deleteShopItem()` (déjà annulable, via
+  `undoable()` depuis ce lot plutôt qu'un `toast()` manuel), droite `toggleShopDone()` — les deux
+  doublent des chemins déjà là (case, fiche), aucun chemin exclusif. Plus de carte = plus de bird
+  sur cet écran, comme `js/tasks.js`. `data/rayons.js` corrigé (audit D5) : « pâtes » seul retombe
+  sur `epicerie-salee` (sens courant, pâtes sèches) et non plus `frais` ; le sens frais exige
+  désormais les deux mots, `pates fraiches`.
 - `js/maison.js` — écran Maison, **vue par pièce posée au Lot 4**, refondue au **Lot V2-5** (audits
   A4/B1/B2/B4/C4, ROADMAP-V2.md §3.7) : `getMaisonItems()` regroupe les tâches d'entretien (`room`
   posé + `repeat.from:'done'`, glossaire `CONVENTIONS.md` §6) par pièce, mêlées depuis le **Lot
@@ -761,6 +778,26 @@ de `CLAUDE.md`/`CONVENTIONS.md` avec l'état final de la V2 est prévue au Lot V
   derrière « Plus de réglages » (`.more-toggle`, réutilisée telle quelle). `maisonAgo()`/
   `freshLabel()` : la première reste vivante pour `today.js` (`careCard()`), la seconde est retirée
   (orpheline).
+- **V2-6 — Courses v2** (Bêta 2.6) : ✅ Fait. `js/shopping.js`, `data/rayons.js` et leur CSS seuls
+  touchés (ROADMAP-V2.md §3.8, audits B7/D5). **Liste continue à en-têtes collés** (point 1, cœur du
+  lot) : `shopRayonCard()` disparaît, remplacée par `shopRayonSection()`/`shopRayonHeadHtml()` — un
+  seul `<ul class="list-page">` (hors carte, comme le bloc du jour d'Aujourd'hui), l'en-tête de
+  chaque rayon restant collé en haut au défilement (`.rayon-head`, `position:sticky`) ; 14 articles
+  tiennent désormais en ~1 écran au lieu de 2,3. Écart ASSUMÉ vis-à-vis de la maquette Canopée
+  (amendement §3.8) : ne pas y revenir. **Mode magasin repensé** (point 2) : `.shop-bar` (bascule
+  Liste/Mode magasin) devient elle aussi collante, juste au-dessus des en-têtes de rayon, et porte
+  la progression globale en mode magasin (« N / M pris ») ; un rayon entièrement coché se signale
+  (« Tout pris », dans les deux modes) — texte neutre, jamais vert : ce n'est pas une action
+  possible. Gros libellés, Wake Lock, coché grisé en bas et jamais retiré, vidage explicite :
+  inchangés. **Balayage** (point 3) : `data-swipe-left` vers `deleteShopItem()` (déjà annulable,
+  refactoré pour appeler `undoable()` plutôt qu'un `toast()` manuel) et `data-swipe-right` vers
+  `toggleShopDone()` — les deux doublent des chemins déjà là (case, fiche), aucun chemin exclusif ;
+  aucune classe nouvelle, `js/gestures.js` du Lot V2-1 suffisait. Plus de carte sur cet écran = plus
+  de bird, comme `js/tasks.js` (même raison). **Dictionnaire** (point 4, audit D5) : « pâtes » seul
+  bascule de `frais` vers `epicerie-salee` (sens courant, pâtes sèches) ; le sens frais exige
+  désormais les deux mots, `pates fraiches`. Revue du reste du dictionnaire à la recherche du même
+  travers (un mot générique ayant perdu son sens courant au profit d'un cas particulier) : aucun
+  autre cas trouvé, le reste distingue déjà correctement le générique de ses variantes.
 
 ## Cycle V1 clos — dettes sciemment laissées pour la V2
 Le Lot 12 a fermé le cycle V1. Rien ci-dessous n'est un oubli : chaque point a été examiné et
