@@ -18,7 +18,7 @@
 | V2-3 | « Aujourd'hui » v3 | Opus puis Sonnet | ⚑ | fait |
 | V2-4 | Tâches v2 | Sonnet | — | fait |
 | V2-5 | Maison & plantes v2 | Sonnet | — | fait |
-| V2-6 | Courses v2 | Sonnet | — | à faire |
+| V2-6 | Courses v2 | Sonnet | — | fait |
 | V2-7 | Habitudes v2 | Sonnet | — | à faire |
 | V2-8 | Mouvement, finition, QA | Sonnet | — | à faire |
 
