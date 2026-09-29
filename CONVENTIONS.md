@@ -9,7 +9,7 @@
 ## 0. Le projet en une phrase
 
 App PWA **personnelle**, installée sur iPhone, qui répond à **« qu'est-ce que je dois faire
-maintenant ? »** — tâches, entretien de la maison, plantes, habitudes, courses. **100 % hors-ligne,
+maintenant ? »** — tâches, entretien de la maison, habitudes, repas, courses. **100 % hors-ligne,
 100 % gratuit, aucun compte, aucun serveur.** Détail complet dans `ROADMAP-V1.md`.
 
 ---
@@ -36,10 +36,12 @@ maintenant ? »** — tâches, entretien de la maison, plantes, habitudes, cours
 
 ### Ordre de chargement — impératif
 ```
-data/rayons.js · data/plantes.js · data/entretien.js
-state.js → ui.js → recur.js → nlp.js → today.js → tasks.js → maison.js
-→ plants.js → habits.js → shopping.js → review.js → settings.js → boot.js
+data/rayons.js · data/entretien.js · data/oiseaux.js
+state.js → ui.js → gestures.js → recur.js → nlp.js → today.js → tasks.js → maison.js
+→ habits.js → shopping.js → meals.js → review.js → settings.js → boot.js
 ```
+(État au Lot V3-2 : 17 fichiers. Les plantes — `plants.js`, `data/plantes.js` — ont été retirées au
+Lot V3-1, `meals.js` ajouté au Lot V3-2 ; voir `ROADMAP-V3.md`.)
 Deux seules règles dures : **`state.js` en premier** (socle, `S`, aucun rendu DOM) et
 **`boot.js` en dernier** (il touche presque tout au démarrage). Entre les deux, l'ordre est libre
 car ces fichiers ne contiennent que des déclarations, aucun code exécuté au chargement.
@@ -132,7 +134,8 @@ Toute lecture de collection passe par `live()`. Toute mutation passe par `touch(
 - Zone sûre iOS : `env(safe-area-inset-bottom)` sur la tab bar.
 
 ### Composants
-- Navigation : `go(name)` — écrans `today, tasks, maison, shopping, habits, settings`.
+- Navigation : `go(name)` — écrans `today, tasks, maison, meals, shopping, habits, settings`
+  (`meals` et `shopping` partagent l'onglet Repas depuis le Lot V3-2).
 - Feuilles modales : `openSheet(html)` / `closeSheet()`. Fermeture par bouton, par tap en dehors et
   par glisser vers le bas depuis la poignée.
 - Confirmations destructives : **jamais `confirm()` natif** — feuille `confirmSheet(message, label,
@@ -197,8 +200,13 @@ Vocabulaire à employer dans le code **et** dans l'interface, sans synonyme flot
 | Terme | Sens précis |
 |---|---|
 | **Tâche** | Une chose à faire, ponctuelle ou récurrente. Collection `tasks[]` |
-| **Entretien** | Une tâche récurrente `from: 'done'` rattachée à une pièce. Se mesure en **jauge de fraîcheur**, jamais en retard |
-| **Soin** | Une action récurrente sur une plante : arrosage, engrais, rempotage |
+| **Entretien** | Une tâche récurrente `from: 'done'` rattachée à une pièce. Se mesure en **jauge de fraîcheur**, jamais en retard. Porte une **durée** en minutes (`mins`) et peut tomber à **jour fixe** (`repeat.kind:'week'` + `days`, ex. la serpillière du samedi) — Lot V3-1 |
+| **Budget d'entretien** | Les minutes d'entretien proposées chaque jour sur « Aujourd'hui » (`settings.choreBudget`, 30 par défaut). Ce qui est dû mais ne tient pas attend le lendemain |
+| **Pack maison** | Les entretiens courants d'un logement, installés d'un tap et étalés (`data/entretien.js`, `pack:true`) |
+| ~~**Soin**~~ | Retiré au Lot V3-1 avec les plantes : une plante est un entretien « S'occuper des plantes » |
+| **Repas** | Un créneau midi ou soir d'un jour donné : à prévoir (N personnes), cantine ou ailleurs. Collection `meals[]`, qui ne stocke que ce qui s'écarte de la semaine type |
+| **Semaine type** | Les 14 repas habituels de la semaine, réglés une fois (`settings.mealWeek`) ; chaque semaine en part |
+| **Plat** | Le nom de ce qu'on mange, rien de plus. Les plats connus se déduisent de l'historique, jamais saisis à part |
 | **Habitude** | Un engagement de régularité personnel. Se mesure en **série** et en **quota**, jamais en jauge |
 | **Jauge de fraîcheur** | `1 − (jours depuis la dernière fois / intervalle)`, borné [0,1]. 1 = frais, 0 = à faire |
 | **Série** | Jours consécutifs où l'objectif d'une habitude est atteint. Les jours inactifs et les jours **sautés** ne la cassent pas |
@@ -208,7 +216,7 @@ Vocabulaire à employer dans le code **et** dans l'interface, sans synonyme flot
 | **Échéance** (`due`) | La **vraie** deadline. Seule elle peut produire un « en retard » |
 | **Effort** | 1 court (~5 min) · 2 moyen (~20 min) · 3 long (~1 h). Alimente « si tu as 10 minutes » |
 | **Revue** | Le tri hebdomadaire des tâches dormantes : faire · reporter · abandonner |
-| **Pièce** | `salon` · `cuisine` · `chambre` · `sdb` · `bureau` · `exterieur` · `autre` |
+| **Pièce** | `partout` (toute la maison) · `cuisine` · `sdb` · `wc` · `salon` · `chambre` · `bureau` · `cellier` · `balcon` · `exterieur` (données d'avant le Lot V3-1) |
 
 ---
 

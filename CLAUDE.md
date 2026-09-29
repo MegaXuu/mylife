@@ -6,7 +6,7 @@
 
 ## Le projet en une phrase
 App PWA **personnelle**, installée sur iPhone, qui répond à « qu'est-ce que je dois faire
-maintenant ? » — tâches, entretien de la maison, plantes, habitudes, courses. **100 % hors-ligne,
+maintenant ? » — tâches, entretien de la maison, habitudes, repas, courses. **100 % hors-ligne,
 100 % gratuit, aucun compte, aucun serveur.**
 
 ## Nature technique
@@ -27,7 +27,7 @@ maintenant ? » — tâches, entretien de la maison, plantes, habitudes, courses
   **à la saisie**, jamais au rendu, pour que la donnée stockée et exportée soit déjà propre. Toute
   saisie texte passe par `cap()` + `autocapitalize="sentences"`. Arbitré au Lot 2, remplace la
   consigne « minuscules de phrase » d'origine (`CONVENTIONS.md` §3 est à jour).
-- Versionnage affiché : **Bêta N.M** (`N`=1 en V1, `N`=2 depuis le cycle V2 ouvert au Lot V2-1),
+- Versionnage affiché : **Bêta N.M** (`N`=1 en V1, `N`=2 en V2, `N`=3 depuis le cycle V3 ouvert au Lot V3-1),
   synchronisé avec `CACHE` dans `sw.js`.
 
 ## Identité visuelle — « Canopée » (Lot 2, appliquée)
@@ -109,12 +109,12 @@ sombre — audit D2) : le bandeau système de la PWA installée suit désormais 
 
 ## Fichiers et ordre de chargement
 Ordre impératif (CONVENTIONS.md §1), déclaré dans `index.html`, miroir dans `sw.js` (`ASSETS`) et
-`test.mjs` (`FILES`) — **18 fichiers** au total depuis le Lot V2-1 (`js/gestures.js` ajouté après
-`js/ui.js`) :
+`test.mjs` (`FILES`) — **17 fichiers** au total depuis le Lot V3-2 (V3-1 : `js/plants.js` et
+`data/plantes.js` retirés ; V3-2 : `js/meals.js` ajouté après `js/shopping.js`) :
 ```
-data/rayons.js · data/plantes.js · data/entretien.js · data/oiseaux.js
+data/rayons.js · data/entretien.js · data/oiseaux.js
 → js/state.js → js/ui.js → js/gestures.js → js/recur.js → js/nlp.js → js/today.js → js/tasks.js
-→ js/maison.js → js/plants.js → js/habits.js → js/shopping.js → js/review.js
+→ js/maison.js → js/habits.js → js/shopping.js → js/meals.js → js/review.js
 → js/settings.js → js/boot.js (toujours en dernier)
 ```
 Deux seules règles dures : `state.js` en premier (socle `S`, aucun rendu DOM), `boot.js` en dernier
@@ -123,10 +123,11 @@ uniquement des déclarations.
 
 - `index.html` — squelette + **tout le CSS** (`<style>` : discipline chromatique en commentaire,
   `:root` complet « Canopée », puis les composants partagés) + conteneurs d'écrans `#s-today
-  #s-tasks #s-maison #s-shopping #s-habits #s-settings` + tab bar **5 onglets depuis le Lot V2-2**
-  (Aujourd'hui · Tâches · Maison · Courses · Habitudes, icônes SVG inline, zone sûre iOS) + feuille modale (`#sheet-bg`/`#sheet`) +
+  #s-tasks #s-maison #s-meals #s-shopping #s-habits #s-settings` + tab bar **5 onglets depuis le Lot V2-2**
+  (Aujourd'hui · Tâches · Maison · **Repas** (depuis le Lot V3-2, à la place de Courses) · Habitudes,
+  icônes SVG inline, zone sûre iOS) + feuille modale (`#sheet-bg`/`#sheet`) +
   toast. Classes disponibles : `.head/.head-over/.head-title/.gear`, `.overline`,
-  `.card` + `.t-plantes/.t-maison/.t-habitudes/.t-courses`, `.btn` +
+  `.card` + `.t-maison/.t-habitudes` (+ `--t-courses` pour le bouton `.shop`), `.btn` +
   `.primary/.secondary/.danger/.quiet/.btn-full`, `.chip/.chips`, `.gauge/.gauge-fill(.hab)`,
   `.list/.row/.row-main/.row-title/.row-meta/.row.done/.check(.on)/.row-del`, `.field/.addbar/
   .add-btn`, `.sheet/.handle/.sheet-title/.sheet-msg`, `.tabbar/.tab`,
@@ -137,9 +138,9 @@ uniquement des déclarations.
   `.row-care`, `.gauge-side/.gauge-cell` (`.gauge-cap` retirée au Lot V2-5, orpheline), `.room-head`,
   `.group-toggle`, et le bloc
   **Lot 6** : `.capture`, `.cap-chips`, `.cap-chip`, `.cap-details` (barre de capture — réutilisent
-  `.addbar/.field/.add-btn/.chip/.btn.quiet` déjà en place), le bloc **Lot 7** : `.plant-photo`,
-  `.file-input` (photo de plante — le reste de la fiche et des lignes de soin réutilise
-  `.row-care/.gauge-cell/.gauge-side/.repeat-n/.field-group` déjà en place), et le bloc **Lot 8** :
+  `.addbar/.field/.add-btn/.chip/.btn.quiet` déjà en place), `.file-input` (posé au Lot 7 pour la photo de plante,
+  seul survivant du bloc au Lot V3-1 : il sert au sélecteur d'import JSON de Réglages ;
+  `.plant-photo` et `.gauge-cell` retirées avec les plantes), et le bloc **Lot 8** :
   `.hab-val/.step/.skip/.row-soft` (bloc du jour, repris tels quels de `maquettes/today.html`),
   `.habits-head` (en-tête du bloc, seule porte vers `go('habits')`), `.hab-cal/.hab-day` (calendrier mensuel de l'écran Habitudes — quatre
   états `.done/.partial/.skip/.inactive`, jamais un cinquième « manqué », cf. `js/habits.js`), et le
@@ -182,10 +183,23 @@ uniquement des déclarations.
   en trois colonnes égales de l'autre — remplace l'usage de `.sheet-msg` sur cet écran). Aucune
   classe nouvelle pour la saisie du jour posée sur l'écran Habitudes : `.hab-ctrl`/`.step`/`.skip`
   du Lot V1-8/V2-3 suffisaient, `habitRowHtml(h, {title:false})` y est rejouée telle quelle.
+  Puis le bloc **Lot V3-1** : `.room-list .gauge-side{width:64px}` (les titres du pack maison sont
+  plus longs, la ligne porte aussi « Fait » — aucune autre classe : le bloc « Entretien du jour »
+  réutilise `.card.t-maison`/`.room-head`/`.room-count`/`.row`/`.check`/`.more`, la feuille du pack
+  `.chips`/`.sheet-msg`/`.field-group`). Puis le bloc **Lot V3-2** : `.repas-seg`/`.seg` (contrôle
+  segmenté Menus | Courses, distinct des chips posées juste en dessous sur Courses),
+  `.meal-nav`/`.meal-week`, `.meal-stats` (reprend `.hab-stats`/`.hab-stat` du Lot V2-7 telles
+  quelles, trois chiffres), `.meal-hint`, `.meal-grid`/`.meal-col`/`.meal-day(.today)`,
+  `.meal-cell(.todo/.off/.past)`/`.meal-dish`/`.meal-meta`, `.meal-type-save`, `.meal-left` et
+  `.meal-nav + .card` (30 px pour que l'oiseau ne couvre pas la flèche). Aucune couleur nouvelle :
+  un repas cantine/ailleurs perd son fond pour un filet pointillé, comme `.hab-day.skip`.
   Au-delà de **900 px** : colonne centrée plafonnée à 560 px (desktop V2).
 - `js/state.js` — **socle**, aucun rendu DOM : `APP_VERSION`, IndexedDB (`openDb`/`idbGet`/`idbSet`,
-  + `idbPutPhoto`/`idbGetPhoto`/`idbDelPhoto`/`idbClearPhotos` — ce dernier posé au Lot 11 pour la
-  réinitialisation — pour le store `photos`), `defaults()`/`migrate()`, `let S`, `save()` (débounce
+  + `idbClearPhotos()` — seul survivant des helpers de photos au Lot V3-1, pour purger à la
+  réinitialisation ce que les plantes ont laissé dans le store `photos`), `mealWeekDefault()` (semaine
+  type des repas, ici parce que `defaults()` l'appelle au chargement), `defaults()`/`migrate()` (+
+  `migratePlants()`, Lot V3-1 : une plante vivante devient un entretien « S'occuper des plantes » par
+  pièce, la clé `plants` et la saison froide disparaissent), `let S`, `save()` (débounce
   150 ms) / `saveNow()` (async), `purgeTombstones()` (>90 j, appelée au boot), helpers synchro-ready
   `stamp()`/`touch()`/`live()` (CONVENTIONS.md §2), helpers de date
   `dayKey()`/`todayKey()`/`addDays()`/`daysBetween()`. Depuis le Lot 11, `migrate()` pose
@@ -193,7 +207,9 @@ uniquement des déclarations.
   plante, une habitude ou un article existant) : elle ne doit jamais se voir proposer la bienvenue
   après coup, seule une base réellement vierge reste à onboarder (`js/settings.js`,
   `maybeWelcome()`).
-- `js/ui.js` — `go(name)` (écrans `today,tasks,maison,shopping,habits,settings`), `openSheet()`/
+- `js/ui.js` — `go(name)` (écrans `today,tasks,maison,meals,shopping,habits,settings` — `meals` et
+  `shopping` partagent l'onglet Repas depuis le Lot V3-2 : `TAB_OF`, `goRepas()` ramène au dernier des
+  deux quitté), `openSheet()`/
   `closeSheet()` (fermeture par tap dehors + glisser la poignée, Pointer Events), `confirmSheet()`
   (+ `_runConfirm()`), `toast(msg, {danger, action:{label,fn}})` (+ `hideToast()`/`_runToastAct()`),
   `esc()`, `cap()` (majuscule initiale, à la saisie), `icon(d, size)` + `IC_GEAR`/`IC_CLOSE`
@@ -210,11 +226,11 @@ uniquement des déclarations.
   sauf en retapant l'onglet **déjà actif** (convention iOS : on remonte alors en haut) ; et il pose
   `body.capture-open` selon `CAPTURE_SCREENS` (`today`, `tasks`, `shopping` — les écrans qui posent
   une barre de saisie collée en bas), classe lue par `.app` dans le `<style>` d'`index.html`.
-  Depuis le **Lot V2-5** (audit B1), `gaugeWidth(f)` accepte aussi un `f` négatif (`rawFreshness
-  (doneAt, days)`, posée ici : même calcul que `freshness()`/`js/recur.js`, sans son clampage,
-  réservée à l'affichage) — la largeur décroît alors sous son plancher de 4 % vers une asymptote à
-  1 %, pour distinguer les degrés de retard là où `freshness()` clampait tout à 0. `gaugeColor(f)`
-  n'a pas eu besoin de changer : sa formule sature déjà proprement pour `f < 0`.
+  Depuis le **Lot V2-5** (audit B1), `gaugeWidth(f)` accepte aussi un `f` négatif — la largeur
+  décroît alors sous son plancher de 4 % vers une asymptote à 1 %, pour distinguer les degrés de
+  retard là où `freshness()` clampait tout à 0. Ce `f` non borné vient de `choreFresh()`
+  (`js/maison.js`) depuis le Lot V3-1 ; `rawFreshness()`, qui le calculait ici à la milliseconde, a
+  été retirée. `gaugeColor(f)` sature déjà proprement pour `f < 0`.
 - `js/gestures.js` — **nouveau au Lot V2-1**, socle de balayage horizontal consommé par les Lots
   V2-4/5/6, sans écran propre. Une ligne devient balayable en portant `data-swipe-left="fn(...)"`
   et/ou `data-swipe-right="fn(...)"` (nom de fonction évalué comme un `onclick=` l'est déjà,
@@ -261,13 +277,21 @@ uniquement des déclarations.
   Effort/Récurrence/Bucket que si un de ces champs porte déjà une valeur non par défaut. Indicateur
   de notes (`IC_NOTE`) sur la ligne. Recherche et filtres n'apparaissent plus dans `renderTasks()`
   qu'au-delà de `TASK_FILTER_MIN` tâches ouvertes.
+  **Depuis le Lot V3-1**, porte aussi les pièces du logement (`ROOM_LABELS`/`ROOM_ORDER`, `partout`
+  en tête ; `roomChoices()` masque `exterieur` tant qu'aucune tâche ne l'emploie), `CHORE_MINS`/
+  `EFFORT_MINS`/`minsToEffort()` et `DOW_NAMES` ; `repeatSummary()` dit « Chaque samedi. » pour des
+  jours fixes ; et `taskSheetHtml()` rend une **fiche d'entretien dédiée** dès que la tâche est un
+  entretien (pièce + `from:'done'`) : titre, « Prochaine fois : … », pièce, **durée** (`setTsMins()`,
+  l'effort en est déduit), rythme, notes — ni début, ni échéance, ni priorité, ni « ce soir », qui
+  n'avaient aucun effet sur un entretien.
 - `js/today.js` — écran **« Aujourd'hui », posé au Lot 5**. `todayBuckets()` est le seul endroit où
   se décide ce qui compte : une passe unique qui répartit en `overdue` (échéance réelle dépassée) /
-  `evening` / `scheduled` (le bloc du jour) / `quick` (anytime à effort 1) / `soins` (entretien) /
-  `done`, chaque filtre retirant ce que le précédent a pris — **aucun item ne peut être dans deux
-  blocs**. Deux seuils y vivent : `TODAY_CARE_SEUIL` (0,4 — sans lui le bloc Entretien serait
-  permanent et l'écran ne saurait jamais dire « c'est bon ») et `S.settings.todayCap` (plafond du
-  bloc du jour, « + N autres »). `todayBadgeCount()` alimente la pastille iOS. Les cochages de la
+  `evening` / `scheduled` (le bloc du jour) / `quick` (anytime à effort 1) / `chores` (l'entretien du
+  jour, `choreDay()` — `js/maison.js` —, plus `choresDone` et `choresWaiting`) / `done`, chaque filtre
+  retirant ce que le précédent a pris — **aucun item ne peut être dans deux blocs**. Le bloc 3 n'a
+  plus de seuil de jauge depuis le Lot V3-1 : c'est le **budget d'entretien** qui le borne (ce qui est
+  dû et tient dans `settings.choreBudget` minutes), et « N autres attendent demain » mène à Maison.
+  `S.settings.todayCap` plafonne le bloc du jour (« + N autres »). `todayBadgeCount()` alimente la pastille iOS. Les cochages de la
   session (`tickToday`) gardent une ligne barrée à sa place jusqu'au prochain démarrage : rien n'est
   persisté, ce n'est pas un journal — depuis le **Lot V2-3**, `_ticked` est un objet `{id: cliché}`
   et non plus un tableau d'ids : une ligne barrée et son moyen de la décocher ont exactement la même
@@ -276,15 +300,10 @@ uniquement des déclarations.
   Florian · Mardi 15 septembre », et redevient la date seule si aucun prénom n'est posé (audit C1,
   arbitrage `ROADMAP-V2.md` §3.6) ; l'état vide se personnalise de la même façon.
   `renderToday()` se termine par `captureBarHtml()` (`js/nlp.js`), comme Tâches — depuis le Lot 6.
-  Depuis le **Lot V1-7**, le bloc du jour (`todaySection()`) mêle aussi les soins de plantes
-  réellement dus (jauge à 0, `getPlantCareItems()`) aux tâches planifiées — jamais le bloc Entretien,
-  réservé aux tâches `from:'done'` — via des entrées `{id, kind:'task'|'soin', t|s}` dans
-  `todayBuckets().scheduled` ; un tap sur un soin ouvre sa fiche plante plutôt que de le compléter.
-  Depuis le **Lot V2-3**, ces soins ne tombent plus sous le plafond (audit B3) : `todayShown()`
-  (pure, testée directement) leur réserve jusqu'à `TODAY_SOIN_RESERVE` (3) places **à la tête** du
-  bloc, les tâches se partageant le reste — la réserve est un minimum garanti, jamais un maximum
-  (sans tâche, tous les soins passent), et elle ne dépasse ni le plafond lui-même ni la moitié du
-  plafond quand il y a aussi des tâches. `todayDone()` pose un cliché des champs que
+  Les soins de plantes mêlés au bloc du jour (Lot V1-7) et leur réserve de places sous le plafond
+  (`todayShown()`, Lot V2-3) ont disparu avec les plantes au Lot V3-1 : `scheduled` redevient une
+  simple liste de tâches. Un entretien coché dans « Entretien du jour » passe par la même
+  `todayDone()` que les tâches (ligne barrée dans son bloc, annulable, décochable). `todayDone()` pose un cliché des champs que
   `completeTask()` modifie puis appelle `undoable()` ; `todayUndone()` (case de la ligne barrée,
   plus jamais `disabled`) le restitue — sans lui, décocher une tâche récurrente la laisserait avec
   l'échéance *suivante* et une réalisation de trop dans son historique (audit A2).
@@ -321,7 +340,7 @@ uniquement des déclarations.
   l'objectif (de 25 à 30, « +10 » pose 30), puis reprend son pas plein au-delà (on peut toujours
   boire un septième verre). `setHabitValue()` et `HAB_STEP_MAX` ont disparu avec le champ numérique. Écran secondaire `go('habits')` (atteint uniquement en tapant l'en-tête
   du bloc, pas d'onglet) : liste des habitudes, fiche création/édition (`habitSheet()`, comme
-  `taskSheet()`/`plantSheet()`), calendrier mensuel de régularité (`habitCalendarHtml()`) à
+  `taskSheet()`), calendrier mensuel de régularité (`habitCalendarHtml()`) à
   **quatre** traitements visuels — fait / partiel / sauté / inactif — et pas un cinquième
   « manqué » : `CONVENTIONS.md` §3 proscrit tout ton culpabilisant, un jour resté sans saisie se lit
   comme « inactif », jamais comme un reproche. **Depuis le Lot 10**, motivation légère sans le
@@ -376,37 +395,63 @@ uniquement des déclarations.
   sur cet écran, comme `js/tasks.js`. `data/rayons.js` corrigé (audit D5) : « pâtes » seul retombe
   sur `epicerie-salee` (sens courant, pâtes sèches) et non plus `frais` ; le sens frais exige
   désormais les deux mots, `pates fraiches`.
-- `js/maison.js` — écran Maison, **vue par pièce posée au Lot 4**, refondue au **Lot V2-5** (audits
-  A4/B1/B2/B4/C4, ROADMAP-V2.md §3.7) : `getMaisonItems()` regroupe les tâches d'entretien (`room`
-  posé + `repeat.from:'done'`, glossaire `CONVENTIONS.md` §6) par pièce, mêlées depuis le **Lot
-  V1-7** aux soins de plantes de la même pièce (`getPlantCareItems()`, `js/plants.js`) en une seule
-  liste triée par fraîcheur croissante — `careRowHtml()` unifie les deux types de ligne. Un tap sur
-  le corps de la ligne (`row-main`) ouvre toujours le détail (`taskSheet()` pour un entretien —
-  balayage à gauche vers `delTask()` pour le supprimer, réutilisé tel quel de `js/tasks.js`, C4 ;
-  `plantSheet()` pour un soin) ; un bouton d'action à droite (`.row-act` : « Fait », « Arrosé »,
-  « Engrais », « Rempoté ») agit immédiatement et s'annule (point 1, audit A4) — c'en était fini de
-  l'ancien tap sur toute la ligne qui complétait un entretien sans confirmation ni retour arrière.
-  `tapMaisonItem()` est ce bouton pour un entretien : il historise un cliché (`doneAt`/`due`/
-  `postponed`/`history`) avant `completeTask()`, comme `doneTask()`/`todayDone()`, et pose
-  `undoable()` — y compris pour le message de célébration d'un entretien annuel (**Lot 10**), qui
-  n'empêche plus l'annulation. `freshCue(f, days)` remplace l'ancien `maisonAgo()`/`careAgo()` dans
-  la légende (audit B2) : « À faire »/« Dans N j »/« Dans N semaines », dérivé de la même fraction
-  que la jauge — jamais l'un sans l'autre. La jauge elle-même (`rawFreshness()`, `js/ui.js`)
-  discrimine enfin les degrés de retard (audit B1). Le compte « N élément(s) à faire »/« Tout est
-  frais » de l'en-tête de pièce remplace l'ancienne jauge agrégée (audit B4, `freshLabel()` retirée
-  : minimum de ses éléments, elle était rouge dès qu'un seul était dû et redondante avec la ligne du
-  dessous). `entretienSheet()` (inchangée) reste réservée à la création ; `maisonAgo()` reste vivante
-  pour `today.js` (`careCard()`), qui l'affiche encore telle quelle dans son propre bloc Entretien.
+- `js/meals.js` — **nouveau au Lot V3-2**, écran **Menus** (`#s-meals`, `go('meals')`), première
+  moitié de l'onglet **Repas** — l'autre est Courses, les deux portent `repasSegHtml()` (contrôle
+  segmenté) sous le même titre « Repas ». Une **semaine type** (`settings.mealWeek`, 14 repas :
+  `{s:'plan'|'cantine'|'ailleurs', p}` par jour ISO et créneau) réglée une fois
+  (`mealTypeSheet()`/`cycleMealType()` : 2 pers. → 1 → cantine → ailleurs ; `mealWeekSet` retient
+  la première fois, l'invitation disparaît alors). `S.meals[]` ne stocke **que** ce qui s'écarte de
+  la semaine type ou porte un plat, champs à `null` = hérités (`upsertMeal()` remet à null ce qui
+  égale la semaine type et tombstone un repas qui n'a plus rien à retenir). Lecture pure :
+  `mealAt()` (le plus récent gagne), `mealType()`, `mealSlot()`, `weekSlots()`, `mealWeekStats()`
+  (repas et portions sur la semaine entière, « à choisir » à partir d'aujourd'hui seulement),
+  `mealDishes()` — **les plats ne se saisissent pas, ils s'apprennent** de l'historique (restes
+  exclus), les plus fréquents d'abord, proposés en un tap dans la fiche (`mealSuggestions()`).
+  `mealSheet()` : plat (`cap()`), statut, personnes, « Il en restera » (`mealLeftoverAction()` →
+  `nextFreeMealSlot()`, annulable), « Ajouter des courses » (`addMealShopping()` → `addShoppingItem()`
+  tel quel). `proposeMeals(start, rnd)` (plats connus tirés en proportion de leur fréquence, sans
+  doublon ni rien de mangé à ±10 jours, repas ouverts et à venir seulement) et `copyLastWeekMeals()`,
+  tous deux annulables d'un bloc (`mealSnapshot()`/`restoreMealSnapshot()`). Pour Aujourd'hui :
+  `mealTodayLine(hour)` (le midi avant 14 h s'il est à prévoir, sinon le soir ; **rien tant que
+  Menus n'a jamais servi**) et `mealTodayHtml()` (bouton `.shop`, comme les courses — ni pastille,
+  ni frein à l'état vide).
+- `js/maison.js` — domaine **Entretien** : écran Maison (vue par pièce, Lot 4, refondue au Lot V2-5 puis
+  au **Lot V3-1**) + le moteur du **budget d'entretien quotidien** + le **pack maison**. `isChore(t)`
+  (pièce + `repeat.from:'done'`, glossaire) et `getMaisonItems()` sont la seule définition de
+  l'entretien — `today.js` s'en sert aussi. Moteur pur, **au jour près** (jamais à la milliseconde :
+  la liste d'Aujourd'hui ne doit pas bouger d'elle-même dans la journée) : `choreDueKey(t)` (jamais
+  fait → aujourd'hui, sinon `nextDue()` depuis `doneAt` — qui sait aussi retrouver le prochain samedi
+  d'un entretien **à jour fixe**, `choreFixedDays()`), `choreFresh(t)` (jours restants / intervalle,
+  non bornée, pour la jauge et le tri), `choreMins(t)` (`t.mins`, sinon `EFFORT_MINS[effort]`),
+  `choreLoad()` (minutes par jour de toute la maison), `choreBudget()`. **`choreDay(today)`** est le
+  seul endroit où se décide l'entretien du jour : ce qui est déjà fait aujourd'hui entame le budget ;
+  parmi le dû, jour fixe d'abord, puis la fraîcheur la plus basse, puis le plus court ; on prend
+  tout ce qui tient, le reste attend demain (`waiting`) ; seule entorse, le premier passe même
+  au-delà du budget si rien n'est encore fait ni pris. Rendu : `choreRowHtml()` (légende
+  `choreCue()` — « À faire »/« Demain »/« Samedi »/« Dans N j »/« Dans N semaines » — + durée, jauge
+  à droite, bouton « Fait » `tapMaisonItem()` annulable, corps → `taskSheet()`, balayage gauche →
+  `delTask()`), `maisonRoomSection()` (le plus dû en tête, « N à faire »/« Tout est frais »),
+  `renderMaison()` (sur-titre « N entretiens · environ M min par jour » ; une maison vide propose le
+  pack). **Pack maison** : `packModels()` (modèles `pack:true` de `data/entretien.js` pas encore
+  suivis — clé pièce + titre, `choreKey()`), `packSheet()`/`togglePackRoom()`/`installPack()`
+  (annulable d'un bloc), et **`packSchedule(entries)`**, pure : étale les premières échéances en
+  simulant la charge journalière sur tout l'horizon, chaque entretien placé (le plus lourd d'abord)
+  sur la phase qui augmente le moins la somme des carrés — sans ça 40 entretiens créés d'un coup
+  seraient tous dus le même jour. `choreFromModel()` pose `doneAt` à rebours (midi) pour que
+  `nextDue()` tombe pile sur la première échéance choisie ; `fixedOffset()` pour un jour fixe.
+  `entretienSheet()`/`addEntretienModels()` (ajout un par un depuis le catalogue, « Déjà suivi »
+  signalé, dû à mi-intervalle). Les plantes, leurs soins et `PLANT_ACTION` ont disparu au V3-1.
 - `js/settings.js` — écran Réglages, **rempli au Lot 11** : six cartes dans cet ordre, chacune un
   groupe. **Profil** : prénom (`setUserName()`, `cap()` posé, vide autorisé), apparence
   (`setTheme('light'|'dark'|'auto')` → `S.settings.theme`, posé sur `data-mode` de `<html>` par
   `applyTheme()` — 'auto' suit `prefers-color-scheme` via `watchSystemTheme()`, silencieux si l'API
   n'existe pas), l'interrupteur Oiseaux (`toggleBirds()`, posé au Lot 2). **Aujourd'hui** :
   `todayCap`, jour de la revue (`reviewDay`, select), et la revue à la demande (`startReview()` sans
-  argument, `js/review.js`). **Maison** : bornes de la saison froide (`coldFrom`/`coldTo`, deux
-  select de mois réutilisant `NLP_MOIS`). **Courses** : `rayonOrderSheet()` (`js/shopping.js`,
-  inchangé, déjà posé au Lot 9). **Données** : export JSON complet de `S` (`exportData()`, dit
-  explicitement que les photos de plantes — des Blobs, store IndexedDB `photos` — n'y sont pas),
+  argument, `js/review.js`). **Maison** (depuis le Lot V3-1, à la place de la saison froide des
+  plantes) : temps d'entretien par jour (`setChoreBudget()`, par pas de 5, jamais sous 5) avec la
+  charge réelle de la maison en regard, et « Installer le pack maison » (`packSheet()`, sans
+  doublon). **Courses** : `rayonOrderSheet()` (`js/shopping.js`,
+  inchangé, déjà posé au Lot 9). **Données** : export JSON complet de `S` (`exportData()`),
   import (`importDataPrompt()` → `confirmSheet` → `onImportFile()` → `validateImportPayload()` puis
   `applyImportedData()`, qui **valide intégralement avant d'écrire quoi que ce soit dans `S`** — un
   import raté ne modifie rien), réinitialisation en deux temps (`resetSheet()` : proposer l'export
@@ -424,8 +469,8 @@ uniquement des déclarations.
   l'échéance précédente, calendaire exact via `setMonth`/`setFullYear` — / `'done'` — depuis
   la réalisation effective `doneAt` — c'est le cœur du lot), `freshness(task, ref)` (jauge continue
   bornée [0,1], jamais négative), `completeTask(task, ref)` (historise, recalcule `due`, remet
-  `postponed` à 0). Partagé entre l'entretien maison (`js/maison.js`) et, au Lot 7, les soins de
-  plantes.
+  `postponed` à 0). Partagé entre l'entretien maison (`js/maison.js`, qui s'en sert aussi pour les
+  entretiens à jour fixe : `nextDue()` depuis `doneAt` trouve le prochain samedi) et les tâches.
 - `js/nlp.js` — **rempli au Lot 6**, toujours **sans conteneur DOM propre** (pas de `#s-nlp`, jamais
   appelé par `go()`) mais plus un placeholder. Deux parties : `parseQuick(texte, ref, ignore)`,
   fonction **pure** (aucun DOM, aucune horloge lue en dehors de `ref`) qui reconnaît dates
@@ -445,31 +490,6 @@ uniquement des déclarations.
   la fiche du Lot 3 préremplie pour ce que le langage naturel n'a pas couvert. Testé isolément dans
   `test.mjs` (plus de 50 cas sur `parseQuick()`, plus le mécanisme d'ignorance) : c'est le seul
   module de l'app qui mérite de vrais tests unitaires.
-- `js/plants.js` — **rempli au Lot 7**. Toujours sans conteneur DOM propre (pas d'écran Plantes,
-  ROADMAP §6 bis) : les plantes vivent dans Maison et dans le bloc du jour d'Aujourd'hui. Modulation
-  saisonnière `plantSeason()` (déduite de `settings.coldFrom`/`coldTo`, jamais d'une date en dur) ;
-  un soin (arrosage, engrais, rempotage) est traduit en un objet minimal `{doneAt,
-  repeat:{kind:'day', n, from:'done'}}` passé tel quel à `freshness()`/`completeTask()` de
-  `js/recur.js` — **le moteur du Lot 4 n'est pas dupliqué**. `getPlantCareItems()` expose les soins
-  actifs à `js/maison.js` et `js/today.js` (un `feed` à `cold:0` est suspendu et n'est jamais
-  proposé) ; depuis le **Lot V2-5**, chaque soin porte aussi `kind`/`days` (type et intervalle
-  appliqué, pour le bouton d'action et la légende de `js/maison.js`) et son `f` est
-  `rawFreshness(lastAt, days)` (`js/ui.js`) plutôt que `careFreshness()`/`freshness()` — non bornée
-  à 0, pour que la jauge de Maison distingue les degrés de retard (audit B1) ; `today.js` en hérite
-  automatiquement (même filtre `f <= 0`, inchangé). `doPlantCare()`/`repotPlantAction()` sont
-  annulables depuis le Lot V2-5 (`undoable()`, snapshot de `lastAt` et de `history` avant
-  `completeTask()`, comme `tapMaisonItem()`). `plantSheet()` : fiche unique création/édition —
-  identité, pièce obligatoire, espèce du catalogue `data/plantes.js` (pré-remplit les intervalles,
-  modifiables ensuite par plante), photo, jauge des trois soins avec boutons « Arrosé » / « Fait
-  l'engrais » / « Rempoté » en action immédiate, historique d'arrosage. **Depuis le Lot V2-5**
-  (point 6), divulgation progressive comme la fiche tâche (Lot V2-4) : ce qui sert au quotidien
-  (identité, les trois jauges/boutons, historique, notes) reste visible d'emblée, le réglage des six
-  champs d'intervalle (`careField()`) vit derrière « Plus de réglages » (`_pSheet._more`,
-  `togglePMore()`), toujours replié par défaut — un intervalle n'a pas de valeur « par défaut » qui
-  justifierait de déplier automatiquement comme le fait `tsHasExtras()` pour la fiche tâche.
-  Photos : `resizePhoto()` (canvas, 1000 px max, JPEG 0,8) puis `idbPutPhoto()` (store `photos`,
-  jamais dans `S`), chargement paresseux (`idbGetPhoto()` seulement à l'ouverture de la fiche), URL
-  objet révoquée à la fermeture via le hook `_onSheetClose` posé dans `js/ui.js`.
 - `js/review.js` — **rempli au Lot 10**. La revue hebdomadaire, le « système immunitaire » de
   l'app (ROADMAP §3 point ⑨) : toujours une feuille modale (`startReview()`/`openSheet()`), jamais
   un écran propre — pas de `#s-review`, jamais appelée par `go()`. `reviewCandidates()` (pure) :
@@ -494,12 +514,11 @@ uniquement des déclarations.
   et pas dans `js/shopping.js` : `defaults()` (`js/state.js`) l'utilise dès son premier appel,
   synchrone, avant même que `js/shopping.js` n'ait chargé — chargé en premier comme les deux autres
   catalogues, c'est justement pour ça.
-- `data/plantes.js` (`PLANTES`) — **rempli au Lot 7** : une quarantaine de plantes d'intérieur
-  courantes (nom, nom latin, intervalles d'arrosage/engrais saison chaude et froide, rempotage en
-  mois). Choisir une espèce dans la fiche plante pré-remplit ces intervalles.
-- `data/entretien.js` (`ENTRETIEN`) — **rempli au Lot 4** : une quarantaine de modèles d'entretien
-  courants (`{title, room, intervalDays, effort}`), proposés en un tap depuis `entretienSheet()`
-  (`js/maison.js`).
+- `data/entretien.js` (`ENTRETIEN`) — catalogue d'entretien, **refondu au Lot V3-1** : chaque modèle
+  `{title, room, days, mins, pack, dow?}`. `pack:true` = le **pack maison** de Florian (40 entretiens,
+  ~28 min/jour, décidés avec lui le 29/09/2026, `ROADMAP-V3.md` §2.1) ; les autres restent proposés
+  un par un. `dow` = jours fixes (la serpillière, `[6]`, pièce `partout`). Modèles génériques, aucune
+  donnée personnelle : le dépôt est public.
 - `data/oiseaux.js` (`OISEAUX`) — **rempli au Lot 2** : 6 espèces, chacune une liste de formes SVG
   plates. Données pures, aucun rendu : redessiner un oiseau = remplacer son tableau, sans toucher à
   `js/ui.js`. Contrat de dessin en tête du fichier (`viewBox 0 0 120 160`, pattes sur **y = 130**,
@@ -610,13 +629,37 @@ uniquement des déclarations.
   d'Aujourd'hui) : le titre ne vit qu'une fois (en-tête de carte), le pas d'ajout y suit bien
   l'objectif (« +10 » pour 30 min), et une saisie posée sur cet écran se relit bien depuis le même
   journal que celle du bloc d'Aujourd'hui.
+  **Depuis le Lot V3-1**, les tests de plantes (saison, soins, fiche, photos) ont disparu avec elles,
+  remplacés par **l'entretien du jour** attaqué directement sur `choreDay()` (seul le dû remonte,
+  dans la limite du budget, retard relatif puis le plus court ; ce qui est fait aujourd'hui entame le
+  budget ; un entretien plus long que le budget passe s'il est seul ; un jour fixe tombe son jour, en
+  premier, et revient sept jours plus tard), son rendu (pièce + durée, pastille, cochage annulable,
+  état vide), **`packSchedule()`** (pure : décalages dans leur intervalle, aucun jour à plus de
+  2 × la moyenne + 10 min sur 28 jours simulés, premier jour allégé), l'installation du pack (pièce
+  décochée ignorée, aucun doublon au deuxième passage, annulable d'un bloc), `migratePlants()`
+  (idempotente) et la fiche d'un entretien (durée, pas d'effort ni de dates). Piège mis au jour :
+  deux tests d'habitudes ne passaient que parce que le Ficus perpétuellement dû empêchait l'état vide
+  — `keepTodayOpen()` pose désormais ce rôle explicitement. **Depuis le Lot V3-2**, **Repas**
+  (`mealScenario()` isole `S.meals` et la semaine type) : héritage de la semaine type sans créer
+  d'objet, tombstone d'un repas revenu à la semaine type, fiche (casse, suggestion apprise en un tap,
+  restes annulables qui ne comptent pas comme un plat, cantine sans plat), « Me proposer »
+  (déterministe via `rnd` injecté : ni doublon, ni plat récent, ni repas cantine, ni plat déjà posé
+  écrasé, annulable), « Reprendre la semaine dernière », la grille (14 cellules, un oiseau), la ligne
+  d'Aujourd'hui (silencieuse tant que Menus n'a jamais servi, midi/soir selon l'heure, hors pastille)
+  et l'onglet Repas partagé par Menus et Courses.
+- **Piège de prévisualisation, reconfirmé au Lot V3-2** : même après `unregister()` du service worker
+  et vidage des caches, le nouveau service worker remplit son cache avec `cache.addAll()` — qui passe
+  par le cache HTTP du navigateur, donc peut y reprendre l'ancienne version d'un fichier servi sans
+  en-têtes par `python3 -m http.server`. Servir avec `Cache-Control: no-store` (un
+  `SimpleHTTPRequestHandler` qui ajoute l'en-tête) ou changer de port règle la question.
 - **À chaque release** : incrémenter `CACHE` (`sw.js`) **et** `APP_VERSION` (`js/state.js`), même
-  numéro (`mylife-b1-N` / `'Bêta 1.N'`).
+  numéro (`mylife-b3-N` / `'Bêta 3.N'` en V3).
 
 ## Modèle de données (S) — ROADMAP-V1.md §5
 ```
-S = { v:1, tasks:[], plants:[], habits:[], habitLog:{}, shopping:[], frequents:[],
-      settings:{userName,weekStart,rayonOrder,rayonOverrides,coldFrom,coldTo,todayCap,reviewDay,hideDone,birds,theme},
+S = { v:1, tasks:[], habits:[], habitLog:{}, meals:[], shopping:[], frequents:[],
+      settings:{userName,weekStart,rayonOrder,rayonOverrides,choreBudget,mealWeek,mealWeekSet,
+                todayCap,reviewDay,hideDone,birds,theme},
       lastReview:null, onboarded:false }
 ```
 Depuis le Lot 4, `tasks[]` porte `{id,createdAt,updatedAt,deletedAt,title,doneAt,notes,cat,room,
@@ -628,13 +671,13 @@ antérieure au Lot 4. Tout objet persisté suit la discipline synchro-ready :
 `id` = `crypto.randomUUID()`, `createdAt`/`updatedAt` (ms), `deletedAt` (tombstone, jamais de
 suppression dure), aucun compteur global stocké, aucun ordre implicite par position.
 
-Depuis le Lot 7, `plants[]` porte `{id,createdAt,updatedAt,deletedAt,name,species,room,photoId,
-care:{water:{warm,cold,lastAt,history}, feed:{warm,cold,lastAt,history}, repot:{months,lastAt}},
-notes,sort}`. `room` n'est jamais `null` (sinon la plante n'apparaît sur aucun écran). `species` est
-une clé de `data/plantes.js` ou une chaîne libre. `water`/`feed` portent deux intervalles (jours),
-saison chaude et froide — `cold:0` suspend le soin cette saison-là, `repot` est en mois et ne varie
-pas avec la saison. `photoId` est la clé du Blob dans le store IndexedDB `photos` (même id que la
-plante), ou `null`.
+Depuis le **Lot V3-1**, un entretien (`room` + `repeat.from:'done'`) porte aussi `mins` (durée en
+minutes, lue par le budget ; absent sur un entretien d'avant → déduit de `effort`), et peut tomber à
+**jour fixe** : `repeat:{kind:'week', n:1, days:[6], from:'done'}` (la serpillière du samedi). Pièces :
+`partout` · `cuisine` · `sdb` · `wc` · `salon` · `chambre` · `bureau` · `cellier` · `balcon` (+
+`exterieur`, gardée pour les données d'avant). `plants[]` (Lot 7) n'existe plus : `migratePlants()`
+le traduit en entretiens puis le retire, avec `settings.coldFrom/coldTo`. `settings.choreBudget` =
+minutes d'entretien proposées par jour (30).
 
 Depuis le Lot 8, `habits[]` porte `{id,createdAt,updatedAt,deletedAt,name,unit,target,sched,sort}` —
 `unit` ∈ `''` (coche simple, `target` forcé à 1) / `'min'` / `'fois'` / `'L'` / `'pages'` ; `sched`
@@ -654,6 +697,14 @@ sous le champ d'ajout dès `count >= 3`. `settings.rayonOrder` (14 clés de `dat
 défaut `RAYON_ORDER_DEFAULT`) et `settings.rayonOverrides` (`{libellé normalisé: rayon}`, corrections
 mémorisées) complètent les réglages.
 
+Depuis le **Lot V3-2**, `meals[]` porte `{id,createdAt,updatedAt,deletedAt,day,slot,dish,leftover,
+status,people}` — `slot` ∈ `'midi'`/`'soir'`, `status` ∈ `null`/`'plan'`/`'cantine'`/`'ailleurs'`,
+`people` ∈ `null`/1–4 ; `null` = hérité de la semaine type. Un repas n'existe en mémoire que s'il
+porte un plat ou s'écarte de la semaine type. `settings.mealWeek` = `{1..7: {midi:{s,p}, soir:{s,p}}}`
+(`mealWeekDefault()` : tout à prévoir, 2 personnes), `settings.mealWeekSet` = la semaine type a été
+réglée au moins une fois. La bibliothèque de plats n'est pas stockée : elle se recalcule depuis
+`meals[]` (`mealDishes()`).
+
 ## Règles et pièges à connaître
 - **Ouvrir `maquettes/MyLife Canopée.html` avant de dessiner ou de coder un écran.** Elle contient
   les huit écrans, y compris ceux qui ne sont pas encore codés — ne pas en inventer un qui y est
@@ -661,9 +712,10 @@ mémorisées) complètent les réglages.
   Lots 3 et 4 ont dérivé sans le savoir (écarts listés dans « Identité visuelle »). En cas de
   désaccord entre le code livré et la maquette, **c'est la maquette qui gagne** (arbitrage 27/07).
 - **Les trois listes miroir** (`<script>` de `index.html`, `ASSETS` de `sw.js`, `FILES` de
-  `test.mjs`) doivent toujours lister les **18 mêmes fichiers** dans le même ordre. Piège classique :
+  `test.mjs`) doivent toujours lister les **17 mêmes fichiers** dans le même ordre. Piège classique :
   ajouter un fichier sans mettre à jour les trois — l'app marche en local et casse une fois installée.
-  (Décompte : 4 `data/` + 14 `js/` = 18. Le Lot 2 a ajouté `data/oiseaux.js`, le Lot V2-1
+  (Décompte : 3 `data/` + 14 `js/` = 17 depuis le Lot V3-2 : le V3-1 a retiré `js/plants.js` et
+  `data/plantes.js`, le V3-2 ajouté `js/meals.js`. Avant : le Lot 2 avait ajouté `data/oiseaux.js`, le Lot V2-1
   `js/gestures.js` — à chaque fois le même risque, et les trois listes ont bien été mises à jour
   ensemble.)
 - **Incrémenter `CACHE` (sw.js) à chaque release**, synchroniser `APP_VERSION` (`js/state.js`) sur le
@@ -671,7 +723,7 @@ mémorisées) complètent les réglages.
 - Toujours échapper le texte utilisateur avec `esc()`. Jamais `confirm()`/`alert()`/`prompt()`
   natifs — `confirmSheet()` maison pour toute confirmation destructive.
 - Suppression = tombstone (`deletedAt = Date.now()` + `touch()`), jamais un `splice()`.
-- `js/nlp.js`, `js/plants.js`, `js/review.js` n'ont pas de conteneur DOM : ne pas essayer d'y faire
+- `js/nlp.js`, `js/review.js` n'ont pas de conteneur DOM (`js/plants.js` non plus, retiré au V3-1) : ne pas essayer d'y faire
   `document.getElementById('s-nlp')` etc., ça n'existe pas et n'existera jamais (nlp est un moteur +
   une barre montée par d'autres écrans, plants rejoindra Maison, review sera une feuille). `js/recur.js`
   non plus, mais pour une autre raison depuis le Lot 4 : c'est un moteur pur (`nextDue`/`freshness`/
@@ -725,11 +777,31 @@ mémorisées) complètent les réglages.
 | **11 — Réglages & filet de sécurité** | Bêta 1.11 | ✅ Fait. Écran Réglages en six groupes (Profil, Aujourd'hui, Maison, Courses, Données, À propos) : prénom, apparence (interrupteur de mode sombre `setTheme('light'\|'dark'\|'auto')`, 'auto' suit `prefers-color-scheme`), Oiseaux (déjà là depuis le Lot 2), plafond du jour, jour de revue, saison froide des plantes, ordre des rayons (réutilise `rayonOrderSheet()` du Lot 9). Export/import JSON complets de `S` (photos exclues, signalé explicitement à l'écran), import validé intégralement avant toute écriture (`validateImportPayload()`/`applyImportedData()`). Réinitialisation en deux temps (proposer l'export, puis seulement le bouton danger) avec purge du store `photos`. Feuille de bienvenue au tout premier lancement (`maybeWelcome()`, trois écrans, jamais revue une fois fermée) ; `migrate()` marque d'office `onboarded=true` sur une base déjà peuplée. Le mode sombre n'était pas dans les six points du prompt de lot mais explicitement promis ici par ce fichier et par ROADMAP-V1.md §7 (« il arrivera avec Réglages au Lot 11 ») : inclus après arbitrage avec Florian. |
 | **12 — Polish, QA, dettes** | Bêta 1.12 | ✅ Fait. Dernier lot du cycle V1, aucune fonctionnalité nouvelle. Audit accessibilité/tactile : une seule cible sous 44 px trouvée (`.chip`, 40 px) et corrigée à 44 ; `:focus-visible`, `prefers-reduced-motion` et zone sûre iOS déjà conformes depuis le premier écran, rien à corriger ; contrastes recalculés par calcul (WCAG) sur toutes les paires ink/ink2 × bg/card/teintes de domaine, clair et sombre : toutes ≥ 4,5:1, aucune régression. `role="checkbox"`/`aria-checked` ajoutés aux 5 boutons `.check` (tasks.js, today.js ×2, shopping.js, maison.js), qui n'exposaient jusque-là qu'un `aria-label` sans état. Audit textuel : aucun emoji, aucune casse fautive, aucun « en retard »/« manqué » hors du seul emploi légitime (échéance réelle d'une tâche, `js/tasks.js`) ; point laissé ouvert au Lot 5 tranché — l'état vide d'Aujourd'hui a désormais deux variantes selon `b.evening.length` (« Rien ne demande ton attention avant ce soir. » s'il reste quelque chose ce soir, « Il ne reste rien à faire aujourd'hui. » sinon). Audit des chemins redondants : une seule vraie redondance trouvée (`rayonOrderSheet()` accessible à l'identique depuis Réglages ET depuis Courses) ; soumise à Florian, qui a choisi de garder les deux (centralisation vs. contexte d'usage) — aucune suppression faite. Dettes techniques : purge des tombstones >90 j déjà en place (rien à faire) ; deux classes CSS orphelines retirées (`.card.t-plantes`, `.card.t-courses` — jamais posées en HTML depuis que Lot 5/7/9 ont gardé Maison et Courses en cartes blanches ; les variables `--t-plantes`/`--t-courses` restent définies, la première est désormais un token dormant) ; aucun `style="..."` non calculé trouvé (les 6 existants sont tous des jauges/oiseaux calculés, légitimes) ; aucune fonction morte détectée (recherche automatisée sur toutes les déclarations `function` de `js/`+`data/`) ; aucun fichier au-dessus de 600 lignes (le plus long est `js/habits.js`, 447 lignes). Les 3 listes miroir revérifiées fichier par fichier : toujours les 17 mêmes, dans le même ordre. `QA-IPHONE.md` créé (checklist à dérouler sur l'iPhone réel : installation, mode avion, pastille, persistance 48 h, photo de plante, mode magasin/Wake Lock, glisser-fermer, zone sûre, mise à jour du service worker, export/import). |
 
-## Cycle V2 « L'usage » — en cours
+## Cycle V3 « Le vrai usage » — en cours
+Plan complet dans `ROADMAP-V3.md` (constat et décisions du 29/09/2026, amendements §3, trois lots).
+Florian n'utilisait pas l'app : la remplir coûtait trop cher. Il a donné **carte blanche** pour
+préparer et coder la suite ; les deux premiers lots ont été faits dans la même session (entorse
+assumée à « un lot = une session »), chacun avec son commit et sa version.
+- **V3-1 — Maison prête à l'emploi** (Bêta 3.1) : ✅ Fait. Pack maison de 40 entretiens décrit avec
+  Florian (`data/entretien.js`, `pack:true`), installé d'un tap et étalé (`packSchedule()`) ; budget
+  d'entretien quotidien de 30 min (`choreDay()`, bloc « Entretien du jour » sur Aujourd'hui, « N autres
+  attendent demain ») ; serpillière d'une traite, à jour fixe le samedi (`repeat.days` + `from:'done'`) ;
+  durée en minutes sur chaque entretien et fiche d'entretien dédiée (pièce, durée, rythme — sans
+  dates, priorité ni « ce soir ») ; pièces du logement (`partout`, `wc`, `cellier`, `balcon`,
+  `sdb` libellée « Salle de bain ») ; **plantes retirées** (`js/plants.js`, `data/plantes.js`,
+  photos, saison froide), `migratePlants()` pour une base qui en avait.
+- **V3-2 — Repas** (Bêta 3.2) : ✅ Fait. `js/meals.js` (17ᵉ fichier) : écran Menus, semaine type,
+  exceptions seules stockées, compte (repas, portions, à choisir), plats appris, restes, « Me
+  proposer », « Reprendre la semaine dernière », quelques courses depuis un repas ; onglet **Repas**
+  (Menus | Courses) à la place de Courses ; « Ce soir : … » sur Aujourd'hui.
+- **V3-3 — Mouvement, finition, QA** (Bêta 3.3) : à faire. Reprend le V2-8 (transitions, animation
+  de complétion, oiseaux en mode sombre, haptique, audit d'accessibilité) étendu aux écrans V3,
+  `QA-IPHONE-V3.md`, synchronisation de `CONVENTIONS.md` (glossaire, pièces, ordre de chargement).
+
+## Cycle V2 « L'usage » — clos à Bêta 2.7
 Plan complet dans `ROADMAP-V2.md` (audit du 14/08/2026, arbitrages §3, huit lots) ; `CONVENTIONS.md`
-reste la loi permanente, amendée par ce même §3. Ce fichier ne détaille pas ici le tableau des huit
-lots V2 (il vit dans `ROADMAP-V2.md`, pas dupliqué pour rester court) ; la synchronisation complète
-de `CLAUDE.md`/`CONVENTIONS.md` avec l'état final de la V2 est prévue au Lot V2-8.
+reste la loi permanente, amendée par ce même §3. Le **V2-8** n'a pas été fait : il est reporté en
+V3-3, la V3 changeant les écrans qu'il devait finir.
 - **V2-1 — Socle d'interaction** (Bêta 2.1) : ✅ Fait. `js/gestures.js` (balayage, non encore posé
   sur aucune ligne — c'est aux Lots V2-4/5/6), `undoable()`/`rowAttrs()` dans `js/ui.js`, `role`/
   `tabindex`/Entrée-Espace posés sur les 7 lignes cliquables existantes (audit D3), correctifs D1
@@ -854,25 +926,17 @@ Le Lot 12 a fermé le cycle V1. Rien ci-dessous n'est un oubli : chaque point a 
 reporté délibérément, hors périmètre d'un lot « polish sans nouvelle fonctionnalité ».
 - **Icônes d'app encore grises** (`icon-180/192/512.png`) : jamais mises à jour vers « Canopée ».
   Même script Node jetable + `zlib` à reprendre, juste avec les bonnes couleurs.
-- **Pas de chemin d'édition/suppression pour une tâche d'entretien** une fois créée depuis
-  `entretienSheet()` (`js/maison.js`) : `tapMaisonItem()` ne fait que la compléter, et l'écran
-  Tâches l'exclut par construction (`doneAt` toujours posé). Pour corriger un intervalle ou
-  supprimer un entretien créé par erreur, il faut aujourd'hui passer par l'export/import JSON.
-  Repéré au Lot 12 (audit des chemins d'action) mais hors périmètre — pas une redondance à
-  corriger, une lacune à combler en V2.
+- ~~Pas de chemin d'édition/suppression pour une tâche d'entretien~~ — **comblé au Lot V2-5**
+  (fiche au tap, balayage pour supprimer), fiche d'entretien dédiée depuis le Lot V3-1.
 - **Sémantique ARIA des `.chip`** : elles servent tantôt de filtre à sélection unique (catégorie,
   pièce, priorité, effort, mode Liste/Mode magasin), tantôt de multi-sélection (jours de semaine
   d'une récurrence), tantôt de puce supprimable (aperçu de capture). Aucune ne porte de rôle ARIA
   au-delà du texte visible. Un passage cohérent (`role="radiogroup"`/`radio` pour le sélecteur
   simple, `aria-pressed` pour le multi-sélection) toucherait une dizaine de générateurs de HTML
-  dans `tasks.js`, `habits.js`, `shopping.js`, `settings.js`, `plants.js` — non fait au Lot 12 par
+  dans `tasks.js`, `habits.js`, `shopping.js`, `settings.js` — non fait au Lot 12 par
   prudence (risque de régression disproportionné pour une amélioration purement sémantique, sans
   impact visuel). Les contrastes et tailles de cible, eux, sont conformes (voir tableau Lot 12).
-- **`--t-plantes` (variable CSS) dormante** : les deux classes qui l'utilisaient (`.card.t-plantes`)
-  ont été retirées au Lot 12 (orphelines depuis que Maison est resté en cartes blanches). La
-  variable reste déclarée dans `:root` et en mode sombre — cohérente avec les 4 teintes de domaine
-  documentées dans la discipline chromatique — mais rien ne l'applique plus nulle part. À utiliser
-  si les plantes obtiennent un jour leur propre surface teintée, sinon à retirer explicitement.
+- ~~`--t-plantes` (variable CSS) dormante~~ — **retirée au Lot V3-1**, avec les plantes.
 - **`rayonOrderSheet()` dupliqué** (Réglages → Courses, et l'écran Courses lui-même) : audité au
   Lot 12, Florian a choisi de garder les deux. Ce n'est donc pas une dette, mais une décision à ne
   pas re-questionner sans raison nouvelle.
