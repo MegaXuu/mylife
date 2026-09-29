@@ -5,19 +5,30 @@
    AUCUN RENDU DOM ICI — voir js/ui.js et les js/<ecran>.js pour l'affichage.
    ========================================================================== */
 
-const APP_VERSION = 'Bêta 3.1'; // à synchroniser avec CACHE (sw.js) à chaque release
+const APP_VERSION = 'Bêta 3.2'; // à synchroniser avec CACHE (sw.js) à chaque release
 
 const IDB_NAME = 'mylife';
 const IDB_VERSION = 1;
 const LS_KEY = 'mylife';
 
 /* ---------- Valeurs par défaut & migration (modèle : ROADMAP-V1.md §5) ---------- */
+// Semaine type des repas (Lot V3-2, js/meals.js) : pour chaque jour ISO
+// (1 = lundi … 7 = dimanche), midi et soir, un statut ('plan' à prévoir,
+// 'cantine', 'ailleurs') et un nombre de personnes. Vit ici et pas dans
+// meals.js : defaults() l'appelle dès le chargement de ce fichier, avant
+// que meals.js n'existe (même raison que RAYON_ORDER_DEFAULT, data/rayons.js).
+function mealWeekDefault(){
+  const w = {};
+  for(let d = 1; d <= 7; d++) w[d] = {midi:{s:'plan', p:2}, soir:{s:'plan', p:2}};
+  return w;
+}
 function defaults(){
   return {
     v: 1,
     tasks: [],       // tâches ponctuelles + entretien récurrent (ménage, admin, plantes)
     habits: [],      // définitions d'habitudes
     habitLog: {},    // { 'YYYY-MM-DD': { habitId: valeur | 'skip' } }
+    meals: [],        // repas de la semaine, seulement là où on s'écarte de la semaine type (Lot V3-2)
     shopping: [],     // articles de la liste de courses
     frequents: [],    // produits fréquents dérivés de l'historique
     settings: {
@@ -26,6 +37,8 @@ function defaults(){
       rayonOrder: RAYON_ORDER_DEFAULT.slice(), // ordre des rayons, adapté au plan du magasin (Lot 9)
       rayonOverrides: {}, // {libellé normalisé: rayon} — corrections mémorisées (Lot 9, js/shopping.js)
       choreBudget: 30,    // minutes d'entretien proposées par jour sur Aujourd'hui (Lot V3-1, js/maison.js)
+      mealWeek: mealWeekDefault(), // semaine type des repas (Lot V3-2, js/meals.js)
+      mealWeekSet: false, // la semaine type a-t-elle déjà été réglée une fois ?
       todayCap: 7,        // plafond visuel de l'écran Aujourd'hui
       reviewDay: 0,        // jour de la revue hebdomadaire (0 = dimanche)
       hideDone: false,
@@ -66,12 +79,14 @@ function migrate(r){
   migratePlants(r);
   r.habits = r.habits || [];
   r.habitLog = r.habitLog || {};
+  r.meals = r.meals || [];
   r.shopping = r.shopping || [];
   r.frequents = r.frequents || [];
   r.settings = Object.assign({
     userName: null, weekStart: 1, rayonOrder: [], rayonOverrides: {}, choreBudget: 30,
-    todayCap: 7, reviewDay: 0, hideDone: false, birds: true, theme: 'auto'
+    mealWeekSet: false, todayCap: 7, reviewDay: 0, hideDone: false, birds: true, theme: 'auto'
   }, r.settings || {});
+  if(!r.settings.mealWeek || typeof r.settings.mealWeek !== 'object') r.settings.mealWeek = mealWeekDefault();
   delete r.settings.coldFrom; delete r.settings.coldTo; // saison froide des plantes, Lot V1-7 → V3-1
   // Lot V1-9 : un rayonOrder vide (installs d'avant ce lot, jamais rempli)
   // retombe sur l'ordre par défaut plutôt que de laisser Courses sans groupes.
@@ -224,7 +239,7 @@ function live(arr){ return arr.filter(o=>!o.deletedAt); }
 function purgeTombstones(){
   const cutoff = Date.now() - 90*24*60*60*1000;
   let changed = false;
-  ['tasks','habits','shopping'].forEach(k=>{
+  ['tasks','habits','meals','shopping'].forEach(k=>{
     const before = S[k].length;
     S[k] = S[k].filter(o=>!o.deletedAt || o.deletedAt > cutoff);
     if(S[k].length !== before) changed = true;

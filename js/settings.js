@@ -109,6 +109,8 @@ function validateImportPayload(obj){
   if(typeof obj.v !== 'number') return false;
   const arrays = ['tasks', 'habits', 'shopping', 'frequents'];
   if(!arrays.every(k => Array.isArray(obj[k]))) return false;
+  // Repas (Lot V3-2) : facultatif, un export d'avant n'en a pas.
+  if(obj.meals !== undefined && !Array.isArray(obj.meals)) return false;
   if(!obj.settings || typeof obj.settings !== 'object') return false;
   if(!obj.habitLog || typeof obj.habitLog !== 'object') return false;
   return true;
@@ -129,7 +131,7 @@ function applyImportedData(raw){
 
 function importDataPrompt(){
   confirmSheet(
-    'Importer un fichier remplace entièrement tes données actuelles (tâches, entretiens, habitudes, courses, réglages). Cette action est irréversible.',
+    'Importer un fichier remplace entièrement tes données actuelles (tâches, entretiens, habitudes, repas, courses, réglages). Cette action est irréversible.',
     'Choisir un fichier',
     () => { const el = document.getElementById('import-input'); if(el) el.click(); }
   );
@@ -163,7 +165,7 @@ async function onImportFile(input){
 function resetSheet(){ openSheet(resetExportStepHtml()); }
 function resetExportStepHtml(){
   return '<p class="sheet-title">Réinitialiser l’application</p>'+
-    '<p class="sheet-msg">Tâches, entretiens, habitudes, courses et réglages seront tous supprimés. Pense à exporter une sauvegarde avant.</p>'+
+    '<p class="sheet-msg">Tâches, entretiens, habitudes, repas, courses et réglages seront tous supprimés. Pense à exporter une sauvegarde avant.</p>'+
     '<button class="btn secondary btn-full" onclick="exportData()">Exporter mes données</button>'+
     '<button class="btn danger btn-full" onclick="openSheet(resetConfirmStepHtml())">Continuer sans exporter</button>'+
     '<button class="btn quiet btn-full" onclick="closeSheet()">Annuler</button>';
@@ -209,7 +211,7 @@ function welcomeStepHtml(){
 }
 function welcomeIntroHtml(){
   return '<p class="sheet-title">Bienvenue dans MyLife</p>'+
-    '<p class="sheet-msg">Une seule question, chaque jour : qu’est-ce qu’il y a à faire maintenant ? Tâches, entretien de la maison, habitudes et courses, réunis en un seul endroit.</p>'+
+    '<p class="sheet-msg">Une seule question, chaque jour : qu’est-ce qu’il y a à faire maintenant ? Tâches, entretien de la maison, habitudes, repas et courses, réunis en un seul endroit.</p>'+
     '<p class="sheet-msg">Tout reste sur cet appareil : aucun compte, aucun serveur, rien n’est envoyé nulle part.</p>'+
     '<button class="btn primary btn-full" onclick="advanceWelcome()">Suivant</button>';
 }

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>MyLife</title>
-<meta name="description" content="Qu'est-ce que je dois faire maintenant ? Tâches, entretien, habitudes, courses — hors-ligne.">
+<meta name="description" content="Qu'est-ce que je dois faire maintenant ? Tâches, entretien, habitudes, repas, courses — hors-ligne.">
 <meta name="theme-color" content="#F3EEE5">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -701,6 +701,65 @@ body.capture-open .toast{bottom:calc(150px + env(safe-area-inset-bottom));}
    respiration entre les dates et le reste. */
 .more-toggle{margin-top:var(--s4);}
 
+/* ==========================================================================
+   Lot V3-2 — Repas (ROADMAP-V3.md §2.4). L'onglet Repas porte deux écrans,
+   Menus (js/meals.js) et Courses (js/shopping.js), séparés par une bascule
+   en chips (.repas-seg — un état, pas une action). Menus est une grille
+   jours × midi/soir dans une carte blanche. Aucune couleur nouvelle : un
+   repas à prévoir est en creux (--sunken), un repas cantine/ailleurs n'a
+   plus de fond, juste un filet pointillé — la même grammaire que le jour
+   « sauté » du calendrier d'habitudes (.hab-day.skip). --ink2 sur --sunken :
+   4,56:1 en clair, 5,69:1 en sombre (calculé), au-dessus de 4,5.
+   ========================================================================== */
+.repas-seg{
+  display:flex; padding:3px; margin:calc(-1 * var(--s2)) 0 var(--s4);
+  background:var(--sunken); border-radius:var(--r-pill);
+}
+.repas-seg .seg{
+  flex:1; min-height:38px; border:0; border-radius:var(--r-pill); /* 38 + 2×3 de rail = 44 px de cible */
+  background:none; color:var(--ink2); font-size:14.5px; font-weight:600;
+  transition:background var(--d1) var(--ease), color var(--d1) var(--ease);
+}
+.repas-seg .seg.on{background:var(--card); color:var(--ink); box-shadow:0 1px 3px rgba(60,45,20,.18);}
+.meal-nav{display:flex; align-items:center; justify-content:space-between; gap:var(--s2); margin:0 -10px 2px;}
+.meal-nav button{
+  flex:none; width:44px; height:44px; display:flex; align-items:center; justify-content:center;
+  background:none; border:0; border-radius:50%; color:var(--ink2);
+}
+.meal-week{font-size:var(--fs-sec); font-weight:700; margin:0; text-align:center;}
+/* La carte suit directement la navigation de semaine (sans invitation) :
+   l'oiseau posé sur son bord déborde de ~32 px vers le haut, il ne doit pas
+   couvrir la flèche « semaine suivante ». */
+.meal-nav + .card{margin-top:30px;}
+.meal-stats{margin:var(--s1) 0 var(--s4); padding-bottom:var(--s3); border-bottom:1px solid var(--line);}
+/* 36 px sous l'invitation : l'oiseau de la carte déborde de ~32 px au-dessus
+   de son bord supérieur, il ne doit jamais chevaucher le bouton. */
+.meal-hint{text-align:center; margin-bottom:36px;}
+.meal-grid{display:grid; grid-template-columns:36px 1fr 1fr; gap:6px; align-items:stretch;}
+.meal-col{font-size:13px; font-weight:700; color:var(--ink2); padding:0 var(--s1) 2px;}
+.meal-day{
+  display:flex; flex-direction:column; justify-content:center;
+  font-size:12.5px; font-weight:600; color:var(--ink2); line-height:1.15;
+}
+.meal-day b{font-size:17px; font-weight:700; color:var(--ink2);}
+.meal-day.today,.meal-day.today b{color:var(--ink);}
+.meal-day.today b{text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:3px;}
+.meal-cell{
+  min-width:0; min-height:56px; padding:8px 10px;
+  display:flex; flex-direction:column; justify-content:center; gap:2px;
+  background:var(--sunken); border:1.5px solid transparent; border-radius:12px;
+  color:var(--ink); text-align:left;
+}
+.meal-dish{
+  font-size:15px; font-weight:600; line-height:1.25; overflow-wrap:anywhere;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.meal-meta{font-size:12.5px; color:var(--ink2);}
+.meal-cell.todo .meal-dish,.meal-cell.off .meal-dish,.meal-cell.past .meal-dish{color:var(--ink2); font-weight:500;}
+.meal-cell.off{background:none; border:1.5px dashed var(--line);}
+.meal-type-save{margin-top:var(--s4);}
+.meal-left{margin:var(--s2) 0 0;}
+
 /* ---------- Au-delà de 900 px : colonne centrée plafonnée (desktop en V2) ---------- */
 @media (min-width:900px){
   .app{max-width:560px; margin:0 auto;}
@@ -713,6 +772,7 @@ body.capture-open .toast{bottom:calc(150px + env(safe-area-inset-bottom));}
   <section id="s-today" class="screen active"></section>
   <section id="s-tasks" class="screen"></section>
   <section id="s-maison" class="screen"></section>
+  <section id="s-meals" class="screen"></section>
   <section id="s-shopping" class="screen"></section>
   <section id="s-habits" class="screen"></section>
   <section id="s-settings" class="screen"></section>
@@ -722,7 +782,7 @@ body.capture-open .toast{bottom:calc(150px + env(safe-area-inset-bottom));}
   <button class="tab on" data-s="today" onclick="go('today')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 1.8"></path></svg>Aujourd'hui</button>
   <button class="tab" data-s="tasks" onclick="go('tasks')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"></path></svg>Tâches</button>
   <button class="tab" data-s="maison" onclick="go('maison')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"></path></svg>Maison</button>
-  <button class="tab" data-s="shopping" onclick="go('shopping')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11H6.2z"></path><path d="M9 8V6a3 3 0 0 1 6 0v2"></path></svg>Courses</button>
+  <button class="tab" data-s="repas" onclick="goRepas()"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v6a3 3 0 0 0 6 0V3"></path><path d="M9 3v18"></path><path d="M18 21V3c-2.2 1.2-3.5 3.6-3.5 7.5 0 1.4.9 2.5 2 2.5H18"></path></svg>Repas</button>
   <button class="tab" data-s="habits" onclick="go('habits')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"></path><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><path d="M7 22l-4-4 4-4"></path><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>Habitudes</button>
 </nav>
 
@@ -746,6 +806,7 @@ body.capture-open .toast{bottom:calc(150px + env(safe-area-inset-bottom));}
 <script src="js/maison.js"></script>
 <script src="js/habits.js"></script>
 <script src="js/shopping.js"></script>
+<script src="js/meals.js"></script>
 <script src="js/review.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/boot.js"></script>

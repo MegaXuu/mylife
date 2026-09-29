@@ -210,7 +210,10 @@ function renderShopping(){
   const progress = (_shopStore && items.length)
     ? '<span class="shop-progress">'+done.length+' / '+items.length+' pris</span>' : '';
   document.getElementById('s-shopping').innerHTML =
-    screenHead(sur, 'Courses')+
+    // Lot V3-2 : Courses est la seconde moitié de l'onglet Repas, derrière
+    // la même bascule que Menus (repasSegHtml(), js/meals.js).
+    screenHead(sur, 'Repas')+
+    repasSegHtml('shopping')+
     '<div class="shop-bar">'+
       '<div class="chips filter-chips">'+
         '<button class="chip'+(!_shopStore ? ' on' : '')+'" onclick="setShopMode(false)">Liste</button>'+

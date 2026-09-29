@@ -21,7 +21,7 @@ const FILES = [
   'data/rayons.js', 'data/entretien.js', 'data/oiseaux.js',
   'js/state.js', 'js/ui.js', 'js/gestures.js', 'js/recur.js', 'js/nlp.js', 'js/today.js',
   'js/tasks.js', 'js/maison.js', 'js/habits.js',
-  'js/shopping.js', 'js/review.js', 'js/settings.js', 'js/boot.js',
+  'js/shopping.js', 'js/meals.js', 'js/review.js', 'js/settings.js', 'js/boot.js',
 ];
 const bundle = FILES.map(read).join('\n');
 const html = read('index.html')
@@ -156,8 +156,8 @@ call('Réglages — six groupes dans l’ordre attendu', () => {
   });
 });
 
-// 1) Les 6 écrans naviguent sans erreur runtime.
-['today', 'tasks', 'maison', 'shopping', 'habits', 'settings'].forEach(scr =>
+// 1) Les 7 écrans naviguent sans erreur runtime (Menus depuis le Lot V3-2).
+['today', 'tasks', 'maison', 'meals', 'shopping', 'habits', 'settings'].forEach(scr =>
   call(`go('${scr}')`, () => win.go(scr))
 );
 
@@ -1715,6 +1715,162 @@ shopScenario('Courses — mode magasin : reste à prendre par rayon et progressi
   win.setShopMode(false);
 });
 
+// 6 quattuordecies) Repas (Lot V3-2, js/meals.js) : semaine type et
+// exceptions, compte de la semaine, plats appris, restes, « Me proposer »,
+// « Reprendre la semaine dernière », ligne d'Aujourd'hui, onglet Repas.
+// Chaque scénario part d'une ardoise vide (meals + semaine type) et restaure
+// derrière lui, comme scenario()/habitScenario()/shopScenario().
+const mealScenario = (label, build) => call(label, () => {
+  const backupM = S.meals.slice(), backupW = S.settings.mealWeek, backupSet = S.settings.mealWeekSet;
+  S.meals.length = 0; S.settings.mealWeek = win.mealWeekDefault(); S.settings.mealWeekSet = false;
+  try{ build(); } finally {
+    S.meals.length = 0; backupM.forEach(m => S.meals.push(m));
+    S.settings.mealWeek = backupW; S.settings.mealWeekSet = backupSet;
+    win.closeSheet();
+  }
+});
+const nextMonday = () => win.addDays(win.weekMonday(win.todayKey()), 7); // semaine entièrement à venir
+
+mealScenario('Repas — semaine type : les exceptions seules sont stockées, un statut par défaut s’hérite', () => {
+  const lun = nextMonday();
+  S.settings.mealWeek[1].midi = {s: 'cantine', p: 2};
+  S.settings.mealWeek[5].soir = {s: 'plan', p: 1};
+  if(win.mealSlot(lun, 'midi').status !== 'cantine') throw new Error('lundi midi hérite « cantine » de la semaine type');
+  if(win.mealSlot(win.addDays(lun, 4), 'soir').people !== 1) throw new Error('vendredi soir hérite d’1 personne');
+  if(S.meals.length) throw new Error('lire une semaine ne crée aucun objet');
+  const st = win.mealWeekStats(lun);
+  if(st.plan !== 13 || st.duo !== 12 || st.portions !== 25 || st.todo !== 13)
+    throw new Error('compte attendu 13 repas, 12 à deux, 25 portions, 13 à choisir ; obtenu ' + JSON.stringify(st));
+  // Poser un plat puis le retirer : l'objet repart en tombstone, rien ne traîne.
+  win.upsertMeal(lun, 'soir', {dish: 'Lasagnes'});
+  if(win.mealWeekStats(lun).todo !== 12) throw new Error('un plat posé retire un repas « à choisir »');
+  win.upsertMeal(lun, 'soir', {dish: ''});
+  if(win.live(S.meals).length) throw new Error('un repas revenu à la semaine type ne garde aucun objet vivant');
+  // Une exception égale à la semaine type n'est pas une exception.
+  const m = win.upsertMeal(lun, 'midi', {status: 'cantine', dish: ''});
+  if(m.status !== null || !m.deletedAt) throw new Error('« cantine » un jour déjà cantine n’a rien à retenir');
+});
+
+mealScenario('Repas — la fiche : plat avec majuscule, suggestions apprises, statut, restes annulables', () => {
+  const lun = nextMonday();
+  win.go('meals');
+  win.mealSheet(lun, 'soir');
+  const input = win.document.getElementById('m-dish');
+  input.value = 'lasagnes'; input.dispatchEvent(new win.Event('input', {bubbles: true}));
+  win.saveMealSheet();
+  if(win.mealSlot(lun, 'soir').dish !== 'Lasagnes') throw new Error('le plat s’enregistre avec sa majuscule (cap())');
+  // Appris : proposé au repas suivant, en un tap.
+  win.mealSheet(win.addDays(lun, 1), 'midi');
+  const sugg = win.document.getElementById('m-sugg').textContent;
+  if(!/Lasagnes/.test(sugg)) throw new Error('un plat déjà mangé devrait être proposé en un tap');
+  win.pickMealDish(0);
+  if(win.mealSlot(win.addDays(lun, 1), 'midi').dish !== 'Lasagnes') throw new Error('taper une suggestion pose le plat et ferme');
+  if(win.mealDishes()[0].count !== 2) throw new Error('mealDishes() compte les occurrences');
+  // Restes : sur le prochain repas libre (mardi soir), annulables.
+  win.mealSheet(win.addDays(lun, 1), 'midi');
+  win.mealLeftoverAction();
+  const x = win.mealSlot(win.addDays(lun, 1), 'soir');
+  if(x.dish !== 'Lasagnes' || !x.leftover) throw new Error('les restes tombent sur le prochain repas à prévoir libre');
+  if(win.mealDishes()[0].count !== 2) throw new Error('des restes ne comptent pas comme un plat de plus');
+  win._runToastAct();
+  if(win.mealSlot(win.addDays(lun, 1), 'soir').dish) throw new Error('annuler retire les restes posés');
+  // Statut : « Cantine » vide le plat et sort le repas du compte.
+  win.mealSheet(lun, 'soir');
+  win.setMealStatus('cantine');
+  win.saveMealSheet();
+  const y = win.mealSlot(lun, 'soir');
+  if(y.status !== 'cantine' || y.dish) throw new Error('un repas à la cantine n’a pas de plat');
+});
+
+mealScenario('Repas — « Me proposer » : repas ouverts seulement, sans doublon ni plat récent', () => {
+  const lun = nextMonday();
+  const passe = win.addDays(lun, -21); // historique : il y a trois semaines
+  ['Curry', 'Gratin', 'Soupe', 'Quiche', 'Tacos', 'Risotto'].forEach((p, i) => {
+    win.upsertMeal(win.addDays(passe, i), 'soir', {dish: p});
+    win.upsertMeal(win.addDays(passe, i), 'midi', {dish: p});
+  });
+  win.upsertMeal(win.addDays(lun, -3), 'soir', {dish: 'Tacos'});  // mangé il y a 3 jours : à éviter
+  win.upsertMeal(lun, 'midi', {dish: 'Pizza'});                   // déjà posé : à garder
+  S.settings.mealWeek[3].midi = {s: 'cantine', p: 2};             // mercredi midi : cantine, jamais rempli
+  const r = win.proposeMeals(lun, () => 0.5);
+  const semaine = win.weekSlots(lun);
+  const plats = semaine.filter(x => x.dish).map(x => x.dish);
+  if(win.mealSlot(lun, 'midi').dish !== 'Pizza') throw new Error('un plat déjà posé n’est jamais remplacé');
+  if(win.mealSlot(win.addDays(lun, 2), 'midi').dish) throw new Error('un repas cantine ne reçoit jamais de plat');
+  if(plats.indexOf('Tacos') !== -1) throw new Error('un plat mangé il y a moins de 10 jours n’est pas proposé');
+  if(new Set(plats).size !== plats.length) throw new Error('aucun doublon dans la semaine : ' + plats.join(','));
+  if(r.filled !== 5) throw new Error('5 plats connus proposables (6 moins Tacos) : ' + r.filled + ' remplis');
+  win.restoreMealSnapshot(r.snap);
+  if(win.weekSlots(lun).filter(x => x.dish).length !== 1) throw new Error('annuler retire tout ce que « Me proposer » a posé');
+});
+
+mealScenario('Repas — « Reprendre la semaine dernière » ne touche qu’aux repas ouverts', () => {
+  const lun = nextMonday();
+  win.upsertMeal(win.addDays(lun, -7), 'soir', {dish: 'Chili'});
+  win.upsertMeal(win.addDays(lun, -6), 'soir', {dish: 'Chili', leftover: true});
+  win.upsertMeal(win.addDays(lun, -5), 'soir', {dish: 'Poisson'});
+  win.upsertMeal(win.addDays(lun, 2), 'soir', {dish: 'Omelette'});
+  const r = win.copyLastWeekMeals(lun);
+  if(r.filled !== 2) throw new Error('deux repas ouverts ont un modèle la semaine d’avant, obtenu ' + r.filled);
+  if(win.mealSlot(lun, 'soir').dish !== 'Chili' || !win.mealSlot(win.addDays(lun, 1), 'soir').leftover)
+    throw new Error('le plat et le statut de restes sont repris tels quels');
+  if(win.mealSlot(win.addDays(lun, 2), 'soir').dish !== 'Omelette') throw new Error('un repas déjà choisi n’est jamais écrasé');
+});
+
+mealScenario('Repas — semaine type : la grille cycle 2 pers. → 1 → cantine → ailleurs, et l’indice disparaît', () => {
+  win.go('meals');
+  if(!/Régler ma semaine type/.test(win.document.getElementById('s-meals').textContent))
+    throw new Error('tant que la semaine type n’a jamais été réglée, l’écran propose de le faire');
+  win.mealTypeSheet();
+  win.cycleMealType(2, 'midi'); win.cycleMealType(2, 'midi'); // mardi midi : 2 → 1 → cantine
+  win.saveMealType();
+  if(S.settings.mealWeek[2].midi.s !== 'cantine' || !S.settings.mealWeekSet)
+    throw new Error('la semaine type s’enregistre, et sa première fois est retenue');
+  win.go('meals');
+  const el = win.document.getElementById('s-meals');
+  if(/Régler ma semaine type/.test(el.textContent)) throw new Error('une fois réglée, l’invitation disparaît');
+  if(el.querySelectorAll('.meal-cell').length !== 14) throw new Error('la grille compte 14 repas');
+  if(el.querySelectorAll('.bird').length > 1) throw new Error('un seul oiseau par écran');
+});
+
+mealScenario('Repas — Aujourd’hui : une ligne pour le repas du moment, ni pastille ni frein à l’état vide', () => {
+  const today = win.todayKey();
+  if(win.mealTodayLine(19)) throw new Error('tant que Menus n’a jamais servi, Aujourd’hui n’en parle pas');
+  win.upsertMeal(today, 'soir', {dish: 'Gratin'});
+  const soir = win.mealTodayLine(19);
+  if(!soir || soir.slot !== 'soir' || soir.dish !== 'Gratin') throw new Error('à 19 h, c’est le repas du soir');
+  const midi = win.mealTodayLine(9);
+  if(!midi || midi.slot !== 'midi') throw new Error('à 9 h, c’est le midi s’il est à prévoir');
+  S.settings.mealWeek[win.isoDow(today)].midi = {s: 'cantine', p: 2};
+  if(win.mealTodayLine(9).slot !== 'soir') throw new Error('midi à la cantine : on parle du soir');
+  const badge = win.todayBadgeCount();
+  win.go('today');
+  const el = win.document.getElementById('s-today');
+  if(!/Ce soir : Gratin/.test(el.textContent)) throw new Error('la ligne du repas devrait apparaître sur Aujourd’hui');
+  win.upsertMeal(today, 'soir', {dish: ''});
+  win.upsertMeal(win.addDays(today, 1), 'midi', {dish: 'Soupe'}); // Menus sert toujours
+  if(!/Ce soir : À choisir/.test((win.go('today'), win.document.getElementById('s-today').textContent)))
+    throw new Error('sans plat choisi, la ligne le dit');
+  if(win.todayBadgeCount() !== badge) throw new Error('un repas n’entre jamais dans la pastille');
+});
+
+call('Onglet Repas — Menus et Courses sous un seul onglet, qui ramène au dernier des deux', () => {
+  const tabs = [...win.document.querySelectorAll('#tabbar .tab')];
+  const repas = tabs.find(t => t.dataset.s === 'repas');
+  if(!repas || !/Repas/.test(repas.textContent)) throw new Error('un onglet « Repas » devrait remplacer « Courses »');
+  if(tabs.some(t => t.dataset.s === 'shopping')) throw new Error('plus d’onglet Courses à part');
+  win.go('shopping');
+  if(!repas.classList.contains('on')) throw new Error('l’onglet Repas reste allumé sur Courses');
+  if(!win.document.querySelector('#s-shopping .repas-seg')) throw new Error('Courses porte la bascule Menus | Courses');
+  win.go('today');
+  win.goRepas();
+  if(win.CURRENT_SCREEN !== undefined && win.document.querySelector('#s-shopping.active') === null)
+    throw new Error('toucher Repas ramène au dernier écran quitté (Courses)');
+  win.go('meals');
+  if(!repas.classList.contains('on')) throw new Error('l’onglet Repas est allumé sur Menus');
+  win.go('today');
+});
+
 // 7) Écriture immédiate puis relecture directe dans IndexedDB — équivalent, pour ce
 //    test de fumée, à vérifier la persistance après un rechargement de l'app.
 if(typeof win.saveNow === 'function'){
@@ -1751,7 +1907,7 @@ if(fails.length){
   fails.forEach(f => console.error('  - ' + f));
   process.exit(1);
 } else {
-  console.log('✓ Test fumée OK — 6 écrans, cycle de vie d’une tâche, oiseaux, casse,\n' +
+  console.log('✓ Test fumée OK — 7 écrans, cycle de vie d’une tâche, oiseaux, casse,\n' +
               '  socle d’interaction V2-1 (gestures.js chargé, undoable(), rowAttrs()),\n' +
               '  navigation & saisie V2-2 (cinq onglets, Habitudes atteignable à zéro,\n' +
               '  mémorisation du défilement, barre de saisie collée par écran),\n' +
@@ -1761,7 +1917,9 @@ if(fails.length){
               '  cochage de session, plafond, état vide, pastille), parseQuick (' + nlpCases.length + ' cas\n' +
               '  + mécanisme d’ignorance), entretien V3-1 (budget quotidien, jours fixes,\n' +
               '  pack maison étalé et sans doublon, migration des plantes, fiche en\n' +
-              '  minutes), habitudes (série/quota, jour\n' +
+              '  minutes), Repas V3-2 (semaine type et exceptions, compte de la semaine,\n' +
+              '  plats appris, restes, « Me proposer », semaine dernière reprise, ligne\n' +
+              '  d’Aujourd’hui, onglet Repas), habitudes (série/quota, jour\n' +
               '  sauté neutre, progression partielle, mode quota hebdomadaire, pas adapté\n' +
               '  à l’objectif et « Fait » en un geste, intégration Aujourd’hui, fiche),\n' +
               '  courses (guessRayon, fréquents, correction mémorisée,\n' +

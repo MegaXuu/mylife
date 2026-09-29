@@ -7,11 +7,12 @@
    (design system « Canopée », Lot V1-2).
    ========================================================================== */
 
-const SCREENS = ['today','tasks','maison','shopping','habits','settings'];
+const SCREENS = ['today','tasks','maison','meals','shopping','habits','settings'];
 const RENDERERS = {
   today: ()=>renderToday(),
   tasks: ()=>renderTasks(),
   maison: ()=>renderMaison(),
+  meals: ()=>renderMeals(),
   shopping: ()=>renderShopping(),
   habits: ()=>renderHabits(),
   settings: ()=>renderSettings()
@@ -32,15 +33,24 @@ function scrollPosFor(name){ return _scrollPos[name] || 0; }
 // <style>) pour que le dernier élément de liste ne passe jamais dessous.
 const CAPTURE_SCREENS = ['today','tasks','shopping'];
 
+// Onglet Repas (Lot V3-2) : deux écrans, Menus et Courses, derrière un seul
+// onglet — il reste allumé sur l'un comme sur l'autre, et le toucher ramène
+// à celui qu'on a quitté en dernier.
+const TAB_OF = {meals:'repas', shopping:'repas'};
+let _repasLast = 'meals';
+function goRepas(){ go(CURRENT_SCREEN === 'meals' || CURRENT_SCREEN === 'shopping' ? CURRENT_SCREEN : _repasLast); }
+
 function go(name){
   if(SCREENS.indexOf(name) === -1) return;
   const sameTab = name === CURRENT_SCREEN;
   if(!sameTab) _scrollPos[CURRENT_SCREEN] = window.scrollY;
   CURRENT_SCREEN = name;
+  if(TAB_OF[name] === 'repas') _repasLast = name;
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   const el = document.getElementById('s-'+name);
   if(el) el.classList.add('active');
-  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.s === name));
+  const tab = TAB_OF[name] || name;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.s === tab));
   document.body.classList.toggle('capture-open', CAPTURE_SCREENS.indexOf(name) !== -1);
   const render = RENDERERS[name];
   if(render) render();

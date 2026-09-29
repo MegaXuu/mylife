@@ -137,7 +137,11 @@ function todayBuckets(){
   //    pas dans la pastille (voir todayBadgeCount()).
   const shopping = shoppingOpenCount();
 
-  return {overdue, scheduled, chores, choresDone, choresWaiting, evening, quick, done, habits, shopping};
+  // 5 bis. Le repas du moment (js/meals.js, Lot V3-2) : une ligne, même
+  //    statut que les courses — un rappel ambiant, ni dû ni pastille.
+  const meal = mealTodayLine();
+
+  return {overdue, scheduled, chores, choresDone, choresWaiting, evening, quick, done, habits, shopping, meal};
 }
 
 // Pastille de l'icône iOS (ROADMAP §6) : ce qu'il reste à faire aujourd'hui.
@@ -294,6 +298,7 @@ function renderToday(){
     if(hasChores) html += choreCard(b, i++, nCards);
     if(b.habits.length) html += todayHabitsCard(b.habits, i++, nCards);
   }
+  if(b.meal) html += mealTodayHtml(b.meal);
   if(b.shopping) html += shoppingButtonHtml(b.shopping);
   if(b.evening.length) html += softSection('Ce soir', b.evening);
   if(!vide && b.quick.length) html += softSection('Si tu as 10 minutes', b.quick);
