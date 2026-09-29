@@ -216,7 +216,11 @@ uniquement des déclarations.
   (trait 2 px, terminaisons rondes), `screenHead(surTitre, titre, {noGear})`,
   `emptyState(titre, sousTitre)`, `gaugeColor(f)`, `CURRENT_SCREEN` (posé par `go()`), et les
   oiseaux : `pickBirds()` (appelé une fois au boot), `birdsOn()`, `birdSvg(nom, w, pos)`,
-  `birdOnCard(i, n)`, `birdOnPerch()`. Depuis le **Lot V2-1** : `undoable(msg, undoFn)` (enveloppe
+  `birdOnCard(i, n)`, `birdOnPerch()` (en mode sombre aussi depuis le Lot V3-3, `OISEAUX_SOMBRE`).
+  Depuis le **Lot V3-3** : `markPop()`/`popClass()`/`popThen()` (animation de coche),
+  `switchNative()`/`switchHtml()` (interrupteur natif à retour haptique, repli `.switch`), fondu
+  `.enter` et `aria-current` posés par `go()`, Échap ferme la feuille, `openSheet()` nomme le
+  dialogue par son `.sheet-title`. Depuis le **Lot V2-1** : `undoable(msg, undoFn)` (enveloppe
   `toast()` avec une action « Annuler » déjà câblée) et `rowAttrs(onTap, opts)` (attributs communs
   d'une ligne cliquable — `role="button"`, `tabindex="0"`, `onclick`, Entrée/Espace — posés sur les
   `.row`/`.row-main` cliquables de `today.js`/`tasks.js`/`maison.js`/`shopping.js`, audit D3).
@@ -531,13 +535,12 @@ uniquement des déclarations.
   du service worker, `saveNow()` sur `pagehide` et `visibilitychange→hidden`, `reg.update()` +
   rechargement sur `controllerchange` au retour au premier plan.
 - `sw.js` — cache-first avec mise à jour en arrière-plan (stale-while-revalidate) ; **incrémenter
-  `CACHE`** (`mylife-b1-N`) à chaque release.
-- `manifest.webmanifest`, `icon-180/192/512.png` (monogramme « M » pixelisé sur aplat gris foncé,
-  généré par script Node jetable + `zlib`, aucune dépendance) — display `standalone`, portrait.
+  `CACHE`** (`mylife-b3-N` en V3) à chaque release.
+- `manifest.webmanifest`, `icon-180/192/512.png` — depuis le **Lot V3-3**, le cacatoès rosalbin de
+  `data/oiseaux.js` perché sur une branche `--act`, fond `--bg`, rastérisé par `tools/gen-icons.mjs`
+  (`node tools/gen-icons.mjs .`, aucune dépendance : balayage + `zlib`) — display `standalone`, portrait.
   `theme_color`/`background_color` = `#F3EEE5` (identique au `<meta name="theme-color">`).
-  **Les icônes sont restées grises** : elles ne connaissent pas encore « Canopée » — passées en
-  revue au Lot 12 (Polish & QA) et sciemment laissées de côté (hors périmètre du lot, aucune des
-  7 tâches ne portait dessus), reportées en dette V2.
+  Les icônes grises des V1/V2 (monogramme « M ») ont été remplacées au Lot V3-3.
 
 ## Lancer / tester
 - Ouvrir `index.html` dans un navigateur (ou servir en local, ex. `python3 -m http.server`). Les
@@ -794,9 +797,36 @@ assumée à « un lot = une session »), chacun avec son commit et sa version.
   exceptions seules stockées, compte (repas, portions, à choisir), plats appris, restes, « Me
   proposer », « Reprendre la semaine dernière », quelques courses depuis un repas ; onglet **Repas**
   (Menus | Courses) à la place de Courses ; « Ce soir : … » sur Aujourd'hui.
-- **V3-3 — Mouvement, finition, QA** (Bêta 3.3) : à faire. Reprend le V2-8 (transitions, animation
-  de complétion, oiseaux en mode sombre, haptique, audit d'accessibilité) étendu aux écrans V3,
-  `QA-IPHONE-V3.md`, synchronisation de `CONVENTIONS.md` (glossaire, pièces, ordre de chargement).
+- **V3-3 — Mouvement, finition, QA** (Bêta 3.3) : ✅ Fait, carte blanche de Florian pour « tout
+  améliorer ». Précédé d'un **audit mesuré** de l'app réelle (pack installé, jeu de données complet,
+  clair et sombre), dont sont sortis la plupart des correctifs. **Mouvement** : fondu d'écran dans
+  `go()` (opacité seule — un transform ferait sauter la barre de saisie `position:fixed`), rebond de
+  la case et coche tracée (`markPop()`/`popClass()` sur le nouveau rendu, `popThen()` sur place quand
+  la ligne va disparaître, Tâches), délais d'animation remis à zéro sous `prefers-reduced-motion`
+  (vérifié : règle CSS dans le CSSOM, chemins JS stubés). **Oiseaux en mode sombre** (audit D4) :
+  `birdsOn()` ne les coupe plus, `OISEAUX_SOMBRE` remplace le plumage presque noir au rendu, un voile
+  CSS atténue l'éclat. **Haptique** : `switchHtml()` pose `<input type="checkbox" switch>` si le
+  navigateur le connaît (Safari 17.4+, `switchNative()`), l'ancien `.switch` sinon — non vérifiable
+  hors iPhone, `QA-IPHONE-V3.md` §5. **Accessibilité** : contrastes recalculés sur 48 paires ×
+  2 modes (seule `--ink2`/`--t-courses` est sous 4,5, et n'est portée par aucun texte) ; **toutes**
+  les cibles mesurées ≥ 44 px, ce qui a révélé que `.row-main` (le tap qui ouvre une fiche) ne
+  couvrait que la hauteur de son texte — 24 px pour un article de courses — corrigé pour toute la
+  ligne ; `aria-pressed` sur les 27 puces à état (dette V1-12 soldée) ; `aria-current` sur l'onglet ;
+  toast en `aria-live` ; feuille en `role="dialog"` nommée par son titre ; Échap ferme la feuille ;
+  `.seg` à 44 px. **Correctifs d'audit** : case rognée sur les lignes balayables (`.check` à −7 px) ;
+  champ de recherche de Tâches pleine largeur ; respiration entre le bloc du jour et la carte
+  suivante ; Maison **replié** (seul le dû à 2 jours est déplié, `MAISON_SOON_DAYS`,
+  `toggleMaisonRoom()`, 4 158 → 2 194 px avec le pack) ; un entretien jamais fait n'apparaît plus
+  dans Tâches ni dans la revue (`openTasks()`, `isChore()`) ; la barre de saisie retient une durée
+  chiffrée (`mins`, « 30 min » restait dans le titre) et annonce « Entretien ajouté à Maison » ;
+  habitudes sans « Série 0 j », sans doublon sur l'écran Habitudes, planning dit en mots (« Tous les
+  jours », « En semaine », « Le week-end »), « Sauter » calé à droite, boutons `.step` visibles en
+  sombre ; bloc Repas unique sur Aujourd'hui (`.repas-block`). **Finitions** : **icônes d'app
+  Canopée** (le cacatoès de `data/oiseaux.js` sur une branche verte, fond crème — dette V1-2 soldée,
+  générateur gardé dans `tools/gen-icons.mjs`, sans dépendance) ; export par la **feuille de partage
+  iOS** (`navigator.share` + fichier, repli sur le téléchargement) et « Dernière sauvegarde : … »
+  (`S.lastExport`) ; toast « MyLife est à jour » à l'arrivée d'une version (`announceUpdate()`,
+  `S.seenVersion`) ; code mort retiré (`freshness()`, champ `duo`). `QA-IPHONE-V3.md` écrit.
 
 ## Cycle V2 « L'usage » — clos à Bêta 2.7
 Plan complet dans `ROADMAP-V2.md` (audit du 14/08/2026, arbitrages §3, huit lots) ; `CONVENTIONS.md`
@@ -924,11 +954,13 @@ V3-3, la V3 changeant les écrans qu'il devait finir.
 ## Cycle V1 clos — dettes sciemment laissées pour la V2
 Le Lot 12 a fermé le cycle V1. Rien ci-dessous n'est un oubli : chaque point a été examiné et
 reporté délibérément, hors périmètre d'un lot « polish sans nouvelle fonctionnalité ».
-- **Icônes d'app encore grises** (`icon-180/192/512.png`) : jamais mises à jour vers « Canopée ».
-  Même script Node jetable + `zlib` à reprendre, juste avec les bonnes couleurs.
+- ~~Icônes d'app encore grises~~ — **refaites au Lot V3-3** (cacatoès sur sa branche,
+  `tools/gen-icons.mjs`). Une icône déjà installée ne change pas d'elle-même : réinstaller, en
+  exportant d'abord (supprimer l'app de l'écran d'accueil efface ses données).
 - ~~Pas de chemin d'édition/suppression pour une tâche d'entretien~~ — **comblé au Lot V2-5**
   (fiche au tap, balayage pour supprimer), fiche d'entretien dédiée depuis le Lot V3-1.
-- **Sémantique ARIA des `.chip`** : elles servent tantôt de filtre à sélection unique (catégorie,
+- ~~Sémantique ARIA des `.chip`~~ — **soldée au Lot V3-3** : `aria-pressed` sur les 27 puces à état.
+  Pour mémoire, le constat d'origine : elles servent tantôt de filtre à sélection unique (catégorie,
   pièce, priorité, effort, mode Liste/Mode magasin), tantôt de multi-sélection (jours de semaine
   d'une récurrence), tantôt de puce supprimable (aperçu de capture). Aucune ne porte de rôle ARIA
   au-delà du texte visible. Un passage cohérent (`role="radiogroup"`/`radio` pour le sélecteur
@@ -937,6 +969,10 @@ reporté délibérément, hors périmètre d'un lot « polish sans nouvelle fonc
   prudence (risque de régression disproportionné pour une amélioration purement sémantique, sans
   impact visuel). Les contrastes et tailles de cible, eux, sont conformes (voir tableau Lot 12).
 - ~~`--t-plantes` (variable CSS) dormante~~ — **retirée au Lot V3-1**, avec les plantes.
+- **`js/habits.js` à 628 lignes** (Lot V3-3), juste au-dessus du seuil indicatif de ~600
+  (`CONVENTIONS.md` §1) : pas scindé pour 28 lignes. Au prochain ajout dans ce domaine, séparer le
+  moteur (série, quota, journal) de l'écran et du bloc d'Aujourd'hui — un 18ᵉ fichier, donc les trois
+  listes miroir à tenir ensemble.
 - **`rayonOrderSheet()` dupliqué** (Réglages → Courses, et l'écran Courses lui-même) : audité au
   Lot 12, Florian a choisi de garder les deux. Ce n'est donc pas une dette, mais une décision à ne
   pas re-questionner sans raison nouvelle.

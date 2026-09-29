@@ -136,6 +136,11 @@ Toute lecture de collection passe par `live()`. Toute mutation passe par `touch(
 ### Composants
 - Navigation : `go(name)` — écrans `today, tasks, maison, meals, shopping, habits, settings`
   (`meals` et `shopping` partagent l'onglet Repas depuis le Lot V3-2).
+- Interrupteurs : `switchHtml(on, label, fn)` (Lot V3-3) — natif à retour haptique là où Safari le
+  connaît, `.switch` sinon. Jamais un `.switch` écrit à la main.
+- Lignes cliquables : `rowAttrs()` sur `.row-main`, qui s'étire sur toute la hauteur de la ligne
+  (CSS du Lot V3-3) — une cible, c'est la ligne entière, pas son texte.
+- Puces à état (`.chip` avec `on`) : toujours `aria-pressed` (Lot V3-3).
 - Feuilles modales : `openSheet(html)` / `closeSheet()`. Fermeture par bouton, par tap en dehors et
   par glisser vers le bas depuis la poignée.
 - Confirmations destructives : **jamais `confirm()` natif** — feuille `confirmSheet(message, label,
@@ -161,8 +166,8 @@ Toute lecture de collection passe par `live()`. Toute mutation passe par `touch(
 [ ] npm test passe (aucune erreur runtime)
 [ ] si un fichier a été ajouté : les 3 listes miroir sont à jour
     (index.html <script>, sw.js ASSETS, test.mjs FILES)
-[ ] CACHE incrémenté dans sw.js          → 'mylife-b1-N'
-[ ] APP_VERSION synchronisé dans state.js → 'Bêta 1.N'   (MÊME numéro que CACHE)
+[ ] CACHE incrémenté dans sw.js          → 'mylife-b3-N' (V3 ; b1 en V1, b2 en V2)
+[ ] APP_VERSION synchronisé dans state.js → 'Bêta 3.N'   (MÊME numéro que CACHE)
 [ ] CLAUDE.md mis à jour si quelque chose y est devenu faux
 [ ] Aucun style="..." non calculé ajouté ; aucune classe CSS orpheline laissée
 [ ] Un seul commit, message en français : « Lot V1-N « Titre » : résumé (Bêta 1.N) »
@@ -208,7 +213,7 @@ Vocabulaire à employer dans le code **et** dans l'interface, sans synonyme flot
 | **Semaine type** | Les 14 repas habituels de la semaine, réglés une fois (`settings.mealWeek`) ; chaque semaine en part |
 | **Plat** | Le nom de ce qu'on mange, rien de plus. Les plats connus se déduisent de l'historique, jamais saisis à part |
 | **Habitude** | Un engagement de régularité personnel. Se mesure en **série** et en **quota**, jamais en jauge |
-| **Jauge de fraîcheur** | `1 − (jours depuis la dernière fois / intervalle)`, borné [0,1]. 1 = frais, 0 = à faire |
+| **Jauge de fraîcheur** | `jours restants avant l'échéance / intervalle`, au jour près (`choreFresh()`, Lot V3-1). 1 = frais, 0 = à faire, négatif = à faire depuis un moment (jamais « en retard » à l'écran) |
 | **Série** | Jours consécutifs où l'objectif d'une habitude est atteint. Les jours inactifs et les jours **sautés** ne la cassent pas |
 | **Sauté** | Jour explicitement neutralisé sur une habitude. Ni réussite ni échec |
 | **Bucket** | `scheduled` (a une date) · `anytime` (faisable dès qu'il y a un trou) · `someday` (pas mûr, n'apparaît nulle part) |

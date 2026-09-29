@@ -11,6 +11,7 @@ async function boot(){
   applyTheme(); // js/settings.js — avant le premier rendu, pour éviter tout flash
   watchSystemTheme();
   go('today');
+  announceUpdate();    // js/settings.js — un toast quand une nouvelle version vient d'arriver
   maybeWelcome();      // js/settings.js — uniquement au tout premier lancement
   maybeStartReview();  // js/review.js — le jour venu, si des tâches dorment
 }

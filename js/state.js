@@ -5,7 +5,7 @@
    AUCUN RENDU DOM ICI — voir js/ui.js et les js/<ecran>.js pour l'affichage.
    ========================================================================== */
 
-const APP_VERSION = 'Bêta 3.2'; // à synchroniser avec CACHE (sw.js) à chaque release
+const APP_VERSION = 'Bêta 3.3'; // à synchroniser avec CACHE (sw.js) à chaque release
 
 const IDB_NAME = 'mylife';
 const IDB_VERSION = 1;
@@ -46,6 +46,8 @@ function defaults(){
       theme: 'auto'        // 'light' | 'dark' | 'auto' (Lot 11) — auto suit prefers-color-scheme
     },
     lastReview: null,
+    lastExport: null,   // dernier export JSON (ms) — Réglages le rappelle (Lot V3-3)
+    seenVersion: null,  // dernière version vue au démarrage — annonce d'une mise à jour (Lot V3-3)
     onboarded: false
   };
 }
@@ -93,6 +95,8 @@ function migrate(r){
   if(!r.settings.rayonOrder || !r.settings.rayonOrder.length) r.settings.rayonOrder = RAYON_ORDER_DEFAULT.slice();
   if(!r.settings.rayonOverrides) r.settings.rayonOverrides = {};
   if(r.lastReview === undefined) r.lastReview = null;
+  if(r.lastExport === undefined) r.lastExport = null;
+  if(r.seenVersion === undefined) r.seenVersion = null;
   // Lot V1-11 : une base déjà peuplée avant l'existence de la bienvenue ne
   // doit jamais se la voir proposer après coup — seule une base réellement
   // vierge (aucune tâche, plante, habitude ou article) reste à onboarder.

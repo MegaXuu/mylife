@@ -83,7 +83,9 @@ Version affichée **Bêta 3.N**, `CACHE = 'mylife-b3-N'`, `APP_VERSION = 'Bêta 
 |---|---|---|---|
 | **V3-1** | Bêta 3.1 | **Maison prête à l'emploi** | Pack maison + étalement, budget d'entretien quotidien, entretien à jour fixe, durée en minutes, fiche d'entretien dédiée, retrait des plantes (+ migration), pièces du logement |
 | **V3-2** | Bêta 3.2 | **Repas** | Onglet Repas (Menus \| Courses), `js/meals.js`, semaine type, exceptions, compte des repas, plats appris, restes, reprendre la semaine dernière, me proposer, ligne du soir sur Aujourd'hui |
-| **V3-3** | Bêta 3.3 | **Mouvement, finition, QA** | L'ancien V2-8 (transitions, animation de complétion, oiseaux en mode sombre, haptique des interrupteurs, audit d'accessibilité), étendu aux écrans V3, `QA-IPHONE-V3.md`, synchronisation de `CLAUDE.md`/`CONVENTIONS.md` |
+| **V3-3** | Bêta 3.3 | **Mouvement, finition, QA** | L'ancien V2-8 (transitions, animation de complétion, oiseaux en mode sombre, haptique des interrupteurs, audit d'accessibilité), étendu aux écrans V3, `QA-IPHONE-V3.md`, synchronisation de `CLAUDE.md`/`CONVENTIONS.md` — **plus**, carte blanche de Florian, les correctifs d'un audit mesuré (Maison replié, cibles pleine ligne, entretien hors de Tâches…), les icônes Canopée, l'export par la feuille de partage iOS et l'annonce des mises à jour |
+
+**État au 29/09/2026 : les trois lots sont faits.** V3-1 et V3-2 en Bêta 3.2, V3-3 en Bêta 3.3.
 
 Le V2-8 n'a pas été fait avant la V3 : il finit des écrans que la V3 change (tab bar, Maison,
 Aujourd'hui). Le faire avant aurait été le refaire après.

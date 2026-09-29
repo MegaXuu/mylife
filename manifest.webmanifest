@@ -1,7 +1,7 @@
 {
   "name": "MyLife",
   "short_name": "MyLife",
-  "description": "Qu'est-ce que je dois faire maintenant ? Tâches, entretien, plantes, habitudes, courses — hors-ligne.",
+  "description": "Qu'est-ce que je dois faire maintenant ? Tâches, entretien, habitudes, repas, courses — hors-ligne.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

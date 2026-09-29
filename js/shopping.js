@@ -147,7 +147,7 @@ function shopRowHtml(it){
   return '<li class="row'+(it.done ? ' done' : '')+'"'+
       ' data-swipe-left="deleteShopItem(\''+it.id+'\')"'+
       ' data-swipe-right="toggleShopDone(\''+it.id+'\')" data-swipe-right-label="'+(it.done ? 'Décocher' : 'Cocher')+'">'+
-    '<button class="check'+(it.done ? ' on' : '')+'" role="checkbox" aria-checked="'+it.done+'" '+
+    '<button class="check'+(it.done ? ' on'+popClass(it.id) : '')+'" role="checkbox" aria-checked="'+it.done+'" '+
       'aria-label="'+(it.done ? 'Décocher' : 'Marquer acheté')+'" onclick="toggleShopDone(\''+it.id+'\')"></button>'+
     '<div class="row-main"'+rowAttrs("shopItemSheet('"+it.id+"')")+'><div class="row-title">'+esc(it.label)+'</div></div>'+
     (it.qty ? '<div class="row-qty">× '+esc(it.qty)+'</div>' : '')+
@@ -216,8 +216,8 @@ function renderShopping(){
     repasSegHtml('shopping')+
     '<div class="shop-bar">'+
       '<div class="chips filter-chips">'+
-        '<button class="chip'+(!_shopStore ? ' on' : '')+'" onclick="setShopMode(false)">Liste</button>'+
-        '<button class="chip'+(_shopStore ? ' on' : '')+'" onclick="setShopMode(true)">Mode magasin</button>'+
+        '<button class="chip'+(!_shopStore ? ' on' : '')+'" aria-pressed="'+!!(!_shopStore)+'" onclick="setShopMode(false)">Liste</button>'+
+        '<button class="chip'+(_shopStore ? ' on' : '')+'" aria-pressed="'+!!(_shopStore)+'" onclick="setShopMode(true)">Mode magasin</button>'+
       '</div>'+
       progress+
     '</div>'+
@@ -258,6 +258,7 @@ function toggleShopDone(id){
   it.done = !it.done;
   touch(it);
   save();
+  if(it.done) markPop(id); // la case cochée joue son animation, là où l'article est rangé (Lot V3-3)
   renderShopping();
 }
 
@@ -299,7 +300,7 @@ function setShRayon(r){ _shItem.rayon = r; refreshShopItemSheet(); }
 function shopItemSheetHtml(){
   const d = _shItem;
   const rayonChips = RAYON_ORDER_DEFAULT.map(r=>
-    '<button class="chip'+(d.rayon === r ? ' on' : '')+'" onclick="setShRayon(\''+r+'\')">'+esc(RAYON_LABELS[r])+'</button>'
+    '<button class="chip'+(d.rayon === r ? ' on' : '')+'" aria-pressed="'+!!(d.rayon === r)+'" onclick="setShRayon(\''+r+'\')">'+esc(RAYON_LABELS[r])+'</button>'
   ).join('');
   return '<p class="sheet-title">Modifier l’article</p>'+
     '<div class="field-group">'+

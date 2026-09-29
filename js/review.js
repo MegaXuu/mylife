@@ -17,7 +17,9 @@ const REVIEW_POSTPONE_MAX = 3;  // postponed au-delà de ça → candidate aussi
 function reviewCandidates(ref){
   ref = ref || Date.now();
   const cutoff = ref - REVIEW_STALE_DAYS*24*60*60*1000;
-  return live(S.tasks).filter(t=>!t.doneAt &&
+  // Jamais un entretien, même jamais fait (isChore(), Lot V3-3) : il se
+  // pilote par sa jauge dans Maison, pas par une revue de dormance.
+  return live(S.tasks).filter(t=>!t.doneAt && !isChore(t) &&
       ((t.touchedAt || t.createdAt || 0) < cutoff || (t.postponed||0) > REVIEW_POSTPONE_MAX))
     .sort((a,b)=>(a.touchedAt||a.createdAt||0) - (b.touchedAt||b.createdAt||0));
 }

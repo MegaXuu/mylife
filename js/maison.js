@@ -22,6 +22,7 @@
    ========================================================================== */
 
 const CHORE_BUDGET_DEFAULT = 30; // minutes d'entretien proposées par jour
+const MAISON_SOON_DAYS = 2;      // Maison ne déplie d'office que l'« à faire », demain et après-demain (Lot V3-3)
 
 function isChore(t){ return !!(t && t.room && t.repeat && t.repeat.from === 'done'); }
 function getMaisonItems(){ return live(S.tasks).filter(isChore); }
@@ -143,18 +144,36 @@ function choreRowHtml(t, today){
   '</li>';
 }
 
-// Carte blanche par pièce, le plus dû en tête ; le compte d'éléments à faire
-// à droite du nom (audit B4, Lot V2-5).
+/* Carte blanche par pièce, le plus dû en tête ; le compte d'éléments à faire
+   à droite du nom (audit B4, Lot V2-5).
+   Divulgation progressive (Lot V3-3) : avec le pack maison, l'écran faisait
+   5 écrans de haut pour 40 entretiens dont la plupart ne demandaient rien
+   avant des semaines. Chaque pièce ne déplie d'office que ce qui tombe dans
+   les MAISON_SOON_DAYS jours ; le reste attend derrière « + N autres »,
+   ouvert pièce par pièce pour la session (comme « Peut-être » sur Tâches). */
+let _maisonOpen = {};
+function toggleMaisonRoom(r){ _maisonOpen[r] = !_maisonOpen[r]; renderMaison(); }
+
 function maisonRoomSection(room, items, i, n, today){
   const sorted = items.slice().sort((a, b)=>choreFresh(a, today) - choreFresh(b, today));
   const due = items.filter(t=>choreFresh(t, today) <= 0).length;
   const count = due ? due+' à faire' : 'Tout est frais';
+  const soonKey = addDays(today, MAISON_SOON_DAYS);
+  const soon = sorted.filter(t=>choreDueKey(t, today) <= soonKey);
+  const open = !!_maisonOpen[room];
+  const shown = open ? sorted : soon;
+  const hidden = sorted.length - shown.length;
+  const toggle = hidden
+    ? '<button class="more" onclick="toggleMaisonRoom(\''+room+'\')">'+
+        (shown.length ? '+ '+hidden+(hidden > 1 ? ' autres' : ' autre') : 'Voir '+(hidden > 1 ? 'les '+hidden+' entretiens' : 'l’entretien'))+'</button>'
+    : (open && soon.length < sorted.length ? '<button class="more" onclick="toggleMaisonRoom(\''+room+'\')">Réduire</button>' : '');
   return '<div class="card">'+birdOnCard(i, n)+
     '<div class="room-head">'+
       '<h2 class="card-title">'+esc(ROOM_LABELS[room] || room)+'</h2>'+
       '<span class="room-count">'+esc(count)+'</span>'+
     '</div>'+
-    '<ul class="list room-list">'+sorted.map(t=>choreRowHtml(t, today)).join('')+'</ul>'+
+    (shown.length ? '<ul class="list room-list">'+shown.map(t=>choreRowHtml(t, today)).join('')+'</ul>' : '')+
+    toggle+
   '</div>';
 }
 
@@ -351,7 +370,7 @@ function entretienSheetHtml(){
   const room = _entSheet.room;
   const have = trackedChoreKeys();
   const roomChips = roomChoices(room).map(r=>
-    '<button class="chip'+(room===r?' on':'')+'" onclick="setEntRoom(\''+r+'\')">'+esc(ROOM_LABELS[r])+'</button>'
+    '<button class="chip'+(room===r ? ' on' : '')+'" aria-pressed="'+!!(room===r)+'" onclick="setEntRoom(\''+r+'\')">'+esc(ROOM_LABELS[r])+'</button>'
   ).join('');
   const rows = ENTRETIEN.map((m, i)=>m.room === room ? {m, i} : null).filter(Boolean).map(({m, i})=>{
     const meta = modelRhythm(m)+' · '+m.mins+' min';

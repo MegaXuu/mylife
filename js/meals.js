@@ -70,16 +70,15 @@ function weekSlots(start){
   weekDays(start).forEach(d=>MEAL_SLOTS.forEach(s=>out.push(mealSlot(d, s))));
   return out;
 }
-// Le compte de la semaine : repas à prévoir, dont à deux ou plus, portions
-// — sur la semaine entière, pour que le chiffre ne fonde pas au fil des
-// jours — et combien restent à choisir, à partir d'aujourd'hui seulement :
-// un lundi soir passé sans plat noté n'est plus à choisir.
+// Le compte de la semaine : repas à prévoir et portions — sur la semaine
+// entière, pour que le chiffre ne fonde pas au fil des jours — et combien
+// restent à choisir, à partir d'aujourd'hui seulement : un lundi soir passé
+// sans plat noté n'est plus à choisir.
 function mealWeekStats(start){
   const today = todayKey();
   const plan = weekSlots(start).filter(x=>x.status === 'plan');
   return {
     plan: plan.length,
-    duo: plan.filter(x=>x.people >= 2).length,
     portions: plan.reduce((s, x)=>s + x.people, 0),
     todo: plan.filter(x=>!x.dish && x.day >= today).length
   };
@@ -369,10 +368,10 @@ function mealSheetHtml(){
   const d = _mSheet;
   const plan = d.status === 'plan';
   const statusChips = MEAL_STATUS_ORDER.map(s=>
-    '<button class="chip'+(d.status === s ? ' on' : '')+'" onclick="setMealStatus(\''+s+'\')">'+esc(MEAL_STATUS_LABELS[s])+'</button>'
+    '<button class="chip'+(d.status === s ? ' on' : '')+'" aria-pressed="'+!!(d.status === s)+'" onclick="setMealStatus(\''+s+'\')">'+esc(MEAL_STATUS_LABELS[s])+'</button>'
   ).join('');
   const peopleChips = MEAL_PEOPLE.map(p=>
-    '<button class="chip'+(d.people === p ? ' on' : '')+'" onclick="setMealPeople('+p+')">'+p+' pers.</button>'
+    '<button class="chip'+(d.people === p ? ' on' : '')+'" aria-pressed="'+!!(d.people === p)+'" onclick="setMealPeople('+p+')">'+p+' pers.</button>'
   ).join('');
   const shop = !d.shop ? '<button class="btn quiet btn-full" onclick="toggleMealShop()">Ajouter des courses</button>' :
     '<div class="field-group"><span class="overline">Courses</span><div class="addbar meal-shop">'+

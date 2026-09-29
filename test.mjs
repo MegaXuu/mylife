@@ -244,16 +244,22 @@ call('stamp/touch/live', () => {
   if(win.live([o, {deletedAt: Date.now()}]).length !== 1) throw new Error('live() ne filtre pas les tombstones');
 });
 
-// 4) Oiseaux (Lot 2) : décoratifs, un seul par écran, aucun en mode sombre.
+// 4) Oiseaux (Lot 2) : décoratifs, un seul par écran — y compris en mode sombre depuis le Lot V3-3.
 call('oiseaux', () => {
   win.go('today');
   const oiseaux = win.document.querySelectorAll('#s-today .bird');
   if(oiseaux.length !== 1) throw new Error(`${oiseaux.length} oiseau(x) sur Aujourd'hui, attendu 1`);
   if(oiseaux[0].getAttribute('aria-hidden') !== 'true') throw new Error('oiseau non masqué aux lecteurs d’écran');
+  // Depuis le Lot V3-3 (audit D4), les oiseaux restent en mode sombre — un
+  // seul, toujours — et le plumage presque noir y est remplacé au rendu.
   win.document.documentElement.setAttribute('data-mode', 'dark');
   win.go('today');
-  if(win.document.querySelectorAll('#s-today .bird').length) throw new Error('oiseau présent en mode sombre');
+  if(win.document.querySelectorAll('#s-today .bird').length !== 1) throw new Error('un oiseau, et un seul, doit rester en mode sombre');
+  const toucanSombre = win.birdSvg('toucan', 30, '');
+  if(/#1E1B18/i.test(toucanSombre) || !/#5A5249/i.test(toucanSombre))
+    throw new Error('en mode sombre, le plumage presque noir du toucan doit passer à sa variante (OISEAUX_SOMBRE)');
   win.document.documentElement.removeAttribute('data-mode');
+  if(!/#1E1B18/i.test(win.birdSvg('toucan', 30, ''))) throw new Error('en mode clair, le toucan garde ses couleurs d’origine');
   S.settings.birds = false;
   win.go('today');
   if(win.document.querySelectorAll('#s-today .bird').length) throw new Error('interrupteur « Oiseaux » sans effet');
@@ -296,17 +302,7 @@ call('nextDue jours fixes de semaine', () => {
   if(win.nextDue(t) !== '2026-01-08') // jeudi suivant
     throw new Error('nextDue jours fixes incorrect, obtenu ' + win.nextDue(t));
 });
-call('freshness bornée [0,1], jamais négative', () => {
-  const now = Date.now();
-  const frais = win.freshness({doneAt: now, repeat: {kind: 'day', n: 6}}, now);
-  if(Math.abs(frais - 1) > 0.01) throw new Error('freshness juste après doneAt devrait être ~1');
-  const demi = win.freshness({doneAt: now - 3*86400000, repeat: {kind: 'day', n: 6}}, now);
-  if(Math.abs(demi - 0.5) > 0.01) throw new Error('freshness à mi-intervalle devrait être ~0,5, obtenu ' + demi);
-  const vieux = win.freshness({doneAt: now - 60*86400000, repeat: {kind: 'day', n: 6}}, now);
-  if(vieux !== 0) throw new Error('freshness très en retard doit rester 0, jamais négative — obtenu ' + vieux);
-  if(win.freshness({doneAt: null, repeat: {kind: 'day', n: 6}}, now) !== 0)
-    throw new Error('freshness sans doneAt devrait être 0 (à faire)');
-});
+
 call('completeTask from:done — doneAt se pose sur l’instant, la tâche reste visible en Maison', () => {
   const t = {doneAt: null, due: null, repeat: {kind: 'day', n: 7, from: 'done'}, history: [], postponed: 2};
   win.completeTask(t);
@@ -355,13 +351,14 @@ call('Maison — bouton « Fait » annulable, détail via taskSheet(), rafraîch
     doneAt: Date.now() - 40 * 86400000, history: ['2026-01-01'], postponed: 0, touchedAt: Date.now()
   });
   S.tasks.push(t);
+  try{
   win.go('maison');
   const html = win.document.getElementById('s-maison').innerHTML;
   if(!new RegExp("taskSheet\\('" + t.id + "'\\)").test(html))
     throw new Error('le reste de la ligne devrait ouvrir le détail via taskSheet(), pas compléter directement');
   if(!new RegExp("data-swipe-left=\"delTask\\('" + t.id + "'\\)\"").test(html))
     throw new Error('un entretien devrait rester supprimable (balayage vers delTask(), point 5/C4)');
-  if(!/Dans \d+ (j|semaines?)|>À faire</.test(html))
+  if(!/Dans \d+ (j|semaines?)|>À faire( ·|<)/.test(html))
     throw new Error('la légende devrait être tournée vers l’action (« Dans N j »/« À faire »), pas « il y a N jours »');
 
   // Bouton « Fait » : immédiat, annulable — restaure doneAt ET history (point 1).
@@ -391,7 +388,9 @@ call('Maison — bouton « Fait » annulable, détail via taskSheet(), rafraîch
     win.renderMaison = origMaison;
     win.renderTasks = origTasks;
   }
-  t.deletedAt = Date.now(); // tombstone : ne pollue pas les scénarios suivants
+  } finally {
+    t.deletedAt = Date.now(); // tombstone, même si une assertion échoue : ne pollue pas les scénarios suivants
+  }
 });
 
 // 6 ter) Écran « Aujourd'hui » (Lot V1-5) : l'algorithme de la roadmap §6. C'est
@@ -1739,8 +1738,8 @@ mealScenario('Repas — semaine type : les exceptions seules sont stockées, un 
   if(win.mealSlot(win.addDays(lun, 4), 'soir').people !== 1) throw new Error('vendredi soir hérite d’1 personne');
   if(S.meals.length) throw new Error('lire une semaine ne crée aucun objet');
   const st = win.mealWeekStats(lun);
-  if(st.plan !== 13 || st.duo !== 12 || st.portions !== 25 || st.todo !== 13)
-    throw new Error('compte attendu 13 repas, 12 à deux, 25 portions, 13 à choisir ; obtenu ' + JSON.stringify(st));
+  if(st.plan !== 13 || st.portions !== 25 || st.todo !== 13)
+    throw new Error('compte attendu 13 repas, 25 portions, 13 à choisir ; obtenu ' + JSON.stringify(st));
   // Poser un plat puis le retirer : l'objet repart en tombstone, rien ne traîne.
   win.upsertMeal(lun, 'soir', {dish: 'Lasagnes'});
   if(win.mealWeekStats(lun).todo !== 12) throw new Error('un plat posé retire un repas « à choisir »');
@@ -1871,6 +1870,156 @@ call('Onglet Repas — Menus et Courses sous un seul onglet, qui ramène au dern
   win.go('today');
 });
 
+// 6 quindecies) Lot V3-3 — mouvement, finition, QA. Le mouvement lui-même ne
+// se voit pas sous jsdom (pas de rendu) : on vérifie les classes qui le
+// déclenchent, et qu'il s'efface quand il le doit.
+call('V3-3 — go() : fondu seulement en changeant d’écran, onglet courant annoncé (aria-current)', () => {
+  win.go('today');
+  win.go('tasks');
+  const el = win.document.getElementById('s-tasks');
+  if(!el.classList.contains('enter')) throw new Error('changer d’écran pose le fondu (.enter)');
+  el.classList.remove('enter');
+  win.go('tasks'); // retaper l'onglet actif : pas de fondu
+  if(el.classList.contains('enter')) throw new Error('retaper l’onglet actif ne rejoue pas de fondu');
+  const cur = [...win.document.querySelectorAll('#tabbar .tab[aria-current="page"]')].map(t => t.dataset.s);
+  if(cur.join() !== 'tasks') throw new Error('un seul onglet porte aria-current="page", le courant ; obtenu ' + cur.join());
+  win.go('shopping');
+  if(win.document.querySelector('#tabbar .tab[aria-current="page"]').dataset.s !== 'repas') throw new Error('Courses allume l’onglet Repas');
+  win.go('today');
+});
+
+scenario('V3-3 — cocher joue l’animation sur la case barrée (Aujourd’hui) et sur place (Tâches)', () => {
+  const t = mk({title: 'Case animée', bucket: 'scheduled', start: win.todayKey()});
+  win.go('today');
+  win.todayDone(t.id);
+  const c = win.document.querySelector('#s-today .row.done .check');
+  if(!c || !c.classList.contains('pop')) throw new Error('la case de la ligne tout juste cochée porte .pop');
+  win.todayUndone(t.id);
+  // Tâches : l'état change tout de suite, la case touchée s'anime avant que la ligne ne parte.
+  const u = mk({title: 'Case sur place', bucket: 'anytime'});
+  win.go('tasks');
+  const btn = win.document.createElement('button');
+  win.doneTask(u.id, btn);
+  if(!u.doneAt) throw new Error('doneTask() marque la tâche faite immédiatement, sans attendre l’animation');
+  if(!btn.classList.contains('pop') || !btn.classList.contains('on')) throw new Error('la case touchée passe cochée et s’anime sur place');
+});
+
+call('V3-3 — interrupteurs : natif si le navigateur connaît <input switch>, bouton .switch sinon', () => {
+  const repli = win.switchHtml(true, 'Oiseaux', 'toggleBirds()');
+  if(!/class="switch on"/.test(repli) || !/role="switch"/.test(repli)) throw new Error('sans support natif (jsdom), le bouton .switch reste en place');
+  win.eval('_switchNative = true');
+  try{
+    const natif = win.switchHtml(false, 'Oiseaux', 'toggleBirds()');
+    if(!/<input type="checkbox" switch/.test(natif) || /checked/.test(natif)) throw new Error('avec support natif, un <input switch> (décoché ici) est posé');
+    if(!/onchange="toggleBirds\(\)"/.test(natif) || !/aria-label="Oiseaux"/.test(natif)) throw new Error('l’interrupteur natif garde son action et son nom');
+  } finally { win.eval('_switchNative = null'); }
+});
+
+call('V3-3 — accessibilité : puces à état annoncé, toasts lus, feuilles nommées, Échap les ferme', () => {
+  win.go('settings');
+  const chips = [...win.document.querySelectorAll('#s-settings .chip')];
+  if(!chips.length || chips.some(c => !c.hasAttribute('aria-pressed'))) throw new Error('toute puce à état porte aria-pressed');
+  if(chips.filter(c => c.getAttribute('aria-pressed') === 'true').length !== 1) throw new Error('une seule puce d’apparence est pressée');
+  if(win.document.getElementById('toast').getAttribute('aria-live') !== 'polite') throw new Error('le toast est une région lue (aria-live)');
+  win.taskSheet(null);
+  const sheet = win.document.getElementById('sheet');
+  if(sheet.getAttribute('role') !== 'dialog' || sheet.getAttribute('aria-label') !== 'Nouvelle tâche') throw new Error('la feuille est un dialogue nommé par son titre');
+  win.document.dispatchEvent(new win.KeyboardEvent('keydown', {key: 'Escape'}));
+  if(win.document.getElementById('sheet-bg').classList.contains('show')) throw new Error('Échap ferme la feuille');
+  win.go('today');
+});
+
+scenario('V3-3 — Maison replie ce qui ne tombe pas avant 2 jours, pièce par pièce', () => {
+  const pres = mk({title: 'Bientôt', room: 'cuisine', repeat: repD(10), mins: 5, doneAt: dAgo(9)});   // demain
+  const loin = mk({title: 'Plus tard', room: 'cuisine', repeat: repD(30), mins: 5, doneAt: dAgo(2)}); // dans 28 j
+  const seul = mk({title: 'Tranquille', room: 'balcon', repeat: repD(90), mins: 5, doneAt: dAgo(1)});
+  win.go('maison');
+  let html = win.document.getElementById('s-maison').innerHTML;
+  if(!html.includes('Bientôt')) throw new Error('ce qui tombe demain reste déplié');
+  if(html.includes('Plus tard') || html.includes('Tranquille')) throw new Error('ce qui ne tombe pas avant 2 jours est replié');
+  if(!/\+ 1 autre/.test(html) || !/Voir l’entretien/.test(html)) throw new Error('le repli se dit : « + 1 autre », « Voir l’entretien »');
+  win.toggleMaisonRoom('cuisine');
+  html = win.document.getElementById('s-maison').innerHTML;
+  if(!html.includes('Plus tard') || !/Réduire/.test(html)) throw new Error('déplier une pièce montre tout, et propose de réduire');
+  if(html.includes('Tranquille')) throw new Error('déplier une pièce ne déplie pas les autres');
+  win.toggleMaisonRoom('cuisine');
+  if(pres.deletedAt || loin.deletedAt || seul.deletedAt) throw new Error('garde-fou du scénario');
+});
+
+scenario('V3-3 — un entretien tapé dans la barre de saisie vit dans Maison, avec sa durée', () => {
+  const calls = [];
+  const origToast = win.toast;
+  win.toast = m => calls.push(m);
+  try{
+    win.go('tasks');
+    win.document.getElementById('cap-input-tasks').value = 'Nettoyer la voiture #partout tous les 30 jours après 45 min';
+    win.commitCapture();
+  } finally { win.toast = origToast; }
+  const t = S.tasks.find(x => x.title === 'Nettoyer la voiture');
+  if(!t || !win.isChore(t)) throw new Error('pièce + « après » = un entretien, titre nettoyé');
+  if(t.mins !== 45 || t.effort !== 3) throw new Error('la durée tapée est retenue (45 min, effort long), obtenu ' + t.mins + '/' + t.effort);
+  if(win.getTaskItems().some(x => x.id === t.id)) throw new Error('un entretien jamais fait ne s’affiche pas dans Tâches');
+  if(win.reviewCandidates(Date.now() + 90 * 86400000).some(x => x.id === t.id)) throw new Error('un entretien n’est jamais un candidat de la revue');
+  if(!calls.some(m => /Entretien ajouté à Maison/.test(m))) throw new Error('créer un entretien depuis la barre le dit');
+  if(!win.getMaisonItems().some(x => x.id === t.id)) throw new Error('il apparaît dans Maison');
+});
+
+call('V3-3 — parseQuick : une durée chiffrée est retenue telle quelle', () => {
+  const r = win.parseQuick('Repasser le linge 30 min', NLP_REF);
+  if(r.mins !== 30 || r.effort !== 2 || /30 min/.test(r.title)) throw new Error('« 30 min » : mins 30, effort moyen, hors du titre ; obtenu ' + JSON.stringify([r.mins, r.effort, r.title]));
+  const c = win.parseQuick('Vider le lave-vaisselle 5 min', NLP_REF);
+  if(c.mins !== 5 || c.effort !== 1) throw new Error('« 5 min » reste un effort court');
+  if(win.parseQuick('Ranger le garage 1 h', NLP_REF).mins !== 60) throw new Error('« 1 h » = 60 min');
+  if(win.parseQuick('Appeler maman', NLP_REF).mins !== null) throw new Error('sans durée, mins reste null');
+});
+
+habitScenario('V3-3 — habitudes : pas de « Série 0 j », planning dit en mots, pas de doublon sur l’écran Habitudes', () => {
+  const h = win.stamp({name: 'Lecture', unit: 'pages', target: 20, sched: {kind: 'days', days: [1,2,3,4,5,6,7]}, sort: 0});
+  S.habits.push(h);
+  const k = win.todayKey();
+  if(/Série 0/.test(win.habitMeta(h, k, true))) throw new Error('une série à 0 ne se dit pas');
+  win.setHabitLogValue(h.id, 20, win.addDays(k, -1));
+  if(!/Série 1 j/.test(win.habitMeta(h, win.addDays(k, -1), false))) throw new Error('une série en cours se dit');
+  if(/Série/.test(win.habitMeta(h, win.addDays(k, -1), false, false))) throw new Error('sur l’écran Habitudes, la série vit dans les chiffres, pas dans la ligne');
+  if(win.schedTxt({kind: 'days', days: [7,1,2,3,4,5,6]}) !== 'Tous les jours') throw new Error('7 jours = « Tous les jours »');
+  if(win.schedTxt({kind: 'days', days: [1,2,3,4,5]}) !== 'En semaine') throw new Error('lundi → vendredi = « En semaine »');
+  if(win.schedTxt({kind: 'days', days: [6,7]}) !== 'Le week-end') throw new Error('samedi et dimanche = « Le week-end »');
+  if(win.schedTxt({kind: 'days', days: [1,3]}) !== 'Lun, Mer') throw new Error('les autres cas restent la liste des jours');
+});
+
+mealScenario('V3-3 — Aujourd’hui : le repas du moment et les courses dans un seul bloc Repas', () => {
+  const backupS = S.shopping.slice();
+  try{
+    win.upsertMeal(win.todayKey(), 'soir', {dish: 'Gratin'});
+    win.addShoppingItem('Crème');
+    win.go('today');
+    const blocks = win.document.querySelectorAll('#s-today .repas-block');
+    if(blocks.length !== 1 || blocks[0].querySelectorAll('.shop').length !== 2)
+      throw new Error('un seul bloc Repas, deux lignes (repas du moment, courses)');
+  } finally { S.shopping.length = 0; backupS.forEach(x => S.shopping.push(x)); }
+});
+
+call('V3-3 — sauvegarde : la date du dernier export se dit, une mise à jour s’annonce une fois', () => {
+  const avantExport = S.lastExport, avantOn = S.onboarded;
+  const calls = [];
+  const origToast = win.toast;
+  win.toast = m => calls.push(m);
+  try{
+    S.lastExport = null;
+    if(!/Aucune sauvegarde/.test(win.lastExportTxt())) throw new Error('jamais exporté : l’écran le dit');
+    S.lastExport = Date.now() - 12 * 86400000;
+    if(!/il y a 12 jours/.test(win.lastExportTxt())) throw new Error('la date du dernier export se dit en jours');
+    S.onboarded = true; S.seenVersion = 'Bêta 3.2';
+    win.announceUpdate();
+    if(calls.length !== 1 || !/à jour/.test(calls[0])) throw new Error('une nouvelle version s’annonce par un toast');
+    win.announceUpdate();
+    if(calls.length !== 1) throw new Error('… une seule fois');
+  } finally {
+    win.toast = origToast;
+    S.lastExport = avantExport; S.seenVersion = win.eval('APP_VERSION'); S.onboarded = avantOn;
+  }
+});
+
 // 7) Écriture immédiate puis relecture directe dans IndexedDB — équivalent, pour ce
 //    test de fumée, à vérifier la persistance après un rechargement de l'app.
 if(typeof win.saveNow === 'function'){
@@ -1919,7 +2068,10 @@ if(fails.length){
               '  pack maison étalé et sans doublon, migration des plantes, fiche en\n' +
               '  minutes), Repas V3-2 (semaine type et exceptions, compte de la semaine,\n' +
               '  plats appris, restes, « Me proposer », semaine dernière reprise, ligne\n' +
-              '  d’Aujourd’hui, onglet Repas), habitudes (série/quota, jour\n' +
+              '  d’Aujourd’hui, onglet Repas), finition V3-3 (fondu d’écran, animation de\n' +
+              '  coche, interrupteur natif, aria-current/aria-pressed/aria-live, Échap,\n' +
+              '  Maison repliée, entretien tapé en barre, durées, habitudes sans « Série\n' +
+              '  0 j », bloc Repas, dernier export, annonce de mise à jour), habitudes (série/quota, jour\n' +
               '  sauté neutre, progression partielle, mode quota hebdomadaire, pas adapté\n' +
               '  à l’objectif et « Fait » en un geste, intégration Aujourd’hui, fiche),\n' +
               '  courses (guessRayon, fréquents, correction mémorisée,\n' +

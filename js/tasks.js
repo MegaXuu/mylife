@@ -96,8 +96,15 @@ let _taskCat = null;   // filtre catégorie actif, null = toutes
 let _taskQuery = '';   // texte de recherche
 let _somedayOpen = false; // groupe « Peut-être » replié par défaut
 
+// Un entretien (isChore(), js/maison.js) ne vit que dans Maison — et, s'il
+// est dû, dans « Entretien du jour ». Jusqu'au Lot V3-3 c'était vrai par
+// ricochet (un entretien garde toujours un doneAt)… sauf pour un entretien
+// jamais fait, tapé dans la barre de saisie (« #cuisine tous les 7 jours
+// après »), qui apparaissait alors dans deux écrans à la fois.
+function openTasks(){ return live(S.tasks).filter(t=>!t.doneAt && !isChore(t)); }
+
 function getTaskItems(){
-  let items = live(S.tasks).filter(t=>!t.doneAt);
+  let items = openTasks();
   if(_taskCat) items = items.filter(t=>t.cat === _taskCat);
   if(_taskQuery){
     const q = _taskQuery.toLowerCase();
@@ -134,7 +141,7 @@ function taskRowHtml(t, opts){
   const noteIcon = t.notes ? '<span class="row-note-ic" aria-hidden="true">'+icon(IC_NOTE, 14)+'</span>' : '';
   const checkBtn = done
     ? '<button class="check on" role="checkbox" aria-checked="true" aria-label="Marquer non fait" onclick="unDoneTask(\''+t.id+'\')"></button>'
-    : '<button class="check" role="checkbox" aria-checked="false" aria-label="Marquer fait" onclick="doneTask(\''+t.id+'\')"></button>';
+    : '<button class="check" role="checkbox" aria-checked="false" aria-label="Marquer fait" onclick="doneTask(\''+t.id+'\', this)"></button>';
   const swipe = ' data-swipe-left="delTask(\''+t.id+'\')"'+
     (!done && opts.postpone ? ' data-swipe-right="postponeTask(\''+t.id+'\')" data-swipe-right-label="Reporter"' : '');
   return '<li class="row'+(opts.soft ? ' row-low' : '')+(done ? ' done' : '')+'"'+swipe+'>'+
@@ -246,7 +253,7 @@ function onTaskSearch(v){ _taskQuery = v; refreshTaskGroups(); }
 function toggleSomeday(){ _somedayOpen = !_somedayOpen; refreshTaskGroups(); }
 
 function renderTasks(){
-  const nOpen = live(S.tasks).filter(t=>!t.doneAt).length;
+  const nOpen = openTasks().length;
   const sur = nOpen === 0 ? 'Aucune tâche ouverte'
                           : nOpen + (nOpen > 1 ? ' tâches ouvertes' : ' tâche ouverte');
   // Recherche et filtres ne prennent de la place que quand ils servent
@@ -255,13 +262,13 @@ function renderTasks(){
   const showFilters = nOpen > TASK_FILTER_MIN;
   if(!showFilters){ _taskCat = null; _taskQuery = ''; }
   const catChips = CAT_ORDER.map(c=>
-    '<button class="chip'+(_taskCat===c?' on':'')+'" onclick="setTaskCat(\''+c+'\')">'+esc(CAT_LABELS[c])+'</button>'
+    '<button class="chip'+(_taskCat===c ? ' on' : '')+'" aria-pressed="'+!!(_taskCat===c)+'" onclick="setTaskCat(\''+c+'\')">'+esc(CAT_LABELS[c])+'</button>'
   ).join('');
   const filters = !showFilters ? '' :
     '<input id="task-search" class="field search-field" type="search" placeholder="Rechercher…" '+
       'autocomplete="off" autocapitalize="none" value="'+esc(_taskQuery)+'" oninput="onTaskSearch(this.value)">'+
     '<div class="chips filter-chips">'+
-      '<button class="chip'+(!_taskCat?' on':'')+'" onclick="setTaskCat(null)">Toutes</button>'+catChips+
+      '<button class="chip'+(!_taskCat ? ' on' : '')+'" aria-pressed="'+!!(!_taskCat)+'" onclick="setTaskCat(null)">Toutes</button>'+catChips+
     '</div>';
   document.getElementById('s-tasks').innerHTML =
     screenHead(sur, 'Tâches')+
@@ -273,13 +280,16 @@ function renderTasks(){
 // Annulable (point 3) : cliché des champs que completeTask() modifie, pour
 // un retour exact si on se ravise dans les secondes qui suivent — même
 // discipline que todayDone()/todayUndone() (js/today.js).
-function doneTask(id){
+// `btn` (la case touchée) : l'animation de complétion se joue sur place
+// avant que la ligne ne quitte son groupe (popThen(), js/ui.js, Lot V3-3).
+// L'état, lui, change tout de suite — seul le rendu attend.
+function doneTask(id, btn){
   const t = S.tasks.find(x=>x.id === id);
   if(!t) return;
   const snap = {doneAt:t.doneAt, due:t.due, postponed:t.postponed||0, history:(t.history||[]).slice()};
   completeTask(t); // recalcule l'échéance et la fraîcheur si récurrente (js/recur.js)
   save();
-  rerender();
+  popThen(btn, rerender);
   undoable(t.title + ' : fait.', ()=>{
     const x = S.tasks.find(y=>y.id === id);
     if(!x) return;
@@ -419,34 +429,34 @@ function toggleTsRepeatDay(dow){
 function taskSheetHtml(){
   const d = _tSheet;
   const catChips = CAT_ORDER.map(c=>
-    '<button class="chip'+(d.cat===c?' on':'')+'" onclick="setTsCat(\''+c+'\')">'+esc(CAT_LABELS[c])+'</button>'
+    '<button class="chip'+(d.cat===c ? ' on' : '')+'" aria-pressed="'+!!(d.cat===c)+'" onclick="setTsCat(\''+c+'\')">'+esc(CAT_LABELS[c])+'</button>'
   ).join('');
-  const roomChips = '<button class="chip'+(!d.room?' on':'')+'" onclick="setTsRoom(null)">Aucune</button>'+
+  const roomChips = '<button class="chip'+(!d.room ? ' on' : '')+'" aria-pressed="'+!!(!d.room)+'" onclick="setTsRoom(null)">Aucune</button>'+
     roomChoices(d.room).map(r=>
-      '<button class="chip'+(d.room===r?' on':'')+'" onclick="setTsRoom(\''+r+'\')">'+esc(ROOM_LABELS[r])+'</button>'
+      '<button class="chip'+(d.room===r ? ' on' : '')+'" aria-pressed="'+!!(d.room===r)+'" onclick="setTsRoom(\''+r+'\')">'+esc(ROOM_LABELS[r])+'</button>'
     ).join('');
   const prioChips = [0,1,2].map(p=>
-    '<button class="chip'+(d.prio===p?' on':'')+'" onclick="setTsPrio('+p+')">'+esc(PRIO_LABELS[p])+'</button>'
+    '<button class="chip'+(d.prio===p ? ' on' : '')+'" aria-pressed="'+!!(d.prio===p)+'" onclick="setTsPrio('+p+')">'+esc(PRIO_LABELS[p])+'</button>'
   ).join('');
   const effortChips = [1,2,3].map(e=>
-    '<button class="chip'+(d.effort===e?' on':'')+'" onclick="setTsEffort('+e+')">'+esc(EFFORT_LABELS[e])+'</button>'
+    '<button class="chip'+(d.effort===e ? ' on' : '')+'" aria-pressed="'+!!(d.effort===e)+'" onclick="setTsEffort('+e+')">'+esc(EFFORT_LABELS[e])+'</button>'
   ).join('');
   // Un entretien (pièce + récurrence après réalisation) se règle en minutes,
   // pas en effort (Lot V3-1) : c'est ce que lit le budget d'entretien du jour.
   // L'effort en est déduit à l'enregistrement (minsToEffort()).
   const chore = !!(d.room && d.repeat && d.repeat.from === 'done');
   const minsChips = CHORE_MINS.map(m=>
-    '<button class="chip'+(d.mins===m?' on':'')+'" onclick="setTsMins('+m+')">'+m+' min</button>'
+    '<button class="chip'+(d.mins===m ? ' on' : '')+'" aria-pressed="'+!!(d.mins===m)+'" onclick="setTsMins('+m+')">'+m+' min</button>'
   ).join('');
   const rep = d.repeat;
   const repeatKindChips = REPEAT_KIND_ORDER.map(k=>
-    '<button class="chip'+(rep && rep.kind===k?' on':'')+'" onclick="setTsRepeatKind(\''+k+'\')">'+esc(REPEAT_KIND_LABELS[k])+'</button>'
+    '<button class="chip'+(rep && rep.kind===k ? ' on' : '')+'" aria-pressed="'+!!(rep && rep.kind===k)+'" onclick="setTsRepeatKind(\''+k+'\')">'+esc(REPEAT_KIND_LABELS[k])+'</button>'
   ).join('');
   const repeatFromChips =
-    '<button class="chip'+(rep && rep.from==='due'?' on':'')+'" onclick="setTsRepeatFrom(\'due\')">À date fixe</button>'+
-    '<button class="chip'+(rep && rep.from==='done'?' on':'')+'" onclick="setTsRepeatFrom(\'done\')">Après réalisation</button>';
+    '<button class="chip'+(rep && rep.from==='due' ? ' on' : '')+'" aria-pressed="'+!!(rep && rep.from==='due')+'" onclick="setTsRepeatFrom(\'due\')">À date fixe</button>'+
+    '<button class="chip'+(rep && rep.from==='done' ? ' on' : '')+'" aria-pressed="'+!!(rep && rep.from==='done')+'" onclick="setTsRepeatFrom(\'done\')">Après réalisation</button>';
   const repeatDayChips = DOW_ORDER.map(dw=>
-    '<button class="chip'+(rep && (rep.days||[]).indexOf(dw)!==-1?' on':'')+'" onclick="toggleTsRepeatDay('+dw+')">'+DOW_LABELS[dw]+'</button>'
+    '<button class="chip'+(rep && (rep.days||[]).indexOf(dw)!==-1 ? ' on' : '')+'" aria-pressed="'+!!(rep && (rep.days||[]).indexOf(dw)!==-1)+'" onclick="toggleTsRepeatDay('+dw+')">'+DOW_LABELS[dw]+'</button>'
   ).join('');
   const repeatBlock = !rep ? '' :
     '<div class="field-group"><span class="overline">Fréquence</span><div class="chips">'+repeatKindChips+'</div></div>'+
@@ -461,8 +471,8 @@ function taskSheetHtml(){
   const bucketBlock = hasDate
     ? '<p class="sheet-msg">Planifiée automatiquement, grâce à sa date.</p>'
     : '<div class="chips">'+
-        '<button class="chip'+(d.bucket!=='someday'?' on':'')+'" onclick="setTsBucket(\'anytime\')">Un jour</button>'+
-        '<button class="chip'+(d.bucket==='someday'?' on':'')+'" onclick="setTsBucket(\'someday\')">Peut-être</button>'+
+        '<button class="chip'+(d.bucket!=='someday' ? ' on' : '')+'" aria-pressed="'+!!(d.bucket!=='someday')+'" onclick="setTsBucket(\'anytime\')">Un jour</button>'+
+        '<button class="chip'+(d.bucket==='someday' ? ' on' : '')+'" aria-pressed="'+!!(d.bucket==='someday')+'" onclick="setTsBucket(\'someday\')">Peut-être</button>'+
       '</div>';
   // Visible d'emblée : titre + les deux dates. Tout le reste vit derrière
   // « Plus d'options » (point 2, audit A5 — 1 285 px, 11 sections toujours
@@ -476,15 +486,13 @@ function taskSheetHtml(){
     '<div class="field-group"><span class="overline">Pièce</span><div class="chips">'+roomChips+'</div></div>'+
     '<div class="field-group"><ul class="list"><li class="row">'+
       '<div class="row-main"><div class="row-title">Ce soir</div></div>'+
-      '<button class="switch'+(d.evening?' on':'')+'" role="switch" aria-checked="'+d.evening+'" '+
-        'aria-label="Ce soir" onclick="toggleTsEvening()"></button>'+
+      switchHtml(d.evening, 'Ce soir', 'toggleTsEvening()')+
     '</li></ul></div>'+
     '<div class="field-group"><span class="overline">Priorité</span><div class="chips">'+prioChips+'</div></div>'+
     '<div class="field-group"><span class="overline">Effort</span><div class="chips">'+effortChips+'</div></div>'+
     '<div class="field-group"><ul class="list"><li class="row">'+
       '<div class="row-main"><div class="row-title">Récurrente</div></div>'+
-      '<button class="switch'+(rep?' on':'')+'" role="switch" aria-checked="'+!!rep+'" '+
-        'aria-label="Récurrente" onclick="toggleTsRepeat()"></button>'+
+      switchHtml(!!rep, 'Récurrente', 'toggleTsRepeat()')+
     '</li></ul></div>'+
     repeatBlock+
     '<div class="field-group"><span class="overline">Bucket</span>'+bucketBlock+'</div>';
@@ -512,7 +520,7 @@ function taskSheetHtml(){
       '<div class="field-group"><span class="overline">Durée</span><div class="chips">'+minsChips+'</div></div>'+
       '<div class="field-group"><ul class="list"><li class="row">'+
         '<div class="row-main"><div class="row-title">Récurrente</div></div>'+
-        '<button class="switch on" role="switch" aria-checked="true" aria-label="Récurrente" onclick="toggleTsRepeat()"></button>'+
+        switchHtml(true, 'Récurrente', 'toggleTsRepeat()')+
       '</li></ul></div>'+
       repeatBlock+
       notesField+

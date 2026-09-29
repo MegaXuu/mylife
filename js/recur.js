@@ -59,17 +59,10 @@ function nextDue(task, ref){
   return dayKey(d);
 }
 
-// Jauge de fraîcheur : 1 = frais (vient d'être fait), 0 = à faire. Ne
-// descend jamais sous 0 : au-delà de l'intervalle c'est « à faire », jamais
-// « en retard ». `ref` = timestamp ms (défaut : maintenant).
-function freshness(task, ref){
-  const days = intervalDays(task.repeat);
-  if(!days) return task.doneAt ? 1 : 0;
-  if(!task.doneAt) return 0;
-  ref = ref || Date.now();
-  const f = 1 - (ref - task.doneAt) / (days*86400000);
-  return Math.max(0, Math.min(1, f));
-}
+// La jauge de fraîcheur vit dans js/maison.js depuis le Lot V3-1
+// (choreFresh(), au jour près et non bornée) ; freshness(), qui la calculait
+// ici à la milliseconde et bornée à [0,1], n'avait plus d'appelant et a été
+// retirée au Lot V3-3.
 
 // Marque une réalisation : historise la date, met à jour doneAt, recalcule
 // l'échéance si récurrente, remet postponed à 0.

@@ -101,3 +101,13 @@ const OISEAUX = {
   ]
 
 };
+
+/* Variante de mode sombre (Lot V3-3, audit D4) — substitutions de couleur
+   appliquées au rendu par birdSvg() (js/ui.js) quand data-mode vaut
+   « dark ». Seul le plumage presque noir disparaissait sur les fonds
+   sombres (#17140F, #211D16) : il passe à un brun-gris chaud, encore lu
+   comme « oiseau sombre » mais détaché du fond. Les pupilles (#2A251E) ne
+   changent pas : elles sont posées sur un blanc d'œil, jamais sur le fond. */
+const OISEAUX_SOMBRE = {
+  '#1E1B18': '#5A5249'
+};

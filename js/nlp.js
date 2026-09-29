@@ -36,7 +36,7 @@ function parseQuick(texte, ref, ignore){
   // recolle au mot voisin à la fin si elle a survécu (cf. result.title).
   text = text.replace(/(\S)([,;.])/g, '$1 $2');
   const matched = [];
-  const result = {title:'', start:null, due:null, evening:false, repeat:null, cat:null, room:null, prio:0, effort:2, matched};
+  const result = {title:'', start:null, due:null, evening:false, repeat:null, cat:null, room:null, prio:0, effort:2, mins:null, matched};
   const refKey = dayKey(ref);
 
   function consume(m, key, label){
@@ -193,12 +193,22 @@ function parseQuick(texte, ref, ignore){
     if(m){ result.prio = 1; consume(m, 'prio', 'Important'); }
   }
 
-  /* ---------- effort : court (~5 min) / long (~1 h) — sinon la valeur par défaut (moyen) ---------- */
+  /* ---------- effort : court (~5 min) / long (~1 h) — sinon la valeur par défaut (moyen) ----------
+     Depuis le Lot V3-3, une durée chiffrée est retenue telle quelle (mins),
+     à toute valeur — « 30 min » restait auparavant dans le titre — et
+     l'effort en est déduit comme partout ailleurs (minsToEffort(),
+     js/tasks.js). Un entretien tapé ici garde donc sa vraie durée pour le
+     budget du jour. */
   function applyEffort(){
     let m = text.match(/ (\d{1,3})\s*min(?:utes?)? /i);
-    if(m && parseInt(m[1], 10) <= 15){ result.effort = 1; consume(m, 'effort', 'Court'); return; }
+    if(m && parseInt(m[1], 10) > 0){
+      result.mins = parseInt(m[1], 10);
+      result.effort = minsToEffort(result.mins);
+      consume(m, 'effort', result.mins + ' min');
+      return;
+    }
     m = text.match(/ (\d{1,2})\s*h(?:eures?)? /i);
-    if(m){ result.effort = 3; consume(m, 'effort', 'Long'); return; }
+    if(m){ result.mins = parseInt(m[1], 10) * 60; result.effort = 3; consume(m, 'effort', 'Long'); return; }
     m = text.match(/ court /i);
     if(m){ result.effort = 1; consume(m, 'effort', 'Court'); return; }
     m = text.match(/ long /i);
@@ -286,15 +296,20 @@ function commitCapture(){
   if(input) _capText = input.value;
   const p = captureParse();
   if(!p.title) return;
-  S.tasks.push(stamp({
+  const t = stamp({
     title:p.title, notes:'', cat:p.cat || 'perso', room:p.room || null,
     bucket:(p.start || p.due) ? 'scheduled' : 'anytime',
     start:p.start, due:p.due, evening:p.evening, prio:p.prio, effort:p.effort,
     repeat:p.repeat, history:[], postponed:0, touchedAt:Date.now()
-  }));
+  });
+  if(p.mins) t.mins = p.mins;
+  S.tasks.push(t);
   save();
   _capText = ''; _capIgnore = new Set();
   rerender();
+  // Un entretien (pièce + « après ») ne s'affiche pas dans Tâches : il vit
+  // dans Maison (Lot V3-3). Le dire, sinon il semble s'être évaporé.
+  if(isChore(t)) toast('Entretien ajouté à Maison.');
   const ni = document.getElementById('cap-input-' + CURRENT_SCREEN);
   if(ni) ni.focus();
 }

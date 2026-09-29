@@ -84,19 +84,65 @@ function setChoreBudget(v){
    encore un tableau `plants` : il reste importable, migrate() le traduit en
    entretiens (migratePlants(), js/state.js).
    ========================================================================== */
+/* Depuis le Lot V3-3, sur iPhone, la feuille de partage d'iOS (Enregistrer
+   dans Fichiers, AirDrop, Mail…) : dans une PWA installée, un lien de
+   téléchargement ouvre au mieux un aperçu, au pire rien. Le JSON est bâti
+   tout de suite, depuis S en mémoire (qui fait foi), sans attendre le disque
+   : navigator.share() exige d'être appelé dans la foulée du tap. Ailleurs,
+   ou si le partage échoue autrement que par un « Annuler », le
+   téléchargement classique prend le relais. */
 function exportData(){
-  saveNow().then(()=>{
-    const blob = new Blob([JSON.stringify(S, null, 2)], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'mylife-'+todayKey()+'.json';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    toast('Export téléchargé');
-  });
+  saveNow();
+  const json = JSON.stringify(S, null, 2);
+  const name = 'mylife-'+todayKey()+'.json';
+  let file = null;
+  try{ file = new File([json], name, {type:'application/json'}); }catch(e){}
+  if(file && navigator.canShare && navigator.share){
+    let ok = false;
+    try{ ok = navigator.canShare({files:[file]}); }catch(e){}
+    if(ok){
+      navigator.share({files:[file], title:'Sauvegarde MyLife'})
+        .then(markExported)
+        .catch(err=>{ if(!err || err.name !== 'AbortError') downloadExport(json, name); });
+      return;
+    }
+  }
+  downloadExport(json, name);
+}
+function downloadExport(json, name){
+  const url = URL.createObjectURL(new Blob([json], {type:'application/json'}));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1500); // tout de suite, Safari peut annuler le téléchargement
+  markExported();
+}
+function markExported(){
+  S.lastExport = Date.now();
+  save();
+  toast('Sauvegarde exportée');
+  if(CURRENT_SCREEN === 'settings') renderSettings();
+}
+// « Dernière sauvegarde : il y a 12 jours » — la date du seul filet de sécurité.
+function lastExportTxt(){
+  if(!S.lastExport) return 'Aucune sauvegarde exportée pour l’instant.';
+  const n = daysBetween(dayKey(new Date(S.lastExport)), todayKey());
+  return 'Dernière sauvegarde : '+(n <= 0 ? 'aujourd’hui' : (n === 1 ? 'hier' : 'il y a '+n+' jours'))+'.';
+}
+
+/* Annonce d'une mise à jour (Lot V3-3) : après un git push, la nouvelle
+   version arrive en silence — le service worker recharge l'app d'un coup.
+   Un toast sobre dit qu'elle est là, une fois. Jamais au tout premier
+   lancement (la bienvenue parle déjà), ni sur une base vierge. */
+function announceUpdate(){
+  const prev = S.seenVersion;
+  if(prev === APP_VERSION) return;
+  S.seenVersion = APP_VERSION;
+  save();
+  if(S.onboarded) toast('MyLife est à jour : '+APP_VERSION+'.');
 }
 
 // Structure minimale attendue d'un fichier importé — pure, sans DOM, testée
@@ -278,15 +324,14 @@ function renderSettings(){
         'onchange="setUserName(this.value)">'+
     '</div>'+
     '<div class="field-group"><span class="overline">Apparence</span><div class="chips">'+
-      '<button class="chip'+(theme==='light' ? ' on' : '')+'" onclick="setTheme(\'light\')">Clair</button>'+
-      '<button class="chip'+(theme==='dark' ? ' on' : '')+'" onclick="setTheme(\'dark\')">Sombre</button>'+
-      '<button class="chip'+(theme==='auto' ? ' on' : '')+'" onclick="setTheme(\'auto\')">Auto</button>'+
+      '<button class="chip'+(theme==='light' ? ' on' : '')+'" aria-pressed="'+!!(theme==='light')+'" onclick="setTheme(\'light\')">Clair</button>'+
+      '<button class="chip'+(theme==='dark' ? ' on' : '')+'" aria-pressed="'+!!(theme==='dark')+'" onclick="setTheme(\'dark\')">Sombre</button>'+
+      '<button class="chip'+(theme==='auto' ? ' on' : '')+'" aria-pressed="'+!!(theme==='auto')+'" onclick="setTheme(\'auto\')">Auto</button>'+
     '</div></div>'+
     '<ul class="list"><li class="row">'+
       '<div class="row-main"><div class="row-title">Oiseaux</div>'+
         '<div class="row-meta">De discrètes présences posées sur les cartes.</div></div>'+
-      '<button class="switch'+(birds ? ' on' : '')+'" role="switch" aria-checked="'+birds+'" '+
-        'aria-label="Oiseaux" onclick="toggleBirds()"></button>'+
+      switchHtml(birds, 'Oiseaux', 'toggleBirds()')+
     '</li></ul>'+
   '</div>';
 
@@ -324,7 +369,7 @@ function renderSettings(){
 
   const donnees = '<div class="card">'+birdOnCard(4, N)+
     '<h2 class="card-title">Données</h2>'+
-    '<p class="row-meta">Export et import complets au format JSON.</p>'+
+    '<p class="row-meta">Export et import complets au format JSON. '+esc(lastExportTxt())+'</p>'+
     '<button class="btn secondary btn-full" onclick="exportData()">Exporter mes données</button>'+
     '<button class="btn secondary btn-full" onclick="importDataPrompt()">Importer des données</button>'+
     '<input id="import-input" class="file-input" type="file" accept="application/json" onchange="onImportFile(this)">'+

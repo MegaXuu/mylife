@@ -190,7 +190,7 @@ function todayRow(t, meta, cls){
 // visible vers la même action (CONVENTIONS.md §3, principe 5).
 function todayDoneRow(t){
   return '<li class="row done">'+
-    '<button class="check on" role="checkbox" aria-checked="true" aria-label="Marquer non fait" '+
+    '<button class="check on'+popClass(t.id)+'" role="checkbox" aria-checked="true" aria-label="Marquer non fait" '+
       'onclick="todayUndone(\''+t.id+'\')"></button>'+
     '<div class="row-main"><div class="row-title">'+esc(t.title)+'</div></div>'+
   '</li>';
@@ -298,8 +298,14 @@ function renderToday(){
     if(hasChores) html += choreCard(b, i++, nCards);
     if(b.habits.length) html += todayHabitsCard(b.habits, i++, nCards);
   }
-  if(b.meal) html += mealTodayHtml(b.meal);
-  if(b.shopping) html += shoppingButtonHtml(b.shopping);
+  // Bloc Repas (Lot V3-3) : le repas du moment et les courses dans une seule
+  // carte teintée — les deux mènent à l'onglet Repas.
+  if(b.meal || b.shopping){
+    html += '<div class="repas-block">'+
+      (b.meal ? mealTodayHtml(b.meal) : '')+
+      (b.shopping ? shoppingButtonHtml(b.shopping) : '')+
+    '</div>';
+  }
   if(b.evening.length) html += softSection('Ce soir', b.evening);
   if(!vide && b.quick.length) html += softSection('Si tu as 10 minutes', b.quick);
 
@@ -327,6 +333,7 @@ function todayDone(id){
   });
   completeTask(t);    // recalcule l'échéance si récurrente (js/recur.js)
   save();
+  markPop(id);        // la case de la ligne barrée joue sa petite animation (Lot V3-3)
   renderToday();
   undoable(t.title + ' : fait.', ()=>todayUndone(id));
 }

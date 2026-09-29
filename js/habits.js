@@ -253,11 +253,17 @@ function habDoneHtml(h, aria){
 
 // `ctrl` dit si la ligne porte une ligne de contrôles : la valeur du jour y est
 // déjà affichée, la méta ne la répète pas.
-function habitMeta(h, k, ctrl){
+// `withStreak` à faux : l'écran Habitudes affiche déjà la série dans ses
+// trois chiffres (habitStatsHtml()), la répéter dans la ligne du jour serait
+// un doublon (Lot V3-3). Une série à 0 ne se dit pas du tout : « Série 0 j »
+// sur une habitude neuve n'apprend rien et sonne comme un reproche
+// (CONVENTIONS.md §3, jamais de ton culpabilisant).
+function habitMeta(h, k, ctrl, withStreak){
   const skip = habitSkippedOn(h, k);
   const streakUnit = h.sched.kind === 'week' ? ' sem.' : ' j';
-  const streakTxt = 'Série ' + habitStreak(h, k) + streakUnit;
-  if(skip) return 'Sautée aujourd’hui · ' + streakTxt;
+  const n = habitStreak(h, k);
+  const streakTxt = (withStreak !== false && n > 0) ? 'Série ' + n + streakUnit : '';
+  if(skip) return 'Sautée aujourd’hui' + (streakTxt ? ' · ' + streakTxt : '');
   const bits = [];
   if(h.sched.kind === 'week'){
     bits.push('<b class="hab-val">' + habitWeekDone(h, habitWeekStart(k)) + '</b> / ' +
@@ -267,7 +273,7 @@ function habitMeta(h, k, ctrl){
   } else if(!ctrl){
     bits.push('<b class="hab-val">' + habitValueOn(h, k) + '</b> / ' + (h.target || 1) + ' ' + esc(h.unit));
   }
-  bits.push(streakTxt);
+  if(streakTxt) bits.push(streakTxt);
   return bits.join(' · ');
 }
 
@@ -319,10 +325,11 @@ function habitRowHtml(h, opts){
   const soft = habitRowSoft(h, k);
   const ctrl = (h.unit && !soft && !habitSkippedOn(h, k)) ? habitCtrlHtml(h, k) : '';
   const title = showTitle ? '<div class="row-title">'+esc(h.name)+'</div>' : '';
+  const metaHtml = c=>{ const m = habitMeta(h, k, c, showTitle); return m ? '<div class="row-meta">'+m+'</div>' : ''; };
   if(!ctrl){
     return '<li class="row'+(soft ? ' row-soft' : '')+'">'+
       '<div class="row-main">'+title+
-        '<div class="row-meta">'+habitMeta(h, k, false)+'</div>'+
+        metaHtml(false)+
       '</div>'+
       habitButtonsHtml(h, k, soft)+
     '</li>';
@@ -332,7 +339,7 @@ function habitRowHtml(h, opts){
       '<div class="row-head">'+title+
         (habitValueOn(h, k) > 0 ? '' : '<button class="skip" onclick="skipHabit(\''+h.id+'\')">Sauter</button>')+
       '</div>'+
-      '<div class="row-meta">'+habitMeta(h, k, true)+'</div>'+
+      metaHtml(true)+
       ctrl+
     '</div>'+
   '</li>';
@@ -416,7 +423,14 @@ function skipHabit(id){
 function schedTxt(sched){
   if(sched.kind === 'week') return (sched.perWeek || 1) + '× par semaine, jour libre';
   if(!sched.days || !sched.days.length) return 'Aucun jour choisi';
-  return sched.days.slice().sort((a,b)=>a-b).map(d=>DOW_LABELS[d]).join(', ');
+  const days = sched.days.slice().sort((a,b)=>a-b);
+  // Les trois cas courants se disent en mots (Lot V3-3) : « Lun, Mar, Mer,
+  // Jeu, Ven, Sam, Dim » se lisait moins vite que « Tous les jours ».
+  const key = days.join('');
+  if(key === '1234567') return 'Tous les jours';
+  if(key === '12345') return 'En semaine';
+  if(key === '67') return 'Le week-end';
+  return days.map(d=>DOW_LABELS[d]).join(', ');
 }
 
 // Calendrier mensuel de régularité : quatre traitements visuels distincts —
@@ -547,13 +561,13 @@ function setHPerWeek(v){ _hSheet.perWeek = Math.max(1, Math.min(7, parseInt(v, 1
 function habitSheetHtml(){
   const d = _hSheet;
   const unitChips = UNIT_ORDER.map(u=>
-    '<button class="chip'+(d.unit===u?' on':'')+'" onclick="setHUnit(\''+u+'\')">'+esc(UNIT_LABELS[u])+'</button>'
+    '<button class="chip'+(d.unit===u ? ' on' : '')+'" aria-pressed="'+!!(d.unit===u)+'" onclick="setHUnit(\''+u+'\')">'+esc(UNIT_LABELS[u])+'</button>'
   ).join('');
   const kindChips =
-    '<button class="chip'+(d.schedKind==='days'?' on':'')+'" onclick="setHSchedKind(\'days\')">Jours fixes</button>'+
-    '<button class="chip'+(d.schedKind==='week'?' on':'')+'" onclick="setHSchedKind(\'week\')">Quota par semaine</button>';
+    '<button class="chip'+(d.schedKind==='days' ? ' on' : '')+'" aria-pressed="'+!!(d.schedKind==='days')+'" onclick="setHSchedKind(\'days\')">Jours fixes</button>'+
+    '<button class="chip'+(d.schedKind==='week' ? ' on' : '')+'" aria-pressed="'+!!(d.schedKind==='week')+'" onclick="setHSchedKind(\'week\')">Quota par semaine</button>';
   const dayChips = DOW_ORDER.map(dw=>
-    '<button class="chip'+(d.days.indexOf(dw)!==-1?' on':'')+'" onclick="toggleHDay('+dw+')">'+DOW_LABELS[dw]+'</button>'
+    '<button class="chip'+(d.days.indexOf(dw)!==-1 ? ' on' : '')+'" aria-pressed="'+!!(d.days.indexOf(dw)!==-1)+'" onclick="toggleHDay('+dw+')">'+DOW_LABELS[dw]+'</button>'
   ).join('');
   const schedBlock = d.schedKind === 'days'
     ? '<div class="field-group"><span class="overline">Jours</span><div class="chips">'+dayChips+'</div></div>'

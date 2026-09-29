@@ -5,7 +5,7 @@
    INCRÉMENTER `CACHE` À CHAQUE RELEASE, sinon l'app installée garde
    silencieusement l'ancienne version (cf. CONVENTIONS.md §4).
    ========================================================================== */
-const CACHE = 'mylife-b3-2';
+const CACHE = 'mylife-b3-3';
 const ASSETS = [
   './',
   './index.html',

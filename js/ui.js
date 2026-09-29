@@ -50,11 +50,26 @@ function go(name){
   const el = document.getElementById('s-'+name);
   if(el) el.classList.add('active');
   const tab = TAB_OF[name] || name;
-  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.s === tab));
+  document.querySelectorAll('.tab').forEach(t=>{
+    const on = t.dataset.s === tab;
+    t.classList.toggle('on', on);
+    // VoiceOver annonce l'onglet courant (Lot V3-3) — la couleur seule ne le dit pas.
+    if(on) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
+  });
   document.body.classList.toggle('capture-open', CAPTURE_SCREENS.indexOf(name) !== -1);
   const render = RENDERERS[name];
   if(render) render();
   window.scrollTo(0, sameTab ? 0 : scrollPosFor(name));
+  // Transition d'écran (Lot V3-3) : un fondu court, seulement quand on CHANGE
+  // d'écran — jamais sur un re-rendu ni en retapant l'onglet actif. Opacité
+  // seule, jamais de transform : un transform sur .screen ferait de lui le
+  // repère des éléments position:fixed qu'il contient (la barre de saisie
+  // collée), qui sauteraient pendant l'animation.
+  if(!sameTab && el && !reduceMotion()){
+    el.classList.remove('enter');
+    void el.offsetWidth; // relance l'animation si on revient vite sur le même écran
+    el.classList.add('enter');
+  }
 }
 
 // Re-rend l'écran affiché, quel qu'il soit. Depuis le Lot V1-5, la fiche
@@ -107,7 +122,12 @@ function screenHead(sur, titre, opts){
    écran. Un seul oiseau par écran, posé sur le BORD SUPÉRIEUR D'UNE CARTE —
    jamais sur un titre, jamais sur la tab bar. Décoratif et rien d'autre :
    aria-hidden, pointer-events:none, aucune animation, aucun clic.
-   Aucun oiseau en mode sombre (ils sont dessinés pour le crème). */
+   Depuis le Lot V3-3 (audit D4), les oiseaux restent en mode sombre : ils
+   étaient dessinés pour le crème, et seul un plumage presque noir y
+   disparaissait (le toucan). OISEAUX_SOMBRE (data/oiseaux.js, seul fichier
+   où des couleurs en dur sont admises) remplace ces teintes au rendu, et
+   une légère baisse de luminosité (CSS, .bird en mode sombre) évite qu'un
+   jaune vif n'éblouisse sur fond noir. */
 let BIRDS_PICK = {};
 
 function pickBirds(){
@@ -127,7 +147,6 @@ function pickBirds(){
 
 function birdsOn(){
   if(typeof OISEAUX === 'undefined') return false;
-  if(document.documentElement.getAttribute('data-mode') === 'dark') return false;
   return !!(S && S.settings && S.settings.birds);
 }
 
@@ -137,11 +156,13 @@ function birdSvg(nom, w, pos){
   const formes = OISEAUX[nom];
   if(!formes) return '';
   const h = Math.round(w * 4 / 3), sous = Math.round(h * 0.1875);
+  const sombre = document.documentElement.getAttribute('data-mode') === 'dark' && typeof OISEAUX_SOMBRE !== 'undefined';
+  const c = col=>(sombre && col && OISEAUX_SOMBRE[col]) || col;
   const corps = formes.map(x=> x.d != null
-    ? '<path d="'+x.d+'" fill="'+(x.f || 'none')+'"'+
-        (x.s ? ' stroke="'+x.s+'" stroke-width="'+x.w+'" stroke-linecap="round"' : '')+
+    ? '<path d="'+x.d+'" fill="'+(c(x.f) || 'none')+'"'+
+        (x.s ? ' stroke="'+c(x.s)+'" stroke-width="'+x.w+'" stroke-linecap="round"' : '')+
         (x.o != null ? ' opacity="'+x.o+'"' : '')+'/>'
-    : '<circle cx="'+x.cx+'" cy="'+x.cy+'" r="'+x.r+'" fill="'+x.f+'"/>'
+    : '<circle cx="'+x.cx+'" cy="'+x.cy+'" r="'+x.r+'" fill="'+c(x.f)+'"/>'
   ).join('');
   return '<svg class="bird" viewBox="0 0 120 160" aria-hidden="true" focusable="false" '+
     'style="width:'+w+'px;height:'+h+'px;bottom:calc(100% - '+sous+'px);'+(pos || '')+'">'+corps+'</svg>';
@@ -189,14 +210,63 @@ function gaugeColor(f){
 // fraîcheur doit se lire « au bout », pas « absente » — une pilule entièrement
 // vide passe pour une donnée manquante. Réservé à la fraîcheur : un quota
 // d'habitude à zéro (Lot 10) doit bien afficher zéro.
-// Pour f < 0 (Lot V2-5, audit B1) : freshness() (js/recur.js) clampe
-// volontairement à 0, ce qui écrasait toute distinction à l'écran entre « dû
-// depuis 1 jour » et « dû depuis 30 jours ». choreFresh() (js/maison.js) ne
-// clampe pas : la largeur continue alors de décroître sous le plancher, vers
-// une asymptote à 1 % — jamais 0, pour la même raison que le plancher existe.
+// Pour f < 0 (Lot V2-5, audit B1) : une fraîcheur bornée à 0 écrasait toute
+// distinction à l'écran entre « dû depuis 1 jour » et « dû depuis 30 jours ».
+// choreFresh() (js/maison.js) ne borne pas : la largeur continue alors de
+// décroître sous le plancher, vers une asymptote à 1 % — jamais 0, pour la
+// même raison que le plancher existe.
 function gaugeWidth(f){
   if(f >= 0) return Math.max(4, Math.round(f * 100)) + '%';
   return Math.max(1, Math.round(4 / (1 - f))) + '%';
+}
+
+/* ---------- Animation de complétion (Lot V3-3) ----------
+   Cocher est l'acte central de l'app : la case se remplit d'un petit
+   rebond et la coche se trace. Les écrans se re-rendent en innerHTML à
+   chaque action, donc l'élément animé est celui du NOUVEAU rendu : l'action
+   pose markPop(id) juste avant de re-rendre, et le générateur de la ligne
+   cochée ajoute popClass(id) à sa case. Pas de confetti, pas de son, pas de
+   félicitation (CONVENTIONS.md §3) ; coupée par prefers-reduced-motion
+   comme toute animation (règle globale du <style>). */
+let _popId = null, _popTimer = null;
+function markPop(id){
+  _popId = id;
+  clearTimeout(_popTimer);
+  _popTimer = setTimeout(()=>{ _popId = null; }, 700);
+}
+function popClass(id){ return _popId === id ? ' pop' : ''; }
+
+// Pose l'état coché sur la case touchée, tout de suite, avant que la ligne
+// ne disparaisse de sa liste (Tâches) : l'animation se joue sur place, puis
+// le rendu suit (`after`), sans délai sous prefers-reduced-motion.
+function popThen(btn, after){
+  if(btn && btn.classList){ btn.classList.add('on', 'pop'); btn.setAttribute('aria-checked', 'true'); }
+  if(!btn || reduceMotion()){ after(); return; }
+  setTimeout(after, 320);
+}
+
+/* ---------- Interrupteur (Lot V3-3, retour haptique) ----------
+   iOS n'expose aucune API de vibration au web (ROADMAP-V2 §3.4). La seule
+   voie réelle : <input type="checkbox" switch> (Safari 17.4+), un
+   interrupteur natif qui déclenche le retour haptique système. Quand le
+   navigateur le connaît, on le pose (teinté --act par accent-color) ; sinon
+   on garde le bouton .switch du Lot V1-2, identique pour tout le reste.
+   `fn` est l'expression JS à évaluer au changement, comme un onclick=. */
+// Détection paresseuse, mémorisée (jamais d'IIFE, CONVENTIONS.md §1).
+let _switchNative = null;
+function switchNative(){
+  if(_switchNative === null){
+    try{ _switchNative = 'switch' in document.createElement('input'); }catch(e){ _switchNative = false; }
+  }
+  return _switchNative;
+}
+function switchHtml(on, label, fn){
+  if(switchNative()){
+    return '<input type="checkbox" switch class="switch-native"'+(on ? ' checked' : '')+
+      ' aria-label="'+esc(label)+'" onchange="'+fn+'">';
+  }
+  return '<button class="switch'+(on ? ' on' : '')+'" role="switch" aria-checked="'+!!on+'" '+
+    'aria-label="'+esc(label)+'" onclick="'+fn+'"></button>';
 }
 
 /* ---------- Toast : carte posée, une seule action facultative ---------- */
@@ -248,6 +318,10 @@ function openSheet(html){
   sheet.style.transition = ''; sheet.style.transform = '';
   bg.style.transition = ''; bg.style.background = '';
   sheet.innerHTML = '<div class="handle"></div>'+html;
+  // Un dialogue se nomme par son titre (Lot V3-3) : VoiceOver annonce
+  // « Nouvelle tâche, dialogue » plutôt qu'une zone anonyme.
+  const title = sheet.querySelector('.sheet-title');
+  sheet.setAttribute('aria-label', title ? title.textContent : 'Détails');
   bg.classList.add('show');
 }
 // Hook générique, posé par un écran qui a besoin de nettoyer une ressource
@@ -261,6 +335,11 @@ function closeSheet(){
 }
 document.getElementById('sheet-bg').addEventListener('click', e=>{
   if(e.target.id === 'sheet-bg') closeSheet(); // fermeture par tap en dehors de la feuille
+});
+// Échap ferme la feuille (clavier, Lot V3-3) — le quatrième chemin de
+// fermeture, après le bouton, le tap dehors et le glisser de la poignée.
+document.addEventListener('keydown', e=>{
+  if(e.key === 'Escape' && document.getElementById('sheet-bg').classList.contains('show')) closeSheet();
 });
 
 let _confirmCb = null;
