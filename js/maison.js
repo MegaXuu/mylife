@@ -1,133 +1,173 @@
 /* ==========================================================================
-   maison.js — écran Maison : vue par pièce (ROADMAP-V1.md §6 bis). Réunit les
-   tâches d'entretien (repeat.from:'done' rattachée à une pièce, glossaire
-   CONVENTIONS.md §6) ET, depuis le Lot V1-7, les soins de plantes de la même
-   pièce (js/plants.js, même moteur de fraîcheur) sous une jauge continue par
-   élément.
+   maison.js — domaine Entretien : l'écran Maison (vue par pièce), le moteur
+   du budget d'entretien quotidien lu par « Aujourd'hui », et le pack maison.
 
-   Lot V2-5 (audit A4/B1/B2/B4/C4, ROADMAP-V2.md §3.7) : une ligne d'entretien
-   tapait au corps entier pour COMPLÉTER, sans confirmation ni retour arrière
-   — un frôlement effaçait la vraie date du dernier passage — quand la même
-   ligne pour une plante ouvrait une fiche de 700 px pour trouver « Arrosé ».
-   Règle unique désormais : un bouton d'action à droite agit (et s'annule),
-   le reste de la ligne ouvre le détail — la fiche tâche (taskSheet(), Lot
-   V1-3, qui sait déjà tout éditer y compris la récurrence) pour un entretien,
-   la fiche plante pour un soin. La légende ne montre plus « il y a N jours »
-   (illisible sans connaître l'intervalle) mais « À faire »/« Dans N j » ; la
-   jauge distingue enfin les degrés de retard (rawFreshness(), js/ui.js) ; la
-   jauge agrégée de pièce, redondante et toujours rouge dès qu'un élément est
-   dû, cède la place à un simple compte.
+   Entretien = tâche récurrente « après réalisation » rattachée à une pièce
+   (glossaire CONVENTIONS.md §6) — isChore(). Depuis le Lot V3-1 :
+     · les plantes ne sont plus un domaine à part (js/plants.js retiré) : une
+       plante, c'est un entretien « S'occuper des plantes » comme un autre ;
+     · un entretien porte une durée (t.mins) : « Aujourd'hui » ne propose
+       chaque jour que ce qui tient dans le budget réglé (30 min par défaut),
+       le plus urgent d'abord — choreDay(). Sans ce budget, une maison de 40
+       entretiens ferait des journées à 8 lignes, et l'app serait abandonnée
+       le troisième jour ;
+     · un entretien peut tomber à jour fixe (repeat.kind 'week' + days, la
+       serpillière du samedi) au lieu de glisser avec sa dernière réalisation ;
+     · le pack maison (data/entretien.js, `pack:true`) s'installe d'un tap, ses
+       premières échéances étalées par packSchedule() pour que rien ne tombe
+       le même jour.
+   Règles d'interface du Lot V2-5, inchangées : le bouton « Fait » à droite
+   agit (et s'annule), le reste de la ligne ouvre le détail (taskSheet()),
+   un balayage à gauche supprime (delTask(), js/tasks.js).
    ========================================================================== */
 
-// Un entretien créé par erreur se supprime désormais d'un balayage à gauche,
-// comme sur Tâches (delTask(), js/tasks.js — réutilisé tel quel, pas dupliqué :
-// confirmation, tombstone et annulation par toast lui appartiennent déjà).
-// Jamais posé sur une ligne de plante : supprimer une plante entière passe par
-// sa fiche (deletePlant()), « supprimer un soin » n'a pas de sens isolément.
-const PLANT_ACTION = {
-  water: {label:'Arrosé', fn:'waterPlantAction'},
-  feed: {label:'Engrais', fn:'feedPlantAction'},
-  repot: {label:'Rempoté', fn:'repotPlantAction'}
-};
+const CHORE_BUDGET_DEFAULT = 30; // minutes d'entretien proposées par jour
 
-function getMaisonItems(){
-  return live(S.tasks).filter(t=>t.room && t.repeat && t.repeat.from === 'done');
+function isChore(t){ return !!(t && t.room && t.repeat && t.repeat.from === 'done'); }
+function getMaisonItems(){ return live(S.tasks).filter(isChore); }
+
+/* ==========================================================================
+   Moteur — fonctions pures sur une tâche et une date 'YYYY-MM-DD', testées
+   isolément (test.mjs). Tout est calculé AU JOUR, jamais à la milliseconde :
+   la liste d'« Aujourd'hui » ne doit pas changer d'elle-même entre 9 h et
+   21 h, seulement quand on agit ou qu'on change de jour.
+   ========================================================================== */
+
+// Jours fixes d'un entretien (serpillière du samedi), ou null.
+function choreFixedDays(t){
+  const r = t.repeat;
+  return (r && r.kind === 'week' && r.days && r.days.length) ? r.days : null;
 }
 
-// Conservée pour today.js (careCard()), qui l'affiche encore telle quelle
-// dans son propre bloc Entretien — un contexte différent de celui audité ici
-// (une seule ligne à la fois, pas une comparaison de plusieurs jauges).
-function maisonAgo(t){
-  if(!t.doneAt) return 'Jamais faite';
-  const n = daysBetween(dayKey(new Date(t.doneAt)), todayKey());
-  if(n <= 0) return 'Aujourd’hui';
-  return 'Il y a '+n+(n>1 ? ' jours' : ' jour');
+// Prochaine échéance. Jamais fait → aujourd'hui ; sinon nextDue() (js/recur.js)
+// depuis la dernière réalisation — c'est lui qui sait aussi retrouver le
+// prochain samedi d'un entretien à jour fixe, et faire le calcul calendaire
+// exact d'un mois ou d'un an.
+function choreDueKey(t, today){
+  today = today || todayKey();
+  if(!t.doneAt) return today;
+  return nextDue(t, today);
 }
 
-// Légende tournée vers l'action (audit B2), à la place de maisonAgo()/
-// careAgo() dans cette vue : « il y a 300 jours » en vert juste au-dessus de
-// « il y a 6 jours » en rouge ne se lit pas sans connaître l'intervalle
-// attendu de chacun. Dérivée de la même fraction que la jauge (f × jours de
-// l'intervalle) : les deux ne peuvent jamais se contredire, par construction.
-// La date réelle du dernier passage n'est pas perdue : elle reste dans le
-// détail (fiche plante ; l'entretien réutilise taskSheet(), point 5).
-function freshCue(f, days){
-  if(!days || f <= 0) return 'À faire';
-  const rem = Math.round(f * days);
-  if(rem <= 0) return 'À faire';
-  if(rem < 14) return 'Dans '+rem+' j';
-  const sem = Math.round(rem/7);
-  return 'Dans '+sem+(sem > 1 ? ' semaines' : ' semaine');
+// Fraîcheur au jour près : jours restants / intervalle. 1 = vient d'être
+// fait, 0 = à faire aujourd'hui, négatif = à faire depuis un moment —
+// non bornée, pour que la jauge et le tri distinguent les degrés de retard
+// (même raison qu'au Lot V2-5, audit B1).
+function choreFresh(t, today){
+  today = today || todayKey();
+  const days = intervalDays(t.repeat) || 1;
+  return daysBetween(today, choreDueKey(t, today)) / days;
 }
 
-// Ligne générique — jauge seule à droite (sans légende, elle est montée dans
-// row-meta), puis le bouton d'action. `e` unifie une tâche d'entretien et un
-// soin de plante : {title, f, cue, onTap, actLabel, actFn, fillId, swipeLeft}.
-// `fillId` (entretien seul) : tapMaisonItem() fait remonter la jauge à 100 %
-// avant le rendu complet. `swipeLeft` (entretien seul) : voir PLANT_ACTION.
-function careRowHtml(e){
-  return '<li class="row row-care"'+(e.swipeLeft ? ' data-swipe-left="'+e.swipeLeft+'"' : '')+'>'+
-    '<div class="row-main"'+rowAttrs(e.onTap)+'>'+
-      '<div class="row-title">'+esc(e.title)+'</div>'+
-      '<div class="row-meta">'+esc(e.cue)+'</div>'+
+// Durée en minutes : le champ du Lot V3-1, sinon déduite de l'effort pour
+// un entretien créé avant lui.
+function choreMins(t){ return t.mins || EFFORT_MINS[t.effort || 2] || 15; }
+
+// Charge moyenne de la maison, en minutes par jour — ce que coûte l'ensemble
+// des entretiens s'ils sont tous tenus à leur rythme.
+function choreLoad(items){
+  return (items || getMaisonItems()).reduce((s, t)=>s + choreMins(t) / (intervalDays(t.repeat) || 1), 0);
+}
+
+function choreBudget(){
+  const b = parseInt(S.settings && S.settings.choreBudget, 10);
+  return b > 0 ? b : CHORE_BUDGET_DEFAULT;
+}
+
+/* La journée d'entretien — le seul endroit où elle se décide.
+   Ce qui a déjà été fait aujourd'hui (depuis Maison comme depuis Aujourd'hui)
+   entame le budget. Parmi ce qui est dû, les entretiens à jour fixe passent
+   d'abord (c'est leur jour), puis le plus en retard relativement à son propre
+   rythme (fraîcheur la plus basse), puis le plus court. On prend tout ce qui
+   tient ; ce qui ne tient pas attend demain, où il sera plus urgent et donc
+   pris en premier. Une seule entorse : si rien n'est encore fait ni pris, le
+   premier passe même s'il dépasse le budget à lui seul — sinon un entretien
+   plus long que le budget ne serait jamais proposé. */
+function choreDay(today){
+  today = today || todayKey();
+  const items = getMaisonItems();
+  const doneToday = items.filter(t=>t.doneAt && dayKey(new Date(t.doneAt)) === today);
+  const used = doneToday.reduce((s, t)=>s + choreMins(t), 0);
+  const budget = choreBudget();
+  const due = items.filter(t=>doneToday.indexOf(t) === -1 && choreDueKey(t, today) <= today)
+    .map(t=>({t, f:choreFresh(t, today), fixed:choreFixedDays(t) ? 1 : 0, m:choreMins(t)}))
+    .sort((a, b)=>(b.fixed - a.fixed) || (a.f - b.f) || (a.m - b.m));
+  const picked = [];
+  let total = used;
+  due.forEach(c=>{
+    if(total + c.m <= budget || (!picked.length && !doneToday.length)){
+      picked.push(c.t);
+      total += c.m;
+    }
+  });
+  return {picked, doneToday, used, budget, waiting: due.length - picked.length};
+}
+
+/* ==========================================================================
+   Rendu de l'écran Maison
+   ========================================================================== */
+
+// Légende tournée vers l'action (audit B2, Lot V2-5), dérivée de la même
+// échéance que la jauge : les deux ne peuvent jamais se contredire. Un
+// entretien à jour fixe dit son jour (« Samedi ») plutôt qu'un compte.
+function choreCue(t, today){
+  today = today || todayKey();
+  const due = choreDueKey(t, today);
+  const n = daysBetween(today, due);
+  if(n <= 0) return 'À faire';
+  if(n === 1) return 'Demain';
+  if(choreFixedDays(t) && n < 7){
+    const d = new Date(due+'T00:00').getDay();
+    return cap(DOW_NAMES[d === 0 ? 7 : d]);
+  }
+  if(n < 14) return 'Dans '+n+' j';
+  const sem = Math.round(n/7);
+  if(n < 60) return 'Dans '+sem+' semaines';
+  const mois = Math.round(n/30);
+  return 'Dans '+mois+' mois';
+}
+
+// Ligne d'entretien : légende + durée, jauge à droite, bouton « Fait ». Le
+// corps ouvre la fiche (taskSheet() sait tout éditer, récurrence et durée
+// comprises), un balayage à gauche supprime.
+function choreRowHtml(t, today){
+  const f = choreFresh(t, today);
+  return '<li class="row row-care" data-swipe-left="delTask(\''+t.id+'\')">'+
+    '<div class="row-main"'+rowAttrs("taskSheet('"+t.id+"')")+'>'+
+      '<div class="row-title">'+esc(t.title)+'</div>'+
+      '<div class="row-meta">'+esc(choreCue(t, today))+' · '+choreMins(t)+' min</div>'+
     '</div>'+
-    '<div class="gauge gauge-side"><div class="gauge-fill"'+(e.fillId ? ' id="'+e.fillId+'"' : '')+' '+
-      'style="width:'+gaugeWidth(e.f)+';background:'+gaugeColor(e.f)+'"></div></div>'+
-    '<button class="row-act" onclick="'+e.actFn+'">'+esc(e.actLabel)+'</button>'+
+    '<div class="gauge gauge-side"><div class="gauge-fill" id="mfill-'+t.id+'" '+
+      'style="width:'+gaugeWidth(f)+';background:'+gaugeColor(f)+'"></div></div>'+
+    '<button class="row-act" onclick="tapMaisonItem(\''+t.id+'\')">Fait</button>'+
   '</li>';
 }
 
-// Carte blanche, nom de pièce en 18 px/700, compte à droite sous un filet.
-// `taskItems` (entretien) et `plantItems` (soins, js/plants.js) sont mêlés
-// puis triés ensemble par fraîcheur croissante — le plus dû en tête, la
-// jauge signée (rawFreshness()) trie désormais correctement même entre deux
-// éléments en retard, plutôt que de les départager arbitrairement à f=0.
-function maisonRoomSection(room, taskItems, plantItems, i, n){
-  const entries = taskItems.map(t=>{
-    const days = intervalDays(t.repeat);
-    const f = rawFreshness(t.doneAt, days);
-    return {
-      title:t.title, f, cue:freshCue(f, days),
-      onTap:"taskSheet('"+t.id+"')", actLabel:'Fait', actFn:"tapMaisonItem('"+t.id+"')",
-      fillId:'mfill-'+t.id, swipeLeft:"delTask('"+t.id+"')"
-    };
-  }).concat(plantItems.map(s=>{
-    const act = PLANT_ACTION[s.kind];
-    return {
-      title:s.title, f:s.f, cue:freshCue(s.f, s.days),
-      onTap:"plantSheet('"+s.plantId+"')", actLabel:act.label, actFn:act.fn+"('"+s.plantId+"')",
-      fillId:null, swipeLeft:null
-    };
-  }));
-  const sorted = entries.slice().sort((a, b)=>a.f - b.f);
-  // Remplace l'ancienne jauge agrégée (audit B4) : minimum de ses éléments,
-  // donc rouge dès qu'un seul était dû et redondante avec la ligne du dessous
-  // — elle ne disait jamais rien que la première ligne triée ne disait déjà.
-  // Un compte reste utile d'un coup d'œil sans rien répéter.
-  const due = entries.filter(e=>e.f <= 0).length;
-  const count = due ? due+(due>1 ? ' éléments à faire' : ' élément à faire') : 'Tout est frais';
+// Carte blanche par pièce, le plus dû en tête ; le compte d'éléments à faire
+// à droite du nom (audit B4, Lot V2-5).
+function maisonRoomSection(room, items, i, n, today){
+  const sorted = items.slice().sort((a, b)=>choreFresh(a, today) - choreFresh(b, today));
+  const due = items.filter(t=>choreFresh(t, today) <= 0).length;
+  const count = due ? due+' à faire' : 'Tout est frais';
   return '<div class="card">'+birdOnCard(i, n)+
     '<div class="room-head">'+
       '<h2 class="card-title">'+esc(ROOM_LABELS[room] || room)+'</h2>'+
       '<span class="room-count">'+esc(count)+'</span>'+
     '</div>'+
-    '<ul class="list room-list">'+sorted.map(careRowHtml).join('')+'</ul>'+
+    '<ul class="list room-list">'+sorted.map(t=>choreRowHtml(t, today)).join('')+'</ul>'+
   '</div>';
 }
 
-// Bouton d'action (« Fait ») d'une ligne d'entretien — immédiat, annulable
-// (point 1) : annuler restaure exactement le doneAt/due/postponed d'avant ET
-// retire l'entrée que completeTask() vient d'ajouter à history, même
-// discipline que doneTask()/todayDone() (js/tasks.js, js/today.js).
+// Bouton « Fait » — immédiat, annulable : annuler restaure exactement
+// doneAt/due/postponed ET retire l'entrée que completeTask() vient d'ajouter
+// à history, même discipline que doneTask()/todayDone().
 function tapMaisonItem(id){
   const t = S.tasks.find(x=>x.id === id);
   if(!t) return;
   const fill = document.getElementById('mfill-'+id);
   if(fill) fill.style.width = '100%'; // retour visuel immédiat : la jauge remonte avant le rendu complet
   // Motivation légère (Lot 10) : la toute première réalisation d'un entretien
-  // annuel mérite un mot sobre — après ça, history n'est plus vide, ça ne se
-  // reproduit plus jamais pour cette tâche. Le message passe désormais par
-  // undoable() comme les autres : rien n'empêche de se raviser sur un jalon.
+  // annuel mérite un mot sobre — après ça, history n'est plus vide.
   const firstAnnual = t.repeat && t.repeat.kind === 'year' && !(t.history && t.history.length);
   const snap = {doneAt:t.doneAt, due:t.due, postponed:t.postponed||0, history:(t.history||[]).slice()};
   completeTask(t);
@@ -147,76 +187,207 @@ function tapMaisonItem(id){
 }
 
 function renderMaison(){
+  const today = todayKey();
   const items = getMaisonItems();
-  const soins = getPlantCareItems(); // js/plants.js — soins d'arrosage/engrais/rempotage
   const byRoom = {};
   items.forEach(t=>{ (byRoom[t.room] = byRoom[t.room] || []).push(t); });
-  const byRoomSoins = {};
-  soins.forEach(s=>{ (byRoomSoins[s.room] = byRoomSoins[s.room] || []).push(s); });
-  const rooms = ROOM_ORDER.filter(r=>(byRoom[r] && byRoom[r].length) || (byRoomSoins[r] && byRoomSoins[r].length));
+  // Une pièce inconnue (donnée importée) reste affichée, en dernier : un
+  // entretien ne doit jamais devenir invisible faute de pièce reconnue.
+  const rooms = ROOM_ORDER.filter(r=>byRoom[r])
+    .concat(Object.keys(byRoom).filter(r=>ROOM_ORDER.indexOf(r) === -1));
   const body = rooms.length
-    ? rooms.map((r,i)=>maisonRoomSection(r, byRoom[r] || [], byRoomSoins[r] || [], i, rooms.length)).join('')
-    : emptyState('Rien à entretenir pour l’instant.', 'Ajoute un modèle d’entretien ou une plante ci-dessous.');
-  const total = items.length + soins.length;
-  const sur = total ? total + (total > 1 ? ' éléments suivis' : ' élément suivi') : '';
+    ? rooms.map((r, i)=>maisonRoomSection(r, byRoom[r], i, rooms.length, today)).join('')
+    : emptyState('Rien à entretenir pour l’instant.', 'Le pack maison installe d’un coup les entretiens courants, déjà réglés. Tu enlèveras ensuite ce qui ne te sert pas.')+
+      '<button class="btn primary btn-full" onclick="packSheet()">Installer le pack maison</button>';
+  const sur = items.length
+    ? items.length+(items.length > 1 ? ' entretiens' : ' entretien')+' · environ '+Math.round(choreLoad(items))+' min par jour'
+    : '';
   document.getElementById('s-maison').innerHTML =
     screenHead(sur, 'Maison')+
     body+
-    '<button class="btn secondary btn-full" onclick="entretienSheet()">Ajouter un entretien</button>'+
-    '<button class="btn secondary btn-full" onclick="plantSheet(null)">Ajouter une plante</button>';
+    '<button class="btn secondary btn-full" onclick="entretienSheet()">Ajouter un entretien</button>';
 }
 
 /* ==========================================================================
-   Feuille d'ajout : on choisit une pièce, on coche des modèles du catalogue
-   (data/entretien.js), créés en une fois comme tâches récurrentes 'done'.
-   L'édition et la suppression d'un entretien déjà créé passent désormais par
-   sa ligne dans Maison (taskSheet() au tap, balayage pour supprimer, point 5)
-   — cette feuille reste réservée à la création.
+   Création depuis le catalogue (data/entretien.js)
+   ========================================================================== */
+
+// Clé de doublon : même pièce, même titre (casse indifférente).
+function choreKey(room, title){ return room+'|'+String(title || '').toLowerCase().trim(); }
+function trackedChoreKeys(){ return new Set(getMaisonItems().map(t=>choreKey(t.room, t.title))); }
+
+// Décalage (0–6) jusqu'au prochain des jours fixes `dow`, aujourd'hui compris.
+function fixedOffset(dow, today){
+  const iso = isoDow(today);
+  return Math.min.apply(null, dow.map(d=>(d - iso + 7) % 7));
+}
+
+// Une tâche d'entretien depuis un modèle, due dans `offset` jours : sa
+// dernière réalisation est posée à rebours (midi, pour rester dans le bon
+// jour quel que soit le fuseau), de sorte que nextDue() tombe pile dessus.
+function choreFromModel(m, room, offset, today){
+  const fixed = m.dow && m.dow.length;
+  const back = offset - (fixed ? 7 : m.days);
+  return stamp({
+    title: m.title, notes:'', cat:'entretien', room, bucket:'anytime',
+    start:null, due:null, evening:false, prio:0,
+    effort: minsToEffort(m.mins), mins: m.mins,
+    repeat: fixed ? {kind:'week', n:1, days:m.dow.slice(), from:'done'} : {kind:'day', n:m.days, days:[], from:'done'},
+    doneAt: new Date(addDays(today, back)+'T12:00').getTime(),
+    history:[], postponed:0, touchedAt:Date.now()
+  });
+}
+
+/* Étalement des premières échéances — fonction PURE, testée isolément.
+   entries = [{days, mins, fixed}] (fixed = décalage imposé d'un entretien à
+   jour fixe, ou null) ; renvoie le décalage (en jours, 0 = aujourd'hui) de
+   la première échéance de chacun.
+   On simule la charge de chaque jour sur tout l'horizon (chaque entretien
+   revient tous les `days` jours) et on place chaque entretien, le plus lourd
+   en premier, sur la phase qui augmente le moins la somme des carrés des
+   charges journalières — la façon classique de lisser : un jour chargé coûte
+   plus qu'il ne pèse. Sans ça, 40 entretiens créés d'un coup seraient tous
+   dus le même jour, puis encore ensemble à chaque retour de cycle. */
+function packSchedule(entries){
+  const H = entries.reduce((m, e)=>Math.max(m, e.fixed != null ? 7 : e.days), 7);
+  const load = new Array(H).fill(0);
+  const out = new Array(entries.length);
+  const addAt = (o, per, mins)=>{ for(let d = o; d < H; d += per) load[d] += mins; };
+  entries.forEach((e, i)=>{ if(e.fixed != null){ out[i] = e.fixed; addAt(e.fixed, 7, e.mins); } });
+  entries.map((e, i)=>i).filter(i=>entries[i].fixed == null)
+    .sort((a, b)=>(entries[b].mins/entries[b].days - entries[a].mins/entries[a].days) || (entries[a].days - entries[b].days))
+    .forEach(i=>{
+      const e = entries[i];
+      let best = 0, bestCost = Infinity;
+      for(let o = 0; o < e.days; o++){
+        let cost = 0;
+        for(let d = o; d < H; d += e.days) cost += 2*load[d]*e.mins + e.mins*e.mins;
+        if(cost < bestCost){ bestCost = cost; best = o; }
+      }
+      out[i] = best;
+      addAt(best, e.days, e.mins);
+    });
+  return out;
+}
+
+/* ---------- Le pack maison : les entretiens courants, installés d'un tap ---------- */
+let _packRooms = null;
+
+function packModels(){
+  const have = trackedChoreKeys();
+  return ENTRETIEN.filter(m=>m.pack && !have.has(choreKey(m.room, m.title)));
+}
+function packSheet(){
+  _packRooms = {};
+  packModels().forEach(m=>{ _packRooms[m.room] = true; });
+  openSheet(packSheetHtml());
+}
+function togglePackRoom(r){ _packRooms[r] = !_packRooms[r]; openSheet(packSheetHtml()); }
+
+function packSheetHtml(){
+  const all = packModels();
+  if(!all.length){
+    return '<p class="sheet-title">Pack maison</p>'+
+      '<p class="sheet-msg">Tout le pack est déjà installé.</p>'+
+      '<button class="btn quiet btn-full" onclick="closeSheet()">Fermer</button>';
+  }
+  const chosen = all.filter(m=>_packRooms[m.room]);
+  const rooms = ROOM_ORDER.filter(r=>all.some(m=>m.room === r));
+  const chips = rooms.map(r=>{
+    const n = all.filter(m=>m.room === r).length;
+    return '<button class="chip'+(_packRooms[r] ? ' on' : '')+'" aria-pressed="'+!!_packRooms[r]+'" '+
+      'onclick="togglePackRoom(\''+r+'\')">'+esc(ROOM_LABELS[r])+' · '+n+'</button>';
+  }).join('');
+  const load = Math.round(chosen.reduce((s, m)=>s + m.mins/m.days, 0));
+  return '<p class="sheet-title">Pack maison</p>'+
+    '<p class="sheet-msg">'+chosen.length+' entretiens déjà réglés, environ '+load+' min par jour. '+
+      'Les premières échéances sont étalées : rien ne tombe le même jour.</p>'+
+    '<div class="field-group"><span class="overline">Pièces</span><div class="chips">'+chips+'</div></div>'+
+    '<div class="field-group"><p class="sheet-msg">Ensuite, un balayage vers la gauche enlève ce qui ne te sert pas, et la fiche de chaque ligne règle son rythme.</p></div>'+
+    '<button class="btn primary btn-full" onclick="installPack()"'+(chosen.length ? '' : ' disabled')+'>Installer'+(chosen.length ? ' ('+chosen.length+')' : '')+'</button>'+
+    '<button class="btn quiet btn-full" onclick="closeSheet()">Annuler</button>';
+}
+
+function installPack(){
+  const models = packModels().filter(m=>_packRooms && _packRooms[m.room]);
+  if(!models.length) return;
+  const today = todayKey();
+  const offsets = packSchedule(models.map(m=>({
+    days: m.days, mins: m.mins, fixed: (m.dow && m.dow.length) ? fixedOffset(m.dow, today) : null
+  })));
+  const created = models.map((m, i)=>choreFromModel(m, m.room, offsets[i], today));
+  created.forEach(t=>S.tasks.push(t));
+  save();
+  closeSheet();
+  rerender();
+  undoable(created.length+' entretiens installés.', ()=>{
+    created.forEach(t=>{ t.deletedAt = Date.now(); touch(t); });
+    save();
+    rerender();
+  });
+}
+
+/* ==========================================================================
+   Feuille d'ajout : on choisit une pièce, on coche des modèles du catalogue.
+   Un modèle déjà suivi dans cette pièce est signalé, pas proposé deux fois.
+   L'édition et la suppression passent par la ligne dans Maison (fiche au
+   tap, balayage pour supprimer) — cette feuille reste réservée à la création.
    ========================================================================== */
 let _entSheet = null;
 
 function entretienSheet(){
-  _entSheet = {room: ROOM_ORDER[0], checked: {}};
+  _entSheet = {room: ROOM_ORDER.find(r=>ENTRETIEN.some(m=>m.room === r)), checked: {}};
   openSheet(entretienSheetHtml());
 }
 function setEntRoom(r){ _entSheet.room = r; _entSheet.checked = {}; openSheet(entretienSheetHtml()); }
 function toggleEntModel(i){ _entSheet.checked[i] = !_entSheet.checked[i]; openSheet(entretienSheetHtml()); }
 
+function modelRhythm(m){
+  return (m.dow && m.dow.length) ? repeatSummary({kind:'week', n:1, days:m.dow, from:'done'}).replace(/\.$/, '')
+                                 : 'Tous les '+m.days+' jours';
+}
+
 function entretienSheetHtml(){
-  const roomChips = ROOM_ORDER.map(r=>
-    '<button class="chip'+(_entSheet.room===r?' on':'')+'" onclick="setEntRoom(\''+r+'\')">'+esc(ROOM_LABELS[r])+'</button>'
+  const room = _entSheet.room;
+  const have = trackedChoreKeys();
+  const roomChips = roomChoices(room).map(r=>
+    '<button class="chip'+(room===r?' on':'')+'" onclick="setEntRoom(\''+r+'\')">'+esc(ROOM_LABELS[r])+'</button>'
   ).join('');
-  const modelRows = ENTRETIEN.map((m, i)=> m.room === _entSheet.room ? {m, i} : null).filter(Boolean);
-  const rows = modelRows.map(({m, i})=>{
+  const rows = ENTRETIEN.map((m, i)=>m.room === room ? {m, i} : null).filter(Boolean).map(({m, i})=>{
+    const meta = modelRhythm(m)+' · '+m.mins+' min';
+    if(have.has(choreKey(room, m.title))){
+      return '<li class="row row-low"><div class="row-main"><div class="row-title">'+esc(m.title)+'</div>'+
+        '<div class="row-meta">Déjà suivi</div></div></li>';
+    }
     const on = !!_entSheet.checked[i];
     return '<li class="row"'+rowAttrs('toggleEntModel('+i+')')+'>'+
-      '<button class="check'+(on?' on':'')+'" role="checkbox" aria-checked="'+on+'" aria-label="Sélectionner"></button>'+
+      '<span class="check'+(on?' on':'')+'" role="checkbox" aria-checked="'+on+'" aria-label="Sélectionner"></span>'+
       '<div class="row-main"><div class="row-title">'+esc(m.title)+'</div>'+
-        '<div class="row-meta">Tous les '+m.intervalDays+' jours</div></div>'+
+        '<div class="row-meta">'+esc(meta)+'</div></div>'+
     '</li>';
   }).join('');
   const n = Object.keys(_entSheet.checked).filter(k=>_entSheet.checked[k]).length;
   return '<p class="sheet-title">Ajouter un entretien</p>'+
     '<div class="field-group"><span class="overline">Pièce</span><div class="chips">'+roomChips+'</div></div>'+
     '<div class="field-group"><ul class="list">'+
-      (rows || '<li class="row"><div class="row-main"><div class="row-meta">Aucun modèle pour cette pièce.</div></div></li>')+
+      (rows || '<li class="row"><div class="row-main"><div class="row-meta">Aucun modèle pour cette pièce. Crée-le depuis la barre de saisie, avec « #'+esc(room)+' » et « tous les N jours après ».</div></div></li>')+
     '</ul></div>'+
     '<button class="btn primary btn-full" onclick="addEntretienModels()"'+(n?'':' disabled')+'>Ajouter'+(n?' ('+n+')':'')+'</button>'+
     '<button class="btn quiet btn-full" onclick="closeSheet()">Annuler</button>';
 }
 
+// Un entretien ajouté seul n'a pas de « dernière fois » connue : il est dû à
+// mi-intervalle plutôt que tout de suite (ni frais ni en retard), ou à son
+// prochain jour fixe.
 function addEntretienModels(){
   const idxs = Object.keys(_entSheet.checked).filter(k=>_entSheet.checked[k]).map(Number);
   if(!idxs.length) return;
+  const today = todayKey();
   idxs.forEach(i=>{
     const m = ENTRETIEN[i];
     if(!m) return;
-    S.tasks.push(stamp({
-      title: m.title, notes:'', cat:'entretien', room:_entSheet.room, bucket:'anytime',
-      start:null, due:null, evening:false, prio:0, effort:m.effort||2,
-      repeat:{kind:'day', n:m.intervalDays, days:[], from:'done'},
-      doneAt: Date.now(), history:[], postponed:0, touchedAt:Date.now()
-    }));
+    const offset = (m.dow && m.dow.length) ? fixedOffset(m.dow, today) : Math.ceil(m.days/2);
+    S.tasks.push(choreFromModel(m, _entSheet.room, offset, today));
   });
   save();
   closeSheet();

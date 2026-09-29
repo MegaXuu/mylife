@@ -153,6 +153,10 @@ dans `js/state.js` — même numéro, comme en V1.
 | **V2-7** | Bêta 2.7 | **Habitudes v2** | Calendrier lisible : nom du mois, en-tête de jours, numéros, hauteur stable (B6). Méta éclatée en lignes distinctes (B5). Saisie rapide par pas adapté à l'objectif (B8). Écran propre avec son état vide et son bouton d'ajout accessible sans défiler | Sonnet |
 | **V2-8** | Bêta 2.8 | **Mouvement, finition, QA** | Transitions d'écran, animation de complétion, oiseaux rendus au mode sombre (D4), essai de l'haptique sur les interrupteurs (§3.4). Audit accessibilité complet. `QA-IPHONE-V2.md`. Mise à jour de `CLAUDE.md` et `CONVENTIONS.md` | Sonnet |
 
+> **29/09/2026 — le V2-8 est reporté en V3-3** (`ROADMAP-V3.md`) : la V3 change la tab bar, Maison
+> et Aujourd'hui ; finir ces écrans avant de les refaire n'aurait eu aucun sens. Le cycle V2 s'arrête
+> donc à Bêta 2.7.
+
 **Dépendances dures :** V2-1 avant V2-4, V2-5, V2-6 (ils consomment `gestures.js` et `undoable()`).
 V2-2 avant V2-3 et V2-7 (la tab bar et la barre collée changent la hauteur utile de chaque écran).
 V2-8 en dernier, toujours.

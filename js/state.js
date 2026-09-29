@@ -5,7 +5,7 @@
    AUCUN RENDU DOM ICI — voir js/ui.js et les js/<ecran>.js pour l'affichage.
    ========================================================================== */
 
-const APP_VERSION = 'Bêta 2.7'; // à synchroniser avec CACHE (sw.js) à chaque release
+const APP_VERSION = 'Bêta 3.1'; // à synchroniser avec CACHE (sw.js) à chaque release
 
 const IDB_NAME = 'mylife';
 const IDB_VERSION = 1;
@@ -15,8 +15,7 @@ const LS_KEY = 'mylife';
 function defaults(){
   return {
     v: 1,
-    tasks: [],       // tâches ponctuelles + entretien récurrent (ménage, admin)
-    plants: [],      // plantes et leurs soins
+    tasks: [],       // tâches ponctuelles + entretien récurrent (ménage, admin, plantes)
     habits: [],      // définitions d'habitudes
     habitLog: {},    // { 'YYYY-MM-DD': { habitId: valeur | 'skip' } }
     shopping: [],     // articles de la liste de courses
@@ -26,8 +25,7 @@ function defaults(){
       weekStart: 1,      // lundi
       rayonOrder: RAYON_ORDER_DEFAULT.slice(), // ordre des rayons, adapté au plan du magasin (Lot 9)
       rayonOverrides: {}, // {libellé normalisé: rayon} — corrections mémorisées (Lot 9, js/shopping.js)
-      coldFrom: 10,       // bornes de la saison froide (plantes) : octobre
-      coldTo: 2,          // → février
+      choreBudget: 30,    // minutes d'entretien proposées par jour sur Aujourd'hui (Lot V3-1, js/maison.js)
       todayCap: 7,        // plafond visuel de l'écran Aujourd'hui
       reviewDay: 0,        // jour de la revue hebdomadaire (0 = dimanche)
       hideDone: false,
@@ -59,15 +57,22 @@ function migrate(r){
     if(t.history === undefined) t.history = [];
     return t;
   });
-  r.plants = r.plants || [];
+  // Lot V3-1 : les plantes ne sont plus un domaine à part. Une base qui en
+  // portait garde l'essentiel — un entretien « S'occuper des plantes » par
+  // pièce, au rythme d'arrosage le plus court de ses plantes — plutôt que de
+  // les perdre sans rien dire. Les photos restent dans le store 'photos'
+  // jusqu'à la prochaine réinitialisation (idbClearPhotos()).
+  const hadPlants = (r.plants || []).length > 0;
+  migratePlants(r);
   r.habits = r.habits || [];
   r.habitLog = r.habitLog || {};
   r.shopping = r.shopping || [];
   r.frequents = r.frequents || [];
   r.settings = Object.assign({
-    userName: null, weekStart: 1, rayonOrder: [], rayonOverrides: {}, coldFrom: 10, coldTo: 2,
+    userName: null, weekStart: 1, rayonOrder: [], rayonOverrides: {}, choreBudget: 30,
     todayCap: 7, reviewDay: 0, hideDone: false, birds: true, theme: 'auto'
   }, r.settings || {});
+  delete r.settings.coldFrom; delete r.settings.coldTo; // saison froide des plantes, Lot V1-7 → V3-1
   // Lot V1-9 : un rayonOrder vide (installs d'avant ce lot, jamais rempli)
   // retombe sur l'ordre par défaut plutôt que de laisser Courses sans groupes.
   if(!r.settings.rayonOrder || !r.settings.rayonOrder.length) r.settings.rayonOrder = RAYON_ORDER_DEFAULT.slice();
@@ -77,10 +82,33 @@ function migrate(r){
   // doit jamais se la voir proposer après coup — seule une base réellement
   // vierge (aucune tâche, plante, habitude ou article) reste à onboarder.
   if(r.onboarded === undefined){
-    const hasData = r.tasks.length || r.plants.length || r.habits.length || r.shopping.length;
+    const hasData = r.tasks.length || hadPlants || r.habits.length || r.shopping.length;
     r.onboarded = !!hasData;
   }
   return r;
+}
+
+// Une plante vivante → un entretien par pièce. Idempotent : la clé plants
+// disparaît après coup, et un entretien de même titre déjà présent dans la
+// pièce n'est pas recréé.
+function migratePlants(r){
+  const plants = (r.plants || []).filter(p=>!p.deletedAt && p.room);
+  delete r.plants;
+  const byRoom = {};
+  plants.forEach(p=>{
+    const w = p.care && p.care.water ? (p.care.water.warm || 7) : 7;
+    byRoom[p.room] = Math.min(byRoom[p.room] || w, w);
+  });
+  Object.keys(byRoom).forEach(room=>{
+    const title = 'S’occuper des plantes';
+    if(r.tasks.some(t=>!t.deletedAt && t.room === room && t.title === title)) return;
+    r.tasks.push(stamp({
+      title, notes:'', cat:'entretien', room, bucket:'anytime', start:null, due:null,
+      evening:false, prio:0, effort:1, mins:10,
+      repeat:{kind:'day', n:byRoom[room], days:[], from:'done'},
+      doneAt:Date.now(), history:[], postponed:0, touchedAt:Date.now()
+    }));
+  });
 }
 
 let S = defaults(); // jamais null, même avant la fin du boot() asynchrone
@@ -121,42 +149,9 @@ function idbSet(key, val){
     }catch(e){ resolve(false); }
   });
 }
-// Photos de plantes (Blobs) : store séparé, jamais dans S. Utilisé à partir du Lot 7.
-function idbPutPhoto(id, blob){
-  return new Promise(resolve=>{
-    if(!_db){ resolve(false); return; }
-    try{
-      const tx = _db.transaction('photos','readwrite');
-      tx.objectStore('photos').put(blob, id);
-      tx.oncomplete = ()=>resolve(true);
-      tx.onerror = ()=>resolve(false);
-    }catch(e){ resolve(false); }
-  });
-}
-function idbGetPhoto(id){
-  return new Promise(resolve=>{
-    if(!_db){ resolve(null); return; }
-    try{
-      const rq = _db.transaction('photos','readonly').objectStore('photos').get(id);
-      rq.onsuccess = ()=>resolve(rq.result || null);
-      rq.onerror = ()=>resolve(null);
-    }catch(e){ resolve(null); }
-  });
-}
-function idbDelPhoto(id){
-  return new Promise(resolve=>{
-    if(!_db){ resolve(false); return; }
-    try{
-      const tx = _db.transaction('photos','readwrite');
-      tx.objectStore('photos').delete(id);
-      tx.oncomplete = ()=>resolve(true);
-      tx.onerror = ()=>resolve(false);
-    }catch(e){ resolve(false); }
-  });
-}
-// Vide le store 'photos' en une fois — réinitialisation (Lot 11) : S = defaults()
-// n'a plus aucun photoId à supprimer un par un, donc rien d'autre ne purgerait
-// les Blobs orphelins.
+// Vide le store 'photos' en une fois — réinitialisation (Lot 11). Depuis le
+// Lot V3-1 plus rien n'y écrit (les photos de plantes ont disparu avec les
+// plantes) : ce qui y reste d'avant est purgé ici, rien d'autre ne le ferait.
 function idbClearPhotos(){
   return new Promise(resolve=>{
     if(!_db){ resolve(false); return; }
@@ -229,7 +224,7 @@ function live(arr){ return arr.filter(o=>!o.deletedAt); }
 function purgeTombstones(){
   const cutoff = Date.now() - 90*24*60*60*1000;
   let changed = false;
-  ['tasks','plants','habits','shopping'].forEach(k=>{
+  ['tasks','habits','shopping'].forEach(k=>{
     const before = S[k].length;
     S[k] = S[k].filter(o=>!o.deletedAt || o.deletedAt > cutoff);
     if(S[k].length !== before) changed = true;

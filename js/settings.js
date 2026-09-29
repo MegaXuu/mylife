@@ -1,6 +1,6 @@
 /* ==========================================================================
    settings.js — écran Réglages (Lot V1-11) : profil, préférences des autres
-   écrans (plafond du jour, jour de revue, saison froide, ordre des rayons),
+   écrans (plafond du jour, jour de revue, budget d'entretien, ordre des rayons),
    apparence (mode sombre), export/import JSON, à propos, réinitialisation,
    et la feuille de bienvenue du tout premier lancement.
    Groupes dans cet ordre, chacun sa carte : Profil · Aujourd'hui · Maison ·
@@ -9,12 +9,6 @@
 
 const REVIEW_DAY_LABELS = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
 
-function monthOptionsHtml(selected){
-  return NLP_MOIS.map((m,i)=>{
-    const v = i+1;
-    return '<option value="'+v+'"'+(selected===v ? ' selected' : '')+'>'+esc(cap(m))+'</option>';
-  }).join('');
-}
 function reviewDayOptionsHtml(selected){
   return REVIEW_DAY_LABELS.map((l,i)=>
     '<option value="'+i+'"'+(selected===i ? ' selected' : '')+'>'+esc(l)+'</option>'
@@ -76,21 +70,19 @@ function setReviewDay(v){
   save();
   renderSettings();
 }
-function setColdFrom(v){
-  S.settings.coldFrom = Math.max(1, Math.min(12, parseInt(v, 10) || 10));
-  save();
-  renderSettings();
-}
-function setColdTo(v){
-  S.settings.coldTo = Math.max(1, Math.min(12, parseInt(v, 10) || 2));
+// Budget d'entretien quotidien (Lot V3-1, choreDay() dans js/maison.js) :
+// par pas de 5 minutes, jamais sous 5 — à 0 l'app ne proposerait plus rien.
+function setChoreBudget(v){
+  const n = Math.round((parseInt(v, 10) || CHORE_BUDGET_DEFAULT) / 5) * 5;
+  S.settings.choreBudget = Math.max(5, Math.min(240, n));
   save();
   renderSettings();
 }
 
 /* ==========================================================================
-   Export / import JSON — S en entier. Les photos de plantes (Blobs, store
-   IndexedDB 'photos') n'y sont jamais : l'écran le dit explicitement plutôt
-   que de laisser Florian le découvrir après un import raté.
+   Export / import JSON — S en entier. Un export d'avant le Lot V3-1 porte
+   encore un tableau `plants` : il reste importable, migrate() le traduit en
+   entretiens (migratePlants(), js/state.js).
    ========================================================================== */
 function exportData(){
   saveNow().then(()=>{
@@ -110,12 +102,12 @@ function exportData(){
 // Structure minimale attendue d'un fichier importé — pure, sans DOM, testée
 // isolément (test.mjs) comme parseQuick()/guessRayon(). Volontairement peu
 // stricte sur le contenu (migrate() sait déjà compléter les champs manquants
-// à l'intérieur de chaque tâche/plante/habitude) mais stricte sur la forme
+// à l'intérieur de chaque tâche/habitude) mais stricte sur la forme
 // générale : un fichier qui n'y ressemble pas doit être rejeté d'un bloc.
 function validateImportPayload(obj){
   if(!obj || typeof obj !== 'object') return false;
   if(typeof obj.v !== 'number') return false;
-  const arrays = ['tasks', 'plants', 'habits', 'shopping', 'frequents'];
+  const arrays = ['tasks', 'habits', 'shopping', 'frequents'];
   if(!arrays.every(k => Array.isArray(obj[k]))) return false;
   if(!obj.settings || typeof obj.settings !== 'object') return false;
   if(!obj.habitLog || typeof obj.habitLog !== 'object') return false;
@@ -137,7 +129,7 @@ function applyImportedData(raw){
 
 function importDataPrompt(){
   confirmSheet(
-    'Importer un fichier remplace entièrement tes données actuelles (tâches, plantes, habitudes, courses, réglages). Cette action est irréversible.',
+    'Importer un fichier remplace entièrement tes données actuelles (tâches, entretiens, habitudes, courses, réglages). Cette action est irréversible.',
     'Choisir un fichier',
     () => { const el = document.getElementById('import-input'); if(el) el.click(); }
   );
@@ -164,20 +156,21 @@ async function onImportFile(input){
 /* ==========================================================================
    Réinitialisation — feuille en deux temps : proposer l'export d'abord, le
    bouton danger seulement ensuite. Vide aussi le store 'photos' (Blobs hors
-   de S, sinon orphelins) avant de recharger sur un accueil vierge — la
+   de S laissés par les plantes d'avant le Lot V3-1) avant de recharger sur
+   un accueil vierge — la
    bienvenue se rejoue puisque S.onboarded revient à false avec defaults().
    ========================================================================== */
 function resetSheet(){ openSheet(resetExportStepHtml()); }
 function resetExportStepHtml(){
   return '<p class="sheet-title">Réinitialiser l’application</p>'+
-    '<p class="sheet-msg">Tâches, plantes, habitudes, courses, photos et réglages seront tous supprimés. Pense à exporter une sauvegarde avant.</p>'+
+    '<p class="sheet-msg">Tâches, entretiens, habitudes, courses et réglages seront tous supprimés. Pense à exporter une sauvegarde avant.</p>'+
     '<button class="btn secondary btn-full" onclick="exportData()">Exporter mes données</button>'+
     '<button class="btn danger btn-full" onclick="openSheet(resetConfirmStepHtml())">Continuer sans exporter</button>'+
     '<button class="btn quiet btn-full" onclick="closeSheet()">Annuler</button>';
 }
 function resetConfirmStepHtml(){
   return '<p class="sheet-title">Confirmer la réinitialisation</p>'+
-    '<p class="sheet-msg">Définitif, y compris les photos de plantes : il n’y a pas de retour en arrière.</p>'+
+    '<p class="sheet-msg">Définitif : il n’y a pas de retour en arrière.</p>'+
     '<button class="btn danger btn-full" onclick="doReset()">Tout réinitialiser</button>'+
     '<button class="btn quiet btn-full" onclick="closeSheet()">Annuler</button>';
 }
@@ -198,7 +191,7 @@ let _welcomeStep = 0, _welcomeName = '', _welcomeTaskTitle = '';
 
 function maybeWelcome(){
   if(S.onboarded) return;
-  const hasData = live(S.tasks).length || live(S.plants).length || live(S.habits).length || live(S.shopping).length;
+  const hasData = live(S.tasks).length || live(S.habits).length || live(S.shopping).length;
   if(hasData){ S.onboarded = true; save(); return; } // filet de sécurité, cf. migrate()
   startWelcome();
 }
@@ -216,7 +209,7 @@ function welcomeStepHtml(){
 }
 function welcomeIntroHtml(){
   return '<p class="sheet-title">Bienvenue dans MyLife</p>'+
-    '<p class="sheet-msg">Une seule question, chaque jour : qu’est-ce qu’il y a à faire maintenant ? Tâches, entretien de la maison, plantes, habitudes et courses, réunis en un seul endroit.</p>'+
+    '<p class="sheet-msg">Une seule question, chaque jour : qu’est-ce qu’il y a à faire maintenant ? Tâches, entretien de la maison, habitudes et courses, réunis en un seul endroit.</p>'+
     '<p class="sheet-msg">Tout reste sur cet appareil : aucun compte, aucun serveur, rien n’est envoyé nulle part.</p>'+
     '<button class="btn primary btn-full" onclick="advanceWelcome()">Suivant</button>';
 }
@@ -313,14 +306,12 @@ function renderSettings(){
 
   const maison = '<div class="card">'+birdOnCard(2, N)+
     '<h2 class="card-title">Maison</h2>'+
-    '<div class="field-group"><span class="overline">Saison froide, pour les plantes</span>'+
-      '<div class="addbar">'+
-        '<select class="field" onchange="setColdFrom(this.value)">'+monthOptionsHtml(S.settings.coldFrom)+'</select>'+
-        ' au '+
-        '<select class="field" onchange="setColdTo(this.value)">'+monthOptionsHtml(S.settings.coldTo)+'</select>'+
-      '</div>'+
+    '<div class="field-group"><span class="overline">Temps d’entretien par jour</span>'+
+      '<div class="repeat-n"><input class="field" type="number" min="5" step="5" inputmode="numeric" '+
+        'value="'+choreBudget()+'" onchange="setChoreBudget(this.value)"><span>minutes</span></div>'+
     '</div>'+
-    '<p class="row-meta">Détermine l’intervalle d’arrosage et d’engrais appliqué selon la saison.</p>'+
+    '<p class="row-meta">Aujourd’hui ne propose que ce qui tient dans ce temps, le plus urgent d’abord. Le reste attend le lendemain. Ta maison demande environ '+Math.round(choreLoad())+' min par jour.</p>'+
+    '<button class="btn secondary btn-full" onclick="packSheet()">Installer le pack maison</button>'+
   '</div>';
 
   const courses = '<div class="card">'+birdOnCard(3, N)+
@@ -331,7 +322,7 @@ function renderSettings(){
 
   const donnees = '<div class="card">'+birdOnCard(4, N)+
     '<h2 class="card-title">Données</h2>'+
-    '<p class="row-meta">Export et import complets au format JSON. Les photos de plantes n’y sont pas incluses : elles restent uniquement sur cet appareil.</p>'+
+    '<p class="row-meta">Export et import complets au format JSON.</p>'+
     '<button class="btn secondary btn-full" onclick="exportData()">Exporter mes données</button>'+
     '<button class="btn secondary btn-full" onclick="importDataPrompt()">Importer des données</button>'+
     '<input id="import-input" class="file-input" type="file" accept="application/json" onchange="onImportFile(this)">'+

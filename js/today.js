@@ -3,39 +3,33 @@
    Il ne liste pas, il DÉCIDE. Ordre imposé par la roadmap :
      1. Échéances dépassées   — uniquement les vraies deadlines (due < aujourd'hui)
      2. Aujourd'hui           — start ≤ aujourd'hui et récurrences dues, plafonné
-     3. Entretien             — au plus 3 jauges, les plus basses
+     3. Entretien du jour     — ce qui tient dans le budget quotidien (Lot V3-1)
      4. Habitudes du jour     — actives aujourd'hui, saisie en ligne (js/habits.js)
      5. Courses               — une ligne, jamais la liste (js/shopping.js)
      6. Ce soir               — sous-section discrète
      7. Si tu as 10 minutes   — 1 à 3 tâches anytime à effort court
 
-   Depuis le Lot V1-7 : les soins de plantes réellement dus (jauge à 0,
-   js/plants.js) rejoignent le bloc 2 « Aujourd'hui » — jamais le bloc 3
-   Entretien, réservé aux tâches from:'done' (ROADMAP §6.2). `scheduled`
-   devient donc un tableau mixte d'entrées {id, kind:'task'|'soin', t|s} ;
-   `id` est dupliqué au premier niveau pour que has()/tri/plafond restent
-   indifférents au contenu, tâche ou soin.
+   Depuis le Lot V3-1 : les plantes ne sont plus un domaine à part (ce sont
+   des entretiens comme les autres), et le bloc 3 n'est plus « les 3 jauges
+   les plus basses » mais la journée d'entretien décidée par choreDay()
+   (js/maison.js) : ce qui est dû et tient dans le budget réglé, le plus
+   urgent d'abord. Le reste attend demain, sans jamais encombrer l'écran.
 
    Depuis le Lot V1-8 : les habitudes actives aujourd'hui (js/habits.js,
    getTodayHabits()) rejoignent la sélection — un domaine à part, jamais mêlé
    aux tâches (une série ne se compte pas comme une jauge, CONVENTIONS.md §6).
 
-   Depuis le Lot V2-3, trois changements (maquettes/today-v2.html) :
-     · le sur-titre porte le prénom (audit C1) ;
-     · les soins de plantes ne tombent plus sous le plafond : ils ont des
-       places réservées à la tête du bloc du jour (audit B3, todayShown()) ;
-     · une ligne cochée est annulable au toast ET décochable à la case
-       (audit A2, todayUndone()).
+   Depuis le Lot V2-3 (maquettes/today-v2.html) : le sur-titre porte le
+   prénom (audit C1) ; une ligne cochée est annulable au toast ET décochable
+   à la case (audit A2, todayUndone()). La réserve de places des soins de
+   plantes sous le plafond (audit B3) a disparu avec les plantes au V3-1.
 
    Mise en forme : la maquette fait foi (cf. le bloc Lot V1-5 du <style>).
    Le bloc du jour est le seul à ne pas être une carte : c'est ce qui le rend
    dominant, il respire pleine largeur pendant que le reste est boîté.
    ========================================================================== */
 
-const TODAY_CARE_MAX = 3;      // au plus 3 entretiens (ROADMAP §6.3)
-const TODAY_CARE_SEUIL = 0.4;  // … et seulement ceux qui approchent d'« à faire »
 const TODAY_QUICK_MAX = 3;     // « si tu as 10 minutes » : 1 à 3 tâches (§6.7)
-const TODAY_SOIN_RESERVE = 3;  // places réservées aux soins dans le bloc du jour (Lot V2-3)
 
 // Sur-titre de l'écran : « Dimanche 26 juillet ». La casse de phrase impose
 // la majuscule initiale que toLocaleDateString ne met pas en français.
@@ -93,15 +87,9 @@ let _todayMore = false; // « + N autres » déplié ?
    précédent a déjà pris.
    ========================================================================== */
 
-// Entretien : tâche récurrente « après réalisation » rattachée à une pièce
-// (glossaire CONVENTIONS.md §6). Même définition que getMaisonItems().
-function todayCareItems(){
-  return live(S.tasks).filter(t=>t.room && t.repeat && t.repeat.from === 'done');
-}
-
 function todayBuckets(){
-  const today = todayKey(), now = Date.now();
-  const care = todayCareItems();
+  const today = todayKey();
+  const care = getMaisonItems(); // entretien : isChore(), js/maison.js
   const careIds = care.map(t=>t.id);
   const ticked = tickedToday();
 
@@ -122,27 +110,23 @@ function todayBuckets(){
   const evening = rest.filter(t=>t.evening && (!t.start || t.start <= today)).sort(taskCompare);
   const takenE = evening.map(t=>t.id);
 
-  // 2. Le jour même : une date posée, arrivée à terme — et, depuis le Lot
-  //    V1-7, les soins de plantes réellement dus (jauge à 0), jamais someday
-  //    ni le bloc Entretien.
-  const scheduledTasks = rest.filter(t=>takenE.indexOf(t.id) === -1 && t.bucket === 'scheduled' &&
+  // 2. Le jour même : une date posée, arrivée à terme. Jamais someday.
+  const scheduled = rest.filter(t=>takenE.indexOf(t.id) === -1 && t.bucket === 'scheduled' &&
     ((t.start && t.start <= today) || (t.due && t.due <= today))).sort(taskCompare);
-  const duePlants = getPlantCareItems().filter(s=>s.f <= 0).sort((a,b)=>a.f - b.f);
-  const scheduled = scheduledTasks.map(t=>({id:t.id, kind:'task', t}))
-    .concat(duePlants.map(s=>({id:s.id, kind:'soin', s})));
 
   // 7. Le mécanisme qui empêche le « un jour » de pourrir silencieusement.
   //    Jamais someday : ce qui n'est pas mûr n'a rien à faire sur cet écran.
   const quick = rest.filter(t=>takenE.indexOf(t.id) === -1 &&
     t.bucket === 'anytime' && (t.effort || 2) === 1).sort(taskCompare).slice(0, TODAY_QUICK_MAX);
 
-  // 3. Les jauges les plus basses, toutes pièces confondues — et seulement
-  //    celles qui approchent d'« à faire ». Sans ce seuil le bloc serait
-  //    permanent, et l'écran ne saurait jamais dire « c'est bon ».
-  const soins = care.map(t=>({t, f: freshness(t, now)}))
-    .filter(x=>x.f < TODAY_CARE_SEUIL)
-    .sort((a,b)=>a.f - b.f)
-    .slice(0, TODAY_CARE_MAX);
+  // 3. La journée d'entretien (Lot V3-1) : ce qui est dû ET tient dans le
+  //    budget quotidien — décidé par choreDay() (js/maison.js), le seul
+  //    endroit où il se décide. Un entretien coché dans la session garde sa
+  //    ligne barrée dans ce bloc, pas dans celui des tâches.
+  const day = choreDay(today);
+  const chores = day.picked.filter(t=>ticked.indexOf(t.id) === -1);
+  const choresDone = care.filter(t=>ticked.indexOf(t.id) !== -1);
+  const choresWaiting = day.waiting;
 
   // 4. Habitudes actives aujourd'hui (js/habits.js) — domaine à part, jamais
   //    mêlé aux tâches : une série ne se compte pas comme une jauge.
@@ -153,14 +137,14 @@ function todayBuckets(){
   //    pas dans la pastille (voir todayBadgeCount()).
   const shopping = shoppingOpenCount();
 
-  return {overdue, scheduled, soins, evening, quick, done, habits, shopping};
+  return {overdue, scheduled, chores, choresDone, choresWaiting, evening, quick, done, habits, shopping};
 }
 
 // Pastille de l'icône iOS (ROADMAP §6) : ce qu'il reste à faire aujourd'hui.
 // « Si tu as 10 minutes » n'y entre pas — c'est une offre, pas un dû.
 function todayBadgeCount(){
   const b = todayBuckets();
-  return b.overdue.length + b.scheduled.length + b.soins.length + b.evening.length +
+  return b.overdue.length + b.scheduled.length + b.chores.length + b.evening.length +
     habitsPendingCount(b.habits);
 }
 
@@ -195,21 +179,6 @@ function todayRow(t, meta, cls){
   '</li>';
 }
 
-// Soin de plante dû, dans le bloc du jour : même disposition que le bloc
-// Entretien (row-care + gauge-side), mais un tap ouvre la fiche plante
-// (js/plants.js) au lieu de compléter directement — c'est là que vit le
-// bouton « arrosé ».
-function todayPlantRow(s){
-  const lieu = ROOM_LABELS[s.room] || s.room;
-  return '<li class="row row-care"'+rowAttrs("plantSheet('"+s.plantId+"')")+'>'+
-    '<div class="row-main">'+
-      '<div class="row-title">'+esc(s.title)+'</div>'+
-      (lieu ? '<div class="row-meta">'+esc(lieu)+'</div>' : '')+
-    '</div>'+
-    '<div class="gauge gauge-side"><div class="gauge-fill" style="width:'+gaugeWidth(s.f)+';background:'+gaugeColor(s.f)+'"></div></div>'+
-  '</li>';
-}
-
 // Ligne cochée dans la session (audit A2). Elle n'est plus `disabled` : le
 // vert plein de .check.on dit déjà « un doigt peut agir ici » (première phrase
 // de la discipline chromatique) — c'était l'attribut qui mentait, pas le
@@ -237,64 +206,36 @@ function overdueCard(list, i, n){
   '</div>';
 }
 
-/* Quelles entrées du bloc du jour sont montrées sous le plafond (audit B3).
-
-   Ce qui se passait : todayBuckets() concatène les soins APRÈS les tâches, et
-   un simple slice(0, cap) les rendait donc structurellement les premiers
-   évincés — avec 7 tâches et 4 soins dus, les quatre soins, et eux seuls,
-   tombaient dans « + 4 autres ». Un arrosage n'attend pas un dépliage.
-
-   L'arbitrage : le plafond reste un plafond — il protège du mur — mais les
-   soins ne sont plus une queue de file. Ils prennent jusqu'à
-   TODAY_SOIN_RESERVE places à la TÊTE du bloc, et les tâches se partagent le
-   reste. Deux garde-fous : la réserve ne dépasse jamais le plafond lui-même
-   (todayCap peut descendre à 1), et jamais la moitié du plafond quand il y a
-   aussi des tâches — sinon un plafond serré n'afficherait plus que des
-   plantes. Ce qui reste de place au-delà des tâches montrées revient aux
-   soins : la réserve est un minimum garanti, pas un maximum. */
-function todayShown(scheduled, cap){
-  const soins = scheduled.filter(e=>e.kind === 'soin');
-  const tasks = scheduled.filter(e=>e.kind !== 'soin');
-  const reserve = Math.min(soins.length, TODAY_SOIN_RESERVE, cap,
-    tasks.length ? Math.ceil(cap / 2) : cap);
-  const t = tasks.slice(0, Math.max(0, cap - reserve));
-  const s = soins.slice(0, Math.max(reserve, cap - t.length));
-  return s.concat(t);
-}
-
 function todaySection(b){
   const cap = S.settings.todayCap || 7;
-  // Déplié, le plafond devient le total : todayShown() reste le seul endroit
-  // qui décide de l'ORDRE, sinon les soins repasseraient en queue de liste au
-  // moment du dépliage (ils sont concaténés là par todayBuckets()).
-  const shown = todayShown(b.scheduled, _todayMore ? b.scheduled.length : cap);
+  const shown = _todayMore ? b.scheduled : b.scheduled.slice(0, cap);
   const hidden = b.scheduled.length - shown.length;
   return '<div class="sec"><h2 class="sec-title">Aujourd’hui</h2>'+
       '<span class="sec-count">'+b.scheduled.length+'</span></div>'+
     '<ul class="list list-page">'+
-      shown.map(e=> e.kind === 'soin' ? todayPlantRow(e.s) : todayRow(e.t, todayMeta(e.t))).join('')+
+      shown.map(t=>todayRow(t, todayMeta(t))).join('')+
       b.done.map(todayDoneRow).join('')+
     '</ul>'+
     (hidden > 0 ? '<button class="more" onclick="toggleTodayMore()">+ '+hidden+' autre'+(hidden>1?'s':'')+'</button>'
                 : (_todayMore && b.scheduled.length > cap ? '<button class="more" onclick="toggleTodayMore()">Réduire</button>' : ''));
 }
 
-function careCard(soins, i, n){
-  const rows = soins.map(({t, f})=>{
-    const lieu = ROOM_LABELS[t.room] || t.room;
-    const etat = f <= 0 ? '<b>À faire</b>' : esc(maisonAgo(t));
-    return '<li class="row row-care"'+rowAttrs("tapTodayCare('"+t.id+"')")+'>'+
-      '<div class="row-main">'+
-        '<div class="row-title">'+esc(t.title)+'</div>'+
-        '<div class="row-meta">'+esc(lieu)+' · '+etat+'</div>'+
-      '</div>'+
-      '<div class="gauge gauge-side"><div class="gauge-fill" id="tfill-'+t.id+'" '+
-        'style="width:'+gaugeWidth(f)+';background:'+gaugeColor(f)+'"></div></div>'+
-    '</li>';
-  }).join('');
+// 3. Entretien du jour (Lot V3-1) : la carte teintée Maison, avec en
+// compteur les minutes qu'il reste — c'est la seule unité qui dise si « ça
+// passe » ce soir. Même case que le bloc du jour (todayDone(), annulable et
+// décochable) : cocher un entretien ici, c'est exactement le « Fait » de
+// Maison. Ce qui est dû mais ne tient pas dans le budget n'est pas caché
+// pour autant : une ligne discrète dit qu'il attend, et mène à Maison.
+function choreCard(b, i, n){
+  const left = b.chores.reduce((s, t)=>s + choreMins(t), 0);
+  const rows = b.chores.map(t=>todayRow(t, esc((ROOM_LABELS[t.room] || t.room)+' · '+choreMins(t)+' min'))).join('')+
+    b.choresDone.map(todayDoneRow).join('');
+  const wait = b.choresWaiting;
   return '<div class="card t-maison">'+birdOnCard(i, n)+
-    '<h2 class="card-title">Entretien</h2>'+
+    '<div class="room-head"><h2 class="card-title">Entretien du jour</h2>'+
+      (left ? '<span class="room-count">'+left+' min</span>' : '')+'</div>'+
     '<ul class="list">'+rows+'</ul>'+
+    (wait ? '<button class="more" onclick="go(\'maison\')">'+wait+(wait > 1 ? ' autres attendent' : ' autre attend')+' demain</button>' : '')+
   '</div>';
 }
 
@@ -324,7 +265,7 @@ function renderToday(){
   // habitude déjà en retrait (row-soft — sautée ou au quota) ne compte pas :
   // seule une habitude encore actionnable retient l'écran.
   const vide = !b.overdue.length && !b.scheduled.length && !b.done.length &&
-               !b.soins.length && !b.quick.length && !habitsPendingCount(b.habits);
+               !b.chores.length && !b.choresDone.length && !b.quick.length && !habitsPendingCount(b.habits);
 
   let html;
   if(vide){
@@ -344,12 +285,13 @@ function renderToday(){
     const n = userFirstName();
     html = emptyState('C’est bon pour aujourd’hui' + (n ? ', ' + n : '') + '.', sousEmpty);
   } else {
-    const nCards = (b.overdue.length ? 1 : 0) + (b.soins.length ? 1 : 0) + (b.habits.length ? 1 : 0);
+    const hasChores = b.chores.length || b.choresDone.length;
+    const nCards = (b.overdue.length ? 1 : 0) + (hasChores ? 1 : 0) + (b.habits.length ? 1 : 0);
     let i = 0;
     html = '';
     if(b.overdue.length) html += overdueCard(b.overdue, i++, nCards);
     if(b.scheduled.length || b.done.length) html += todaySection(b);
-    if(b.soins.length) html += careCard(b.soins, i++, nCards);
+    if(hasChores) html += choreCard(b, i++, nCards);
     if(b.habits.length) html += todayHabitsCard(b.habits, i++, nCards);
   }
   if(b.shopping) html += shoppingButtonHtml(b.shopping);
@@ -399,21 +341,4 @@ function todayUndone(id){
   save();
   hideToast();
   renderToday();
-}
-
-// Entretien : un tap sur la ligne suffit, comme dans Maison. Retour visuel
-// immédiat — la jauge remonte avant le rendu complet.
-function tapTodayCare(id){
-  const t = S.tasks.find(x=>x.id === id);
-  if(!t) return;
-  const fill = document.getElementById('tfill-'+id);
-  if(fill) fill.style.width = '100%';
-  // Même célébration sobre qu'en Maison (js/maison.js tapMaisonItem) : les
-  // deux surfaces complètent la même tâche, la fête ne doit avoir lieu que
-  // depuis l'une ou l'autre, jamais deux fois.
-  const firstAnnual = t.repeat && t.repeat.kind === 'year' && !(t.history && t.history.length);
-  completeTask(t);
-  save();
-  if(firstAnnual) toast('Entretien annuel réalisé pour la première fois : « ' + t.title + ' ».');
-  setTimeout(renderToday, reduceMotion() ? 0 : 260);
 }

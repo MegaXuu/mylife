@@ -18,9 +18,9 @@ const read = f => readFileSync(root + f, 'utf8');
 // <script> de index.html et du tableau ASSETS de sw.js. Concaténés en un seul
 // <script> pour rester robuste sous jsdom, même portée globale qu'en prod.
 const FILES = [
-  'data/rayons.js', 'data/plantes.js', 'data/entretien.js', 'data/oiseaux.js',
+  'data/rayons.js', 'data/entretien.js', 'data/oiseaux.js',
   'js/state.js', 'js/ui.js', 'js/gestures.js', 'js/recur.js', 'js/nlp.js', 'js/today.js',
-  'js/tasks.js', 'js/maison.js', 'js/plants.js', 'js/habits.js',
+  'js/tasks.js', 'js/maison.js', 'js/habits.js',
   'js/shopping.js', 'js/review.js', 'js/settings.js', 'js/boot.js',
 ];
 const bundle = FILES.map(read).join('\n');
@@ -133,16 +133,14 @@ call('Réglages — applyImportedData() : rejet intégral si invalide, remplacem
   }
 });
 
-// Asynchrone (IndexedDB) : hors du helper call() synchrone, comme savePlantSheet()
-// et le flush saveNow() plus bas.
+// Asynchrone (IndexedDB) : hors du helper call() synchrone, comme le flush
+// saveNow() plus bas. Depuis le Lot V3-1 plus rien n'écrit dans « photos »
+// (photos de plantes retirées), mais la réinitialisation purge encore ce
+// qu'une base d'avant y a laissé.
 try{
-  await win.idbPutPhoto('photo-test-reset', new win.Blob(['x']));
-  const before = await win.idbGetPhoto('photo-test-reset');
-  if(!before) throw new Error('la photo de test devrait être présente avant idbClearPhotos()');
   const ok = await win.idbClearPhotos();
   if(!ok) throw new Error('idbClearPhotos() devrait réussir');
-  const after = await win.idbGetPhoto('photo-test-reset');
-  if(after) throw new Error('idbClearPhotos() devrait vider le store « photos » entièrement');
+  if(typeof win.idbPutPhoto !== 'undefined') throw new Error('idbPutPhoto() devrait avoir disparu avec les plantes (Lot V3-1)');
 }catch(e){ onError('Réglages — Réinitialisation : idbClearPhotos() vide le store sans toucher à state', e); }
 
 call('Réglages — six groupes dans l’ordre attendu', () => {
@@ -443,17 +441,96 @@ scenario('Aujourd’hui — répartition des blocs, aucun item dans deux blocs �
     throw new Error('pastille attendue à 3 (retard + jour + soir), obtenue ' + win.todayBadgeCount());
 });
 
-scenario('Aujourd’hui — entretien : seules les jauges basses remontent, au plus 3', () => {
-  const rep = {kind: 'day', n: 10, days: [], from: 'done'};
-  const frais = mk({title: 'Frais', room: 'salon', repeat: rep, doneAt: Date.now()});
-  const bas = mk({title: 'Bas', room: 'salon', repeat: rep, doneAt: Date.now() - 9 * 86400000});
+// 6 ter bis) Entretien du jour (Lot V3-1) : le budget quotidien — choreDay()
+// est le seul endroit où se décide ce qu'« Aujourd'hui » propose d'entretien.
+const dAgo = n => new Date(win.addDays(win.todayKey(), -n) + 'T12:00').getTime();
+const repD = n => ({kind: 'day', n, days: [], from: 'done'});
+
+scenario('Entretien du jour — seul le dû remonte, dans la limite du budget, le plus urgent d’abord', () => {
+  const budgetAvant = S.settings.choreBudget;
+  S.settings.choreBudget = 30;
+  try{
+    const frais = mk({title: 'Frais', room: 'salon', repeat: repD(10), mins: 10, doneAt: dAgo(2)});
+    const a = mk({title: 'A', room: 'cuisine', repeat: repD(3), mins: 5, doneAt: dAgo(5)});   // f = -2/3
+    const bb = mk({title: 'B', room: 'sdb', repeat: repD(7), mins: 20, doneAt: dAgo(7)});    // f = 0
+    const c = mk({title: 'C', room: 'wc', repeat: repD(4), mins: 10, doneAt: dAgo(4)});      // f = 0
+    const d = mk({title: 'D', room: 'bureau', repeat: repD(30), mins: 5, doneAt: dAgo(31)}); // f = -1/30
+    let day = win.choreDay();
+    const titres = day.picked.map(t => t.title).join(',');
+    if(titres !== 'A,D,C')
+      throw new Error('attendu A,D,C (retard relatif puis le plus court, 20 min sur 30), obtenu ' + titres);
+    if(day.waiting !== 1) throw new Error('B (20 min) ne tient plus dans le budget : il doit attendre, obtenu ' + day.waiting);
+    if(day.picked.indexOf(frais) !== -1) throw new Error('un entretien encore frais ne doit jamais être proposé');
+    // Faire C entame le budget : B ne remonte pas pour autant.
+    win.completeTask(c);
+    day = win.choreDay();
+    if(day.used !== 10 || day.picked.map(t => t.title).join(',') !== 'A,D')
+      throw new Error('ce qui est fait aujourd’hui compte dans le budget, obtenu used=' + day.used + ' ' + day.picked.map(t => t.title));
+    const b = win.todayBuckets();
+    if(!has(b.chores, a) || has(b.chores, bb)) throw new Error('todayBuckets().chores doit refléter choreDay()');
+    if(has(b.scheduled, a) || has(b.overdue, a) || has(b.quick, a))
+      throw new Error('un entretien ne doit jamais fuiter dans les blocs de tâches');
+    if(b.choresWaiting !== 1) throw new Error('le nombre d’entretiens qui attendent doit remonter jusqu’à l’écran');
+  } finally { S.settings.choreBudget = budgetAvant; }
+});
+
+scenario('Entretien du jour — un entretien plus long que le budget passe s’il est seul, pas après un autre', () => {
+  const budgetAvant = S.settings.choreBudget;
+  S.settings.choreBudget = 10;
+  try{
+    const four = mk({title: 'Four', room: 'cuisine', repeat: repD(60), mins: 45, doneAt: dAgo(61)});
+    let day = win.choreDay();
+    if(day.picked.length !== 1 || day.picked[0] !== four)
+      throw new Error('rien d’autre de fait ni de pris : le premier passe même au-delà du budget');
+    const petit = mk({title: 'Petit', room: 'wc', repeat: repD(4), mins: 5, doneAt: dAgo(4)});
+    win.completeTask(petit);
+    day = win.choreDay();
+    if(day.picked.length) throw new Error('5 min déjà faites sur 10 : le four (45 min) attend demain');
+  } finally { S.settings.choreBudget = budgetAvant; }
+});
+
+scenario('Entretien du jour — un entretien à jour fixe tombe son jour, en premier', () => {
+  const today = win.todayKey();
+  const iso = win.isoDow(today);
+  const autreJour = iso === 7 ? 1 : iso + 1;
+  const retard = mk({title: 'Très en retard', room: 'sdb', repeat: repD(3), mins: 25, doneAt: dAgo(20)});
+  const serp = mk({title: 'Serpillière', room: 'partout', mins: 30, doneAt: dAgo(7),
+    repeat: {kind: 'week', n: 1, days: [iso], from: 'done'}});
+  const demain = mk({title: 'Pas aujourd’hui', room: 'partout', mins: 10, doneAt: dAgo(6),
+    repeat: {kind: 'week', n: 1, days: [autreJour], from: 'done'}});
+  const day = win.choreDay();
+  if(day.picked[0] !== serp) throw new Error('un entretien à jour fixe passe avant tout le reste, le jour venu');
+  if(day.picked.indexOf(demain) !== -1) throw new Error('un entretien à jour fixe ne tombe que son jour');
+  if(win.choreCue(demain) !== 'Demain') throw new Error('un jour fixe à J+1 se dit « Demain », obtenu ' + win.choreCue(demain));
+  // Fait, il revient exactement une semaine plus tard, même jour.
+  win.completeTask(serp);
+  if(win.choreDueKey(serp) !== win.addDays(today, 7))
+    throw new Error('fait aujourd’hui, un entretien du samedi revient le samedi suivant, obtenu ' + win.choreDueKey(serp));
+  if(retard.doneAt > dAgo(19)) throw new Error('garde-fou du scénario');
+});
+
+scenario('Entretien du jour — rendu, cochage annulable, pastille et état vide', () => {
+  const t = mk({title: 'Nettoyer les WC', room: 'wc', repeat: repD(4), mins: 5, doneAt: dAgo(4)});
+  win.go('today');
+  let el = win.document.getElementById('s-today');
+  if(!/Entretien du jour/.test(el.textContent) || !/WC · 5 min/.test(el.textContent))
+    throw new Error('le bloc « Entretien du jour » devrait montrer la pièce et la durée');
+  if(win.todayBadgeCount() !== 1) throw new Error('un entretien dû compte dans la pastille, obtenu ' + win.todayBadgeCount());
+  if(/C’est bon pour aujourd’hui/.test(el.textContent)) throw new Error('un entretien dû empêche l’état vide');
+  const histAvant = (t.history || []).length, doneAvant = t.doneAt;
+  win.todayDone(t.id);
   const b = win.todayBuckets();
-  if(b.soins.some(x => x.t.id === frais.id))
-    throw new Error('un entretien encore frais ne doit pas encombrer Aujourd’hui — sinon l’écran ne sait jamais dire « c’est bon »');
-  if(!b.soins.some(x => x.t.id === bas.id)) throw new Error('un entretien proche d’« à faire » doit remonter');
-  if(b.soins.length > 3) throw new Error('au plus 3 entretiens (ROADMAP §6.3)');
-  // Un entretien vit dans son bloc, jamais dans la liste des tâches du jour.
-  if(has(b.scheduled, bas) || has(b.overdue, bas)) throw new Error('un entretien ne doit pas fuiter dans les blocs de tâches');
+  if(has(b.chores, t) || !has(b.choresDone, t)) throw new Error('coché, il reste barré dans son bloc et n’est plus à faire');
+  if(has(b.done, t)) throw new Error('un entretien coché ne doit pas rejoindre les tâches cochées du bloc du jour');
+  win._runToastAct();
+  if(t.doneAt !== doneAvant || (t.history || []).length !== histAvant)
+    throw new Error('annuler doit restituer la dernière réalisation d’avant');
+  win.todayDone(t.id);
+  win.untickToday(t.id); // prochain démarrage : la ligne barrée disparaît
+  win.go('today');
+  el = win.document.getElementById('s-today');
+  if(!/C’est bon pour aujourd’hui/.test(el.textContent))
+    throw new Error('tout l’entretien du jour fait : l’écran doit pouvoir dire « c’est bon »');
 });
 
 scenario('Aujourd’hui — cochée dans la session : elle reste barrée et sort des blocs ouverts', () => {
@@ -511,47 +588,9 @@ scenario('Aujourd’hui — plafond todayCap et « + N autres »', () => {
   S.settings.todayCap = 7;
 });
 
-// 6 quinquies) Lot V2-3 — les trois décisions de l'écran « Aujourd'hui » v3.
-// todayShown() est PURE (une liste d'entrées, un plafond) : on l'attaque
-// directement, sans DOM ni plantes réelles, exactement comme parseQuick().
-call('Aujourd’hui — réserve de places pour les soins sous le plafond (audit B3, todayShown())', () => {
-  const mixte = (nt, ns) => {
-    const a = [];
-    for(let i = 0; i < nt; i++) a.push({id: 't' + i, kind: 'task'});
-    for(let i = 0; i < ns; i++) a.push({id: 's' + i, kind: 'soin'});
-    return a; // l'ordre de todayBuckets() : les soins CONCATÉNÉS après les tâches
-  };
-  const soins = l => l.filter(e => e.kind === 'soin').length;
-
-  // Le cas exact de l'audit du 14/08/2026 : 7 tâches, 4 soins dus, plafond à 7.
-  // En V1, les QUATRE soins tombaient dans « + 4 autres ».
-  const a = win.todayShown(mixte(7, 4), 7);
-  if(a.length !== 7) throw new Error('le plafond reste un plafond : 7 lignes attendues, obtenu ' + a.length);
-  if(soins(a) !== 3) throw new Error('3 places réservées aux soins attendues, obtenu ' + soins(a));
-  if(a[0].kind !== 'soin') throw new Error('les soins prennent la tête du bloc, pas la queue de la file');
-
-  // La réserve est un minimum garanti, pas un maximum : sans tâche, tous passent.
-  if(win.todayShown(mixte(0, 5), 7).length !== 5)
-    throw new Error('5 soins et aucune tâche : les 5 doivent passer');
-  // Elle ne prend jamais plus qu'il n'y a de soins dus.
-  const b = win.todayShown(mixte(10, 1), 7);
-  if(b.length !== 7 || soins(b) !== 1) throw new Error('un seul soin dû : une seule place réservée');
-  if(b[0].kind !== 'soin') throw new Error('ce soin unique doit rester en tête');
-  // Plafond serré : la réserve ne mange jamais plus de la moitié des places.
-  const c = win.todayShown(mixte(3, 4), 2);
-  if(c.length !== 2 || soins(c) !== 1)
-    throw new Error('un plafond à 2 doit rester partagé, obtenu ' + c.map(e => e.kind).join(','));
-  // Aucun soin dû : le plafond se comporte exactement comme en V1.
-  if(win.todayShown(mixte(9, 0), 7).length !== 7)
-    throw new Error('sans soin, rien ne doit changer par rapport à la V1');
-  // Déplié (plafond = total), l'ordre ne bouge pas : les soins restent en tête.
-  // Sans ça, taper « + 4 autres » les renvoyait en queue de liste.
-  const d = win.todayShown(mixte(7, 4), 11);
-  if(d.length !== 11) throw new Error('déplié, les 11 entrées doivent être montrées');
-  if(d.slice(0, 4).some(e => e.kind !== 'soin'))
-    throw new Error('déplier ne doit pas renvoyer les soins en queue de liste');
-});
-
+// 6 quinquies) Lot V2-3 — les décisions de l'écran « Aujourd'hui » v3 (la
+// réserve de places des soins de plantes, todayShown(), a disparu avec les
+// plantes au Lot V3-1).
 scenario('Aujourd’hui — cocher est annulable, et une ligne cochée se décoche (audit A2)', () => {
   const today = win.todayKey();
   const t = mk({title: 'Relever le compteur', bucket: 'scheduled', start: today, due: today,
@@ -809,98 +848,109 @@ call("parseQuick — ignore('repeat') rend le fragment au titre", () => {
   if(!/tous les 3 jours après/i.test(sans.title)) throw new Error('le fragment de récurrence devrait revenir dans le titre, obtenu « ' + sans.title + ' »');
 });
 
-// 6 quinquies) Plantes (Lot V1-7, js/plants.js) : modulation saisonnière et
-// réutilisation du moteur de récurrence (js/recur.js) sans le dupliquer.
-call('Plantes — plantSeason() suit settings.coldFrom/coldTo, y compris le bouclage sur l’année', () => {
-  S.settings.coldFrom = 10; S.settings.coldTo = 2;
-  if(win.plantSeason(new Date(2026, 0, 15)) !== 'cold') throw new Error('janvier devrait être en saison froide');
-  if(win.plantSeason(new Date(2026, 6, 15)) !== 'warm') throw new Error('juillet devrait être en saison chaude');
-  if(win.plantSeason(new Date(2026, 9, 15)) !== 'cold') throw new Error('octobre (coldFrom) devrait déjà être froid');
-  if(win.plantSeason(new Date(2026, 1, 28)) !== 'cold') throw new Error('février (coldTo) devrait encore être froid');
-});
-call('Plantes — careFreshness() : cold:0 suspend le soin (null), jamais une jauge', () => {
-  if(win.careFreshness({warm:7, cold:0, lastAt:Date.now()}, 'cold') !== null)
-    throw new Error('un soin à cold:0 doit être suspendu (null) en saison froide');
-  const f = win.careFreshness({warm:7, cold:14, lastAt:Date.now()}, 'cold');
-  if(f === null || Math.abs(f - 1) > 0.01) throw new Error('un soin tout juste fait doit être ~1, obtenu ' + f);
-});
-
-let plantId;
-call('Plantes — création, soin traduit en tâche pour recur.js, historique', () => {
-  const p = win.stamp({
-    name: 'Ficus du salon', species: 'ficus_lyrata', room: 'salon', photoId: null,
-    care: {
-      water: {warm: 7, cold: 14, lastAt: Date.now() - 5000, history: []},
-      feed: {warm: 30, cold: 0, lastAt: null, history: []},
-      repot: {months: 24, lastAt: null}
-    },
-    notes: '', sort: 0
+// 6 quinquies) Pack maison (Lot V3-1) : installation d'un tap, premières
+// échéances étalées, rien en double ; et la migration des plantes d'avant.
+call('Pack maison — packSchedule() étale les premières échéances (pure)', () => {
+  const pack = win.eval('ENTRETIEN').filter(m => m.pack);
+  if(pack.length < 30) throw new Error('le pack devrait couvrir une maison entière, obtenu ' + pack.length + ' modèles');
+  const today = '2026-09-29'; // un mardi
+  const entries = pack.map(m => ({days: m.days, mins: m.mins, fixed: m.dow ? win.fixedOffset(m.dow, today) : null}));
+  const off = win.packSchedule(entries);
+  entries.forEach((e, i) => {
+    if(e.fixed != null && off[i] !== e.fixed) throw new Error('un jour fixe garde son décalage imposé');
+    if(e.fixed == null && (off[i] < 0 || off[i] >= e.days)) throw new Error('une première échéance doit tomber dans son propre intervalle');
   });
-  S.plants.push(p);
-  plantId = p.id;
-  // getPlantCareItems() déduit la saison de la date réelle (plantSeason() sans
-  // ref) : on force la saison froide via les réglages, indépendamment de la
-  // date du jour où tourne le test, pour vérifier la suspension de l'engrais.
-  S.settings.coldFrom = 1; S.settings.coldTo = 12;
-  const items = win.getPlantCareItems();
-  S.settings.coldFrom = 10; S.settings.coldTo = 2;
-  const water = items.find(x => x.id === p.id + '-water');
-  if(!water) throw new Error('le soin arrosage devrait apparaître dans getPlantCareItems()');
-  if(water.title !== 'Ficus du salon (arrosage)') throw new Error('titre du soin incorrect : ' + water.title);
-  if(items.some(x => x.id === p.id + '-feed'))
-    throw new Error('l’engrais suspendu en saison froide (cold:0) ne doit jamais être proposé');
-  if(!items.some(x => x.id === p.id + '-repot')) throw new Error('le rempotage devrait aussi apparaître');
-  const before = p.care.water.lastAt;
-  win.doPlantCare(p.id, 'water');
-  if(p.care.water.lastAt <= before) throw new Error('doPlantCare devrait rafraîchir lastAt');
-  if(p.care.water.history.length !== 1) throw new Error('doPlantCare devrait historiser l’arrosage (recur.js completeTask)');
+  const serp = pack.findIndex(m => m.dow);
+  if(off[serp] !== 4) throw new Error('mardi 29/09 : la serpillière du samedi tombe dans 4 jours, obtenu ' + off[serp]);
+  // Charge simulée des 28 premiers jours, chacun tenu à son rythme.
+  const load = new Array(28).fill(0);
+  entries.forEach((e, i) => { const per = e.fixed != null ? 7 : e.days; for(let d = off[i]; d < 28; d += per) load[d] += e.mins; });
+  const avg = pack.reduce((s, m) => s + m.mins / m.days, 0);
+  const max = Math.max.apply(null, load);
+  if(max > 2 * avg + 10) throw new Error('aucun jour ne doit concentrer la charge : max ' + max + ' min pour une moyenne de ' + avg.toFixed(1));
+  if(load[0] > avg + 15) throw new Error('le premier jour ne doit pas tout porter : ' + load[0] + ' min');
 });
 
-call('Maison — les soins de plante rejoignent la vue par pièce, à côté de l’entretien', () => {
+scenario('Pack maison — installation d’un tap, aucun doublon, annulable', () => {
+  win.packSheet();
+  const n = win.packModels().length;
+  if(!/Pack maison/.test(win.document.getElementById('sheet').textContent)) throw new Error('la feuille du pack devrait s’ouvrir');
+  win.togglePackRoom('balcon'); // pas de balcon : décoché, jamais installé
+  win.installPack();
+  const chores = win.getMaisonItems();
+  const nBalcon = win.eval('ENTRETIEN').filter(m => m.pack && m.room === 'balcon').length;
+  if(chores.length !== n - nBalcon) throw new Error('attendu ' + (n - nBalcon) + ' entretiens, obtenu ' + chores.length);
+  if(chores.some(t => t.room === 'balcon')) throw new Error('une pièce décochée ne doit rien recevoir');
+  if(chores.some(t => !t.mins || !t.id || t.deletedAt !== null)) throw new Error('discipline synchro-ready et durée posées sur chaque entretien');
+  const serp = chores.find(t => t.title === 'Passer la serpillière');
+  if(!serp || !serp.repeat.days || serp.repeat.days[0] !== 6 || serp.repeat.from !== 'done')
+    throw new Error('la serpillière tombe à jour fixe, le samedi');
+  if(win.isoDow(win.choreDueKey(serp)) !== 6) throw new Error('sa prochaine échéance doit être un samedi');
+  // Le premier jour tient dans le budget (ou presque) : pas de mur.
+  const day = win.choreDay();
+  if(day.used + day.picked.reduce((s, t) => s + win.choreMins(t), 0) > win.choreBudget() + 45)
+    throw new Error('le premier jour ne doit pas déborder du budget');
+  const dueToday = chores.filter(t => win.choreDueKey(t) <= win.todayKey()).length;
+  if(dueToday > chores.length / 3) throw new Error('les échéances doivent être étalées : ' + dueToday + ' dues le premier jour');
+  // Rien en double au deuxième passage.
+  win.packSheet();
+  if(win.packModels().some(m => m.room !== 'balcon')) throw new Error('un deuxième passage ne doit reproposer que le non installé');
+  win.closeSheet();
   win.go('maison');
   const html = win.document.getElementById('s-maison').innerHTML;
-  if(!html.includes('Ficus du salon (arrosage)'))
-    throw new Error('le soin d’arrosage du Ficus devrait apparaître dans la vue Maison');
-  if(!/plantSheet\('/.test(html)) throw new Error('un tap sur une plante devrait ouvrir sa fiche (plantSheet), pas la compléter directement');
-  // Bouton d'action (point 1) : « Arrosé », annulable, restaure lastAt ET history.
-  const p = S.plants.find(x => x.id === plantId);
-  const lastAtAvant = p.care.water.lastAt, histAvant = (p.care.water.history || []).length;
-  win.waterPlantAction(p.id);
-  if(p.care.water.lastAt <= lastAtAvant) throw new Error('« Arrosé » depuis Maison devrait rafraîchir lastAt');
-  if(p.care.water.history.length !== histAvant + 1) throw new Error('« Arrosé » devrait historiser l’arrosage');
-  if(!/Annuler/.test(win.document.getElementById('toast').textContent))
-    throw new Error('« Arrosé » devrait être annulable (point 1, Lot V2-5)');
+  if(!/Toute la maison/.test(html)) throw new Error('la pièce « Toute la maison » devrait apparaître dans Maison');
+  if(html.indexOf('Toute la maison') > html.indexOf('Cuisine')) throw new Error('« Toute la maison » vient en premier');
+  if(!/environ \d+ min par jour/.test(html)) throw new Error('le sur-titre devrait dire la charge quotidienne');
+  if(/Installer le pack maison/.test(html)) throw new Error('le bouton du pack n’a sa place que sur une maison vide');
+  // Annuler l'installation : tout redevient tombstone.
+  win.packSheet(); // seul le balcon reste à installer : proposé coché
+  win.installPack();
+  if(!win.getMaisonItems().some(t => t.room === 'balcon')) throw new Error('le balcon devrait s’installer au deuxième passage');
   win._runToastAct();
-  if(p.care.water.lastAt !== lastAtAvant) throw new Error('annuler doit restituer le lastAt d’avant');
-  if(p.care.water.history.length !== histAvant) throw new Error('annuler doit retirer l’entrée ajoutée à history');
+  if(win.getMaisonItems().some(t => t.room === 'balcon')) throw new Error('annuler l’installation doit retirer ce qu’elle a créé');
+  if(win.getMaisonItems().length !== n - nBalcon) throw new Error('annuler ne touche qu’à ce que l’installation a créé');
 });
 
-// Point 2 (audit B2) : la légende d'un soin suspendu (cold:0) n'affiche
-// toujours rien, puisque le soin lui-même n'apparaît nulle part (getPlant-
-// CareItems() l'exclut avant même d'atteindre la légende ou la jauge).
-call('Maison — un soin suspendu (cold:0) n’affiche aucune légende, aucune ligne (Lot V2-5)', () => {
-  S.settings.coldFrom = 1; S.settings.coldTo = 12; // saison froide forcée : l’engrais (cold:0) se suspend
+scenario('Maison vide — l’état vide propose le pack', () => {
   win.go('maison');
-  const html = win.document.getElementById('s-maison').innerHTML;
-  S.settings.coldFrom = 10; S.settings.coldTo = 2; // restitue le réglage par défaut des scénarios suivants
-  if(html.includes('Ficus du salon (engrais)'))
-    throw new Error('un soin suspendu (cold:0) ne devrait apparaître nulle part dans Maison, légende comprise');
+  const el = win.document.getElementById('s-maison');
+  if(!/Installer le pack maison/.test(el.textContent)) throw new Error('une maison vide devrait proposer le pack d’un tap');
 });
 
-call('Aujourd’hui — un soin de plante vraiment dû rejoint le bloc du jour, jamais le bloc Entretien', () => {
-  const p = S.plants.find(x => x.id === plantId);
-  const savedLastAt = p.care.water.lastAt;
-  p.care.water.lastAt = Date.now() - 30 * 86400000; // très en retard : jauge à 0
-  const b = win.todayBuckets();
-  const entry = b.scheduled.find(x => x.id === plantId + '-water');
-  if(!entry || entry.kind !== 'soin') throw new Error('le soin d’arrosage dû devrait rejoindre le bloc du jour (kind:"soin")');
-  if(b.soins.some(x => x.t && x.t.id === plantId + '-water'))
-    throw new Error('un soin de plante ne doit jamais fuiter dans le bloc Entretien, réservé aux tâches from:done');
-  win.go('today');
-  const el = win.document.getElementById('s-today');
-  if(!/Ficus du salon \(arrosage\)/.test(el.textContent))
-    throw new Error('le soin dû devrait être rendu dans le bloc « Aujourd’hui »');
-  p.care.water.lastAt = savedLastAt; // remis à l'état frais pour ne pas polluer les autres scénarios
+call('Migration — une plante d’avant le Lot V3-1 devient un entretien « S’occuper des plantes »', () => {
+  const r = win.migrate({v: 1, tasks: [], habits: [], habitLog: {}, shopping: [], frequents: [],
+    settings: {coldFrom: 10, coldTo: 2},
+    plants: [
+      {id: 'p1', room: 'salon', deletedAt: null, care: {water: {warm: 9}}},
+      {id: 'p2', room: 'salon', deletedAt: null, care: {water: {warm: 5}}},
+      {id: 'p3', room: 'bureau', deletedAt: Date.now(), care: {water: {warm: 7}}}
+    ]});
+  if('plants' in r) throw new Error('la clé plants doit disparaître');
+  if(r.tasks.length !== 1) throw new Error('une seule pièce vivante : un seul entretien, obtenu ' + r.tasks.length);
+  const t = r.tasks[0];
+  if(t.title !== 'S’occuper des plantes' || t.room !== 'salon' || t.repeat.n !== 5 || t.repeat.from !== 'done')
+    throw new Error('l’entretien devrait reprendre la pièce et le rythme d’arrosage le plus court');
+  if(!r.onboarded) throw new Error('une base qui avait des plantes n’est pas vierge : pas de bienvenue');
+  if('coldFrom' in r.settings || !r.settings.choreBudget) throw new Error('réglages : saison froide retirée, budget d’entretien posé');
+  if(win.migrate(r).tasks.length !== 1) throw new Error('la migration doit être idempotente');
+});
+
+call('Fiche d’un entretien — durée en minutes, pas d’effort ni de dates', () => {
+  const t = win.stamp({title: 'Nettoyer le frigo', notes: '', cat: 'entretien', room: 'cuisine', bucket: 'anytime',
+    start: null, due: null, evening: false, prio: 0, effort: 2, mins: 20,
+    repeat: repD(30), doneAt: dAgo(3), history: [], postponed: 0, touchedAt: Date.now()});
+  S.tasks.push(t);
+  try{
+    win.go('maison');
+    win.taskSheet(t.id);
+    const sh = win.document.getElementById('sheet').textContent;
+    if(!/Durée/.test(sh) || /Effort|Échéance|Priorité/.test(sh))
+      throw new Error('la fiche d’un entretien règle une durée, sans effort, échéance ni priorité');
+    if(!/Prochaine fois : dans 4 semaines/.test(sh)) throw new Error('la fiche d’un entretien dit quand il revient, obtenu : ' + sh.slice(0, 200));
+    win.setTsMins(45);
+    win.saveTaskSheet();
+    if(t.mins !== 45 || t.effort !== 3) throw new Error('la durée s’enregistre et l’effort en est déduit, obtenu ' + t.mins + '/' + t.effort);
+  } finally { t.deletedAt = Date.now(); }
 });
 
 // 6 sexies) Habitudes (Lot V1-8, js/habits.js) : moteur de série/quota — JAMAIS
@@ -966,7 +1016,7 @@ habitScenario('Aujourd’hui — le bloc Habitudes rejoint todayBuckets(), jamai
   S.habits.push(h);
   const b = win.todayBuckets();
   if(!b.habits.some(x => x.id === h.id)) throw new Error('une habitude active aujourd’hui devrait apparaître dans todayBuckets().habits');
-  if(b.scheduled.some(x => x.id === h.id) || b.soins.some(x => x.t && x.t.id === h.id))
+  if(b.scheduled.some(x => x.id === h.id) || b.chores.some(x => x.id === h.id))
     throw new Error('une habitude ne doit jamais fuiter dans les blocs de tâches ou d’entretien');
   if(win.todayBadgeCount() < 1) throw new Error('une habitude non atteinte devrait compter dans la pastille');
   win.go('today');
@@ -975,12 +1025,9 @@ habitScenario('Aujourd’hui — le bloc Habitudes rejoint todayBuckets(), jamai
   if(!/Habitudes du jour/.test(el.textContent)) throw new Error('le titre du bloc devrait être « Habitudes du jour »');
 });
 
-// Isole aussi S.plants : le Ficus créé plus haut a un engrais/rempotage
-// jamais fait (donc perpétuellement dus) qui polluerait sinon tout état vide
-// calculé après ce point du fichier.
 call('Aujourd’hui — état vide : une habitude non atteinte l’empêche, une déjà faite ne gêne plus (principe 6)', () => {
-  const backupH = S.habits.slice(), backupLog = S.habitLog, backupP = S.plants.slice();
-  S.habits.length = 0; S.habitLog = {}; S.plants.length = 0;
+  const backupH = S.habits.slice(), backupLog = S.habitLog;
+  S.habits.length = 0; S.habitLog = {};
   try{
     const today = win.todayKey();
     const h = win.stamp({name: 'Lecture', unit: '', target: 1, sched: {kind: 'days', days: [win.isoDow(today)]}, sort: 0});
@@ -997,7 +1044,6 @@ call('Aujourd’hui — état vide : une habitude non atteinte l’empêche, une
   } finally {
     S.habits.length = 0; backupH.forEach(h => S.habits.push(h));
     S.habitLog = backupLog;
-    S.plants.length = 0; backupP.forEach(p => S.plants.push(p));
   }
 });
 
@@ -1056,9 +1102,20 @@ habitScenario('Habitudes — le pas ne saute jamais par-dessus l’objectif, « 
   if(win.habitValueOn(h, k) !== 0) throw new Error('annuler « Fait » devrait revenir à la valeur d’avant');
 });
 
+// Une tâche du jour garde l'écran ouvert : sans elle, atteindre la dernière
+// habitude ferait (à raison) basculer Aujourd'hui sur son état vide, et la
+// carte observée disparaîtrait. Jusqu'au Lot V3-1, le Ficus perpétuellement
+// dû des tests de plantes jouait ce rôle sans le dire.
+const keepTodayOpen = () => {
+  const t = mk({title: 'Garde l’écran ouvert', bucket: 'scheduled', start: win.todayKey()});
+  return () => { t.deletedAt = Date.now(); };
+};
+
 habitScenario('Habitudes — bloc du jour : ligne de contrôles, et jamais « Sauter » avec les deux boutons d’ajout', () => {
   const h = win.stamp({name: 'Lecture', unit: 'pages', target: 20, sched: {kind: 'days', days: [1,2,3,4,5,6,7]}, sort: 0});
   S.habits.push(h);
+  const release = keepTodayOpen();
+  try{
   win.go('today');
   let card = win.document.querySelector('#s-today .card.t-habitudes');
   if(!card) throw new Error('le bloc « Habitudes du jour » devrait être rendu');
@@ -1088,11 +1145,14 @@ habitScenario('Habitudes — bloc du jour : ligne de contrôles, et jamais « Sa
   if(!card.querySelector('.row-soft')) throw new Error('une habitude au quota reste posée, en retrait');
   if(!/6 \/ 6|20 \/ 20/.test(card.textContent))
     throw new Error('la ligne compacte reprend la valeur dans sa méta, obtenu : ' + card.textContent.trim());
+  } finally { release(); }
 });
 
 habitScenario('Habitudes — une habitude sans unité dit « Fait », jamais « + » (audit B8)', () => {
   const h = win.stamp({name: 'Étirements', unit: '', target: 1, sched: {kind: 'days', days: [1,2,3,4,5,6,7]}, sort: 0});
   S.habits.push(h);
+  const release = keepTodayOpen();
+  try{
   win.go('today');
   const card = win.document.querySelector('#s-today .card.t-habitudes');
   if(card.querySelector('.hab-ctrl'))
@@ -1106,6 +1166,7 @@ habitScenario('Habitudes — une habitude sans unité dit « Fait », jamais « 
   if(!apres.querySelector('.row-soft')) throw new Error('une coche simple faite passe en retrait');
   if([...apres.querySelectorAll('.step')].map(b => b.textContent).join('|') !== '−')
     throw new Error('une coche simple faite n’offre plus qu’un « − » pour se dédire');
+  } finally { release(); }
 });
 
 // Fiche habitude (création/édition/suppression via l’UI, comme taskSheet/plantSheet) —
@@ -1292,8 +1353,8 @@ shopScenario('Aujourd’hui — bloc Courses (5) : une ligne, jamais la liste, n
 });
 
 shopScenario('Aujourd’hui — le bouton Courses reste visible même quand tout le reste dit "c’est bon" (comme Ce soir)', () => {
-  const backupH = S.habits.slice(), backupLog = S.habitLog, backupP = S.plants.slice();
-  S.habits.length = 0; S.habitLog = {}; S.plants.length = 0;
+  const backupH = S.habits.slice(), backupLog = S.habitLog;
+  S.habits.length = 0; S.habitLog = {};
   try{
     win.addShoppingItem('Chocolat noir');
     win.go('today');
@@ -1305,7 +1366,6 @@ shopScenario('Aujourd’hui — le bouton Courses reste visible même quand tout
   } finally {
     S.habits.length = 0; backupH.forEach(h => S.habits.push(h));
     S.habitLog = backupLog;
-    S.plants.length = 0; backupP.forEach(p => S.plants.push(p));
   }
 });
 
@@ -1428,29 +1488,6 @@ call('Maison — célébration sobre à la première réalisation d’un entreti
     t.deletedAt = Date.now(); // tombstone : ne pollue pas les scénarios suivants
   }
 });
-
-// savePlantSheet() est asynchrone (photo éventuelle) : hors du helper call()
-// synchrone, comme le flush saveNow() plus bas.
-try{
-  win.plantSheet(null);
-  const nameEl = win.document.getElementById('p-name');
-  if(!nameEl) throw new Error('le champ nom devrait être présent à la création');
-  // _pSheet est un `let` de plants.js : accessible en interne (oninput=) mais
-  // pas via win._pSheet (pas de propriété sur window). On passe donc par le
-  // DOM et les setters exposés, comme le ferait un vrai geste utilisateur.
-  nameEl.value = 'orchidée du bureau';
-  nameEl.dispatchEvent(new win.Event('input', {bubbles: true}));
-  win.setPRoom('bureau');
-  await win.savePlantSheet();
-  const p = S.plants.find(x => x.name === 'Orchidée du bureau');
-  if(!p) throw new Error('la plante devrait être créée avec la casse posée par cap()');
-  if(!p.id || !p.createdAt || !p.updatedAt || p.deletedAt !== null)
-    throw new Error('la discipline synchro-ready (id/createdAt/updatedAt/deletedAt) devrait être respectée');
-  win.deletePlant(p.id);
-  win._runConfirm();
-  if(!p.deletedAt) throw new Error('la suppression d’une plante doit être un tombstone, jamais un splice()');
-  if(!S.plants.some(x => x.id === p.id)) throw new Error('la plante supprimée doit rester dans le tableau (tombstone)');
-}catch(e){ onError('plantSheet — création/suppression', e); }
 
 // 6 undecies) Socle d'interaction (Lot V2-1) : gestures.js se charge sans
 // erreur runtime (déjà couvert par window.onerror sur l'ensemble du bundle,
@@ -1718,12 +1755,13 @@ if(fails.length){
               '  socle d’interaction V2-1 (gestures.js chargé, undoable(), rowAttrs()),\n' +
               '  navigation & saisie V2-2 (cinq onglets, Habitudes atteignable à zéro,\n' +
               '  mémorisation du défilement, barre de saisie collée par écran),\n' +
-              '  « Aujourd’hui » v3 V2-3 (prénom dans le sur-titre et l’état vide, réserve\n' +
-              '  de places des soins sous le plafond, cochage annulable et décochable),\n' +
+              '  « Aujourd’hui » v3 V2-3 (prénom dans le sur-titre et l’état vide,\n' +
+              '  cochage annulable et décochable),\n' +
               '  récurrence, Maison, algorithme d’« Aujourd’hui » (blocs, seuil d’entretien,\n' +
               '  cochage de session, plafond, état vide, pastille), parseQuick (' + nlpCases.length + ' cas\n' +
-              '  + mécanisme d’ignorance), plantes (saison, soins réutilisant recur.js,\n' +
-              '  intégration Maison et bloc du jour, fiche), habitudes (série/quota, jour\n' +
+              '  + mécanisme d’ignorance), entretien V3-1 (budget quotidien, jours fixes,\n' +
+              '  pack maison étalé et sans doublon, migration des plantes, fiche en\n' +
+              '  minutes), habitudes (série/quota, jour\n' +
               '  sauté neutre, progression partielle, mode quota hebdomadaire, pas adapté\n' +
               '  à l’objectif et « Fait » en un geste, intégration Aujourd’hui, fiche),\n' +
               '  courses (guessRayon, fréquents, correction mémorisée,\n' +
@@ -1736,5 +1774,5 @@ if(fails.length){
               '  hebdomadaire (candidats, déclenchement, flux complet, lastReview),\n' +
               '  célébrations sobres (record de série, entretien annuel), Réglages (bienvenue\n' +
               '  au premier lancement, thème, export/import validé avant écriture,\n' +
-              '  réinitialisation du store photos, ordre des six groupes) et persistance.');
+              '  réinitialisation, ordre des six groupes) et persistance.');
 }

@@ -13,14 +13,36 @@
 
 const CAT_LABELS = {perso:'Perso', menage:'Ménage', entretien:'Entretien', admin:'Admin'};
 const CAT_ORDER = ['perso','menage','entretien','admin'];
-const ROOM_LABELS = {salon:'Salon', cuisine:'Cuisine', chambre:'Chambre', sdb:'Sdb', bureau:'Bureau', exterieur:'Extérieur'};
-const ROOM_ORDER = ['salon','cuisine','chambre','sdb','bureau','exterieur'];
+// Pièces (Lot V3-1) : celles d'un logement courant, plus « partout » pour ce
+// qui se fait dans toute la maison d'une traite (serpillière, aspirateur).
+// « exterieur » reste une clé valide pour les données d'avant ce lot, mais
+// n'est plus proposée dans les sélecteurs tant qu'aucune tâche ne l'emploie
+// (roomChoices()) — le balcon la remplace pour un appartement.
+const ROOM_LABELS = {partout:'Toute la maison', salon:'Salon', cuisine:'Cuisine', chambre:'Chambre',
+  sdb:'Salle de bain', wc:'WC', bureau:'Bureau', cellier:'Cellier', balcon:'Balcon', exterieur:'Extérieur'};
+const ROOM_ORDER = ['partout','cuisine','sdb','wc','salon','chambre','bureau','cellier','balcon','exterieur'];
+// Durées proposées pour un entretien (fiche tâche) et correspondance avec
+// l'effort 1/2/3 du glossaire (CONVENTIONS.md §6) : une durée en minutes est
+// ce que lit le budget d'entretien quotidien, l'effort ce que lit « si tu as
+// 10 minutes ». Les deux sont tenus d'accord par minsToEffort().
+const CHORE_MINS = [2,5,10,15,20,30,45,60];
+const EFFORT_MINS = {1:5, 2:15, 3:45};
+function minsToEffort(m){ return m <= 10 ? 1 : (m <= 30 ? 2 : 3); }
+
+// Pièces proposées dans un sélecteur : toutes, sauf « exterieur » qu'on ne
+// garde que si une tâche vivante l'emploie encore (ou si c'est la valeur en
+// cours) — jamais une pièce muette de plus à parcourir.
+function roomChoices(current){
+  const used = live(S.tasks).some(t=>t.room === 'exterieur');
+  return ROOM_ORDER.filter(r=>r !== 'exterieur' || used || current === 'exterieur');
+}
 const PRIO_LABELS = {0:'Normal', 1:'Important', 2:'Urgent'};
 const EFFORT_LABELS = {1:'Court', 2:'Moyen', 3:'Long'};
 const MOIS_ABBR = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
 const REPEAT_KIND_LABELS = {day:'Jour', week:'Semaine', month:'Mois', year:'An'};
 const REPEAT_KIND_ORDER = ['day','week','month','year'];
 const DOW_LABELS = {1:'Lun', 2:'Mar', 3:'Mer', 4:'Jeu', 5:'Ven', 6:'Sam', 7:'Dim'};
+const DOW_NAMES = {1:'lundi', 2:'mardi', 3:'mercredi', 4:'jeudi', 5:'vendredi', 6:'samedi', 7:'dimanche'};
 const DOW_ORDER = [1,2,3,4,5,6,7];
 // Indicateur de notes (audit C3) : un rectangle à deux lignes, même trait
 // que le reste des icônes du projet (icon(), js/ui.js).
@@ -47,12 +69,16 @@ function repeatSummary(r){
   const n = r.n || 1;
   const unitSing = {day:'jour', week:'semaine', month:'mois', year:'an'}[r.kind] || 'jour';
   const unitPlur = {day:'jours', week:'semaines', month:'mois', year:'ans'}[r.kind] || 'jours';
-  let base;
+  // Jours fixes (Lot V3-1) : « Chaque samedi. » — qu'il s'ancre sur
+  // l'échéance ou sur la dernière réalisation, un jour fixe revient toujours
+  // le même jour de la semaine : préciser « après la dernière fois » ne
+  // dirait rien de plus, sinon une contradiction apparente.
   if(r.kind === 'week' && r.days && r.days.length){
-    base = 'Chaque '+r.days.slice().sort((a,b)=>a-b).map(d=>DOW_LABELS[d]).join(', ');
-  } else {
-    base = n === 1 ? 'Tous les '+unitSing : 'Tous les '+n+' '+unitPlur;
+    const noms = r.days.slice().sort((a,b)=>a-b).map(d=>DOW_NAMES[d]);
+    const liste = noms.length > 1 ? noms.slice(0, -1).join(', ')+' et '+noms[noms.length-1] : noms[0];
+    return 'Chaque '+liste+'.';
   }
+  const base = n === 1 ? 'Tous les '+unitSing : 'Tous les '+n+' '+unitPlur;
   return base + (r.from === 'done' ? ' après la dernière fois.' : ', à date fixe.');
 }
 
@@ -348,10 +374,11 @@ function taskSheet(id){
     id: t.id, title: t.title || '', notes: t.notes || '', cat: t.cat || 'perso',
     room: t.room || null, bucket: t.bucket || 'anytime', start: t.start || null,
     due: t.due || null, evening: !!t.evening, prio: t.prio || 0, effort: t.effort || 2,
+    mins: t.mins || EFFORT_MINS[t.effort || 2],
     repeat: t.repeat ? {kind:t.repeat.kind, n:t.repeat.n||1, days:(t.repeat.days||[]).slice(), from:t.repeat.from||'done'} : null
   } : {
     id: null, title:'', notes:'', cat:'perso', room:null, bucket:'anytime',
-    start:null, due:null, evening:false, prio:0, effort:2, repeat:null
+    start:null, due:null, evening:false, prio:0, effort:2, mins:EFFORT_MINS[2], repeat:null
   };
   _tSheet._more = tsHasExtras(_tSheet);
   openSheet(taskSheetHtml());
@@ -369,6 +396,7 @@ function setTsCat(c){ _tSheet.cat = c; refreshTaskSheet(); }
 function setTsRoom(r){ _tSheet.room = r; refreshTaskSheet(); }
 function setTsPrio(p){ _tSheet.prio = p; refreshTaskSheet(); }
 function setTsEffort(e){ _tSheet.effort = e; refreshTaskSheet(); }
+function setTsMins(m){ _tSheet.mins = m; _tSheet.effort = minsToEffort(m); refreshTaskSheet(); }
 function setTsBucket(b){ _tSheet.bucket = b; refreshTaskSheet(); }
 function setTsDate(field, val){ _tSheet[field] = val || null; refreshTaskSheet(); }
 function toggleTsEvening(){ _tSheet.evening = !_tSheet.evening; refreshTaskSheet(); }
@@ -394,7 +422,7 @@ function taskSheetHtml(){
     '<button class="chip'+(d.cat===c?' on':'')+'" onclick="setTsCat(\''+c+'\')">'+esc(CAT_LABELS[c])+'</button>'
   ).join('');
   const roomChips = '<button class="chip'+(!d.room?' on':'')+'" onclick="setTsRoom(null)">Aucune</button>'+
-    ROOM_ORDER.map(r=>
+    roomChoices(d.room).map(r=>
       '<button class="chip'+(d.room===r?' on':'')+'" onclick="setTsRoom(\''+r+'\')">'+esc(ROOM_LABELS[r])+'</button>'
     ).join('');
   const prioChips = [0,1,2].map(p=>
@@ -402,6 +430,13 @@ function taskSheetHtml(){
   ).join('');
   const effortChips = [1,2,3].map(e=>
     '<button class="chip'+(d.effort===e?' on':'')+'" onclick="setTsEffort('+e+')">'+esc(EFFORT_LABELS[e])+'</button>'
+  ).join('');
+  // Un entretien (pièce + récurrence après réalisation) se règle en minutes,
+  // pas en effort (Lot V3-1) : c'est ce que lit le budget d'entretien du jour.
+  // L'effort en est déduit à l'enregistrement (minsToEffort()).
+  const chore = !!(d.room && d.repeat && d.repeat.from === 'done');
+  const minsChips = CHORE_MINS.map(m=>
+    '<button class="chip'+(d.mins===m?' on':'')+'" onclick="setTsMins('+m+')">'+m+' min</button>'
   ).join('');
   const rep = d.repeat;
   const repeatKindChips = REPEAT_KIND_ORDER.map(k=>
@@ -453,11 +488,39 @@ function taskSheetHtml(){
     '</li></ul></div>'+
     repeatBlock+
     '<div class="field-group"><span class="overline">Bucket</span>'+bucketBlock+'</div>';
-  return '<p class="sheet-title">'+(d.id ? 'Modifier la tâche' : 'Nouvelle tâche')+'</p>'+
-    '<div class="field-group">'+
+  const titleField = '<div class="field-group">'+
       '<input id="ts-title" class="field field-full" type="text" placeholder="Titre" value="'+esc(d.title)+'" '+
         'autocomplete="off" autocapitalize="sentences" oninput="_tSheet.title=this.value">'+
-    '</div>'+
+    '</div>';
+  const notesField = '<div class="field-group">'+
+      '<textarea id="ts-notes" class="field area field-full" placeholder="Notes" autocapitalize="sentences" '+
+        'oninput="_tSheet.notes=this.value">'+esc(d.notes)+'</textarea>'+
+    '</div>';
+  // Fiche d'un entretien (Lot V3-1) : ni début, ni échéance, ni priorité, ni
+  // « ce soir » — un entretien se pilote par son rythme, pas par une date
+  // (principe 4, CONVENTIONS.md §3), et ces champs n'avaient aucun effet sur
+  // lui. Restent ce qui le définit : pièce, durée, rythme. Tout tient sur un
+  // écran, donc pas de « Plus d'options ».
+  if(chore){
+    const t = d.id ? S.tasks.find(x=>x.id === d.id) : null;
+    const f = t ? choreFresh(t) : null;
+    const next = t ? (f <= 0 ? 'À faire aujourd’hui.' : 'Prochaine fois : '+choreCue(t).toLowerCase()+'.') : '';
+    return '<p class="sheet-title">'+(d.id ? 'Modifier l’entretien' : 'Nouvel entretien')+'</p>'+
+      (next ? '<p class="sheet-msg">'+esc(next)+'</p>' : '')+
+      titleField+
+      '<div class="field-group"><span class="overline">Pièce</span><div class="chips">'+roomChips+'</div></div>'+
+      '<div class="field-group"><span class="overline">Durée</span><div class="chips">'+minsChips+'</div></div>'+
+      '<div class="field-group"><ul class="list"><li class="row">'+
+        '<div class="row-main"><div class="row-title">Récurrente</div></div>'+
+        '<button class="switch on" role="switch" aria-checked="true" aria-label="Récurrente" onclick="toggleTsRepeat()"></button>'+
+      '</li></ul></div>'+
+      repeatBlock+
+      notesField+
+      '<button class="btn primary btn-full" onclick="saveTaskSheet()">Enregistrer</button>'+
+      '<button class="btn quiet btn-full" onclick="closeSheet()">Annuler</button>';
+  }
+  return '<p class="sheet-title">'+(d.id ? 'Modifier la tâche' : 'Nouvelle tâche')+'</p>'+
+    titleField+
     '<div class="field-group"><span class="overline">Début</span>'+
       '<input class="field field-full" type="date" value="'+(d.start||'')+'" onchange="setTsDate(\'start\', this.value)"></div>'+
     '<div class="field-group"><span class="overline">Échéance</span>'+
@@ -483,6 +546,7 @@ function saveTaskSheet(){
     t.title = title; t.notes = notes; t.cat = d.cat; t.room = d.room;
     t.start = d.start || null; t.due = d.due || null; t.evening = !!d.evening;
     t.prio = d.prio; t.effort = d.effort; t.bucket = bucket; t.repeat = d.repeat; t.touchedAt = Date.now();
+    if(d.room && d.repeat && d.repeat.from === 'done') t.mins = d.mins;
     touch(t);
   } else {
     t = stamp({
@@ -490,6 +554,7 @@ function saveTaskSheet(){
       evening:!!d.evening, prio:d.prio, effort:d.effort, bucket, repeat:d.repeat, history:[],
       postponed:0, touchedAt:Date.now()
     });
+    if(d.room && d.repeat && d.repeat.from === 'done') t.mins = d.mins;
     S.tasks.push(t);
   }
   save();

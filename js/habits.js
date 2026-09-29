@@ -21,7 +21,7 @@
 
    Ce fichier expose aussi le bloc permanent d'Aujourd'hui (getTodayHabits(),
    appelé depuis js/today.js — today.js est plus tôt dans l'ordre de
-   chargement mais ce n'est qu'une déclaration, comme getPlantCareItems()) et
+   chargement mais ce n'est qu'une déclaration, comme choreDay()) et
    l'écran secondaire go('habits') : définitions, séries, calendrier mensuel.
 
    Depuis le Lot V2-7 (audit B5/B6/B8), l'écran go('habits') pose la même
@@ -513,8 +513,8 @@ function renderHabits(){
 }
 
 /* ==========================================================================
-   Fiche habitude — création et édition par la même feuille (comme taskSheet/
-   plantSheet). Deux modes de planification traités séparément (point ㉒).
+   Fiche habitude — création et édition par la même feuille (comme
+   taskSheet()). Deux modes de planification traités séparément (point ㉒).
    ========================================================================== */
 let _hSheet = null;
 

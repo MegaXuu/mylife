@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>MyLife</title>
-<meta name="description" content="Qu'est-ce que je dois faire maintenant ? Tâches, entretien, plantes, habitudes, courses — hors-ligne.">
+<meta name="description" content="Qu'est-ce que je dois faire maintenant ? Tâches, entretien, habitudes, courses — hors-ligne.">
 <meta name="theme-color" content="#F3EEE5">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -59,7 +59,7 @@
   --g-hab:#7FA36B;   /* quota d'habitudes : TOUJOURS cette couleur, jamais la rampe */
   --g-track:var(--sunken);
   /* — teintes de domaine (fonds de cartes uniquement) — */
-  --t-plantes:#E3EADD; --t-maison:#EFE4D0; --t-habitudes:#F2E7CF; --t-courses:#F0E0D8;
+  --t-maison:#EFE4D0; --t-habitudes:#F2E7CF; --t-courses:#F0E0D8;
   /* — typo — */
   --f:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   --fs-title:30px; --fs-sec:18px; --fs-item:17px; --fs-body:16px;
@@ -82,7 +82,7 @@ html[data-mode="dark"]{
   --act:#8FC7A4; --on:#17140F;
   --due:#E8907E;
   --g-ok:#8FC7A4; --g-low:#D98274; --g-hab:#8FC7A4;
-  --t-plantes:#222A20; --t-maison:#2C2418; --t-habitudes:#2D2617; --t-courses:#2C201B;
+  --t-maison:#2C2418; --t-habitudes:#2D2617; --t-courses:#2C201B;
 }
 
 /* ---------- Socle ---------- */
@@ -139,9 +139,9 @@ svg{display:block;}
 }
 /* Teintes de domaine : à l'intérieur, les filets et la piste de jauge passent
    en --line-in (le filet clair disparaîtrait sur un fond teinté). Seules
-   .t-maison et .t-habitudes sont posées sur une carte en V1 (plantes et
-   courses restent des cartes blanches, cf. arbitrage du 27/07/2026) —
-   .card.t-plantes/.card.t-courses ont été retirées au Lot 12, orphelines. */
+   .t-maison et .t-habitudes sont posées sur une carte (Courses reste en
+   cartes blanches, cf. arbitrage du 27/07/2026) — .card.t-courses a été
+   retirée au Lot 12, orpheline ; --t-plantes au Lot V3-1, avec les plantes. */
 .card.t-maison,.card.t-habitudes{
   --line:var(--line-in); --g-track:var(--line-in);
 }
@@ -314,13 +314,11 @@ svg{display:block;}
 }
 
 /* ==========================================================================
-   Lot V2-5 — Maison & plantes v2 (ROADMAP-V2.md §3.7, audits A4/B1/B2/B4).
-   Trois des cinq points du lot n'ajoutent aucune règle ici : la légende
-   tournée vers l'action (B2) et la jauge qui redevient discriminante (B1)
-   sont du contenu et du calcul (freshCue()/rawFreshness(), js/maison.js et
-   js/ui.js), et la fiche plante allégée (point 6) réutilise .more-toggle du
-   Lot V2-4 tel quel. Restent .row-act (le bouton d'action, point 1) et
-   .room-count (remplace la jauge agrégée de pièce, point 4).
+   Lot V2-5 — Maison v2 (ROADMAP-V2.md §3.7, audits A4/B1/B2/B4). La
+   légende tournée vers l'action (B2) et la jauge qui redevient
+   discriminante (B1) sont du contenu et du calcul (choreCue()/choreFresh(),
+   js/maison.js depuis le Lot V3-1). Restent .row-act (le bouton d'action,
+   point 1) et .room-count (remplace la jauge agrégée de pièce, point 4).
    ========================================================================== */
 
 /* ---------- Ligne d'entretien : jauge de fraîcheur posée À DROITE ----------
@@ -333,9 +331,12 @@ svg{display:block;}
    à des tâches de 17 px, il s'allège. */
 .room-list .row-care .row-title{font-weight:500;}
 
-.gauge-side{flex:none; width:110px;}                   /* jauge seule, sans légende (Aujourd'hui ET Maison, Lot V2-5) */
-.gauge-cell{flex:none; width:110px; text-align:right;} /* jauge + légende (fiche plante) */
-.gauge-cell .gauge{width:100%;}
+.gauge-side{flex:none; width:110px;}                   /* jauge seule, sans légende (Maison) */
+/* Lot V3-1 : les titres du pack maison sont plus longs que les anciens
+   modèles (« Nettoyer la bouche de VMC de la salle de bain ») et la
+   ligne porte aussi « Fait » : la jauge rétrécit pour laisser au titre
+   deux lignes au plus sur un iPhone, sans rien perdre de sa lecture. */
+.room-list .gauge-side{width:64px;}
 
 /* Bouton d'action à droite d'une ligne d'entretien/de soin (« Fait »,
    « Arrosé »…, Lot V2-5 point 1) : du texte --act, comme .more/.group-toggle
@@ -478,21 +479,10 @@ svg{display:block;}
 .cap-chip{display:inline-flex; align-items:center; gap:6px;}
 .cap-details{margin-top:var(--s2); padding:0 var(--s1);}
 
-/* ==========================================================================
-   Lot V1-7 — plantes. Les lignes de soin (Maison, Aujourd'hui, fiche) et
-   leurs jauges réutilisent .row-care/.gauge-cell/.gauge-side déjà posés au
-   Lot V1-5 ; seuls la photo et son contrôle de sélection sont nouveaux.
-   ========================================================================== */
-.plant-photo{
-  display:flex; align-items:center; justify-content:center;
-  width:100%; height:160px; padding:0; margin-bottom:var(--s2);
-  border:0; border-radius:var(--r-btn); background:var(--sunken);
-  color:var(--ink2); font-size:var(--fs-low); overflow:hidden;
-}
-.plant-photo img{width:100%; height:100%; object-fit:cover;}
-/* Masqué visuellement mais toujours dans le DOM : .plant-photo déclenche son
-   clic. display:none empêcherait le sélecteur de fichiers sur certains
-   navigateurs, d'où cette technique plutôt qu'un simple display:none. */
+/* Sélecteur de fichier masqué visuellement mais toujours dans le DOM (import
+   JSON, Réglages) : un bouton déclenche son clic. display:none empêcherait le
+   sélecteur de fichiers sur certains navigateurs. Posé au Lot V1-7 pour la
+   photo de plante, retirée au Lot V3-1 avec les plantes. */
 .file-input{position:absolute; width:1px; height:1px; overflow:hidden; opacity:0; pointer-events:none;}
 
 /* ==========================================================================
@@ -740,11 +730,10 @@ body.capture-open .toast{bottom:calc(150px + env(safe-area-inset-bottom));}
 <div class="toast" id="toast"></div>
 
 <!-- Application en scripts <script> classiques, portée globale unique, aucun
-     bundler. ORDRE DE CHARGEMENT IMPÉRATIF (CONVENTIONS.md §1) : les 3
-     catalogues d'abord, puis state.js (socle), puis boot.js en dernier.
+     bundler. ORDRE DE CHARGEMENT IMPÉRATIF (CONVENTIONS.md §1) : les
+     catalogues data/ d'abord, puis state.js (socle), puis boot.js en dernier.
      Miroir obligatoire dans sw.js (ASSETS) et test.mjs (FILES). -->
 <script src="data/rayons.js"></script>
-<script src="data/plantes.js"></script>
 <script src="data/entretien.js"></script>
 <script src="data/oiseaux.js"></script>
 <script src="js/state.js"></script>
@@ -755,7 +744,6 @@ body.capture-open .toast{bottom:calc(150px + env(safe-area-inset-bottom));}
 <script src="js/today.js"></script>
 <script src="js/tasks.js"></script>
 <script src="js/maison.js"></script>
-<script src="js/plants.js"></script>
 <script src="js/habits.js"></script>
 <script src="js/shopping.js"></script>
 <script src="js/review.js"></script>
