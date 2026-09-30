@@ -5,7 +5,7 @@
    AUCUN RENDU DOM ICI — voir js/ui.js et les js/<ecran>.js pour l'affichage.
    ========================================================================== */
 
-const APP_VERSION = 'Bêta 3.4'; // à synchroniser avec CACHE (sw.js) à chaque release
+const APP_VERSION = 'Bêta 3.5'; // à synchroniser avec CACHE (sw.js) à chaque release
 
 const IDB_NAME = 'mylife';
 const IDB_VERSION = 1;
@@ -47,6 +47,7 @@ function defaults(){
     },
     lastReview: null,
     lastExport: null,   // dernier export JSON (ms) — Réglages le rappelle (Lot V3-3)
+    backupNudgeAt: null, // dernier rappel de sauvegarde au démarrage (ms) — au plus un par semaine (Lot V3-5)
     seenVersion: null,  // dernière version vue au démarrage — annonce d'une mise à jour (Lot V3-3)
     onboarded: false
   };
@@ -60,6 +61,7 @@ function migrate(r){
   if(r.habitLog !== undefined && (typeof r.habitLog !== 'object' || Array.isArray(r.habitLog))) r.habitLog = {};
   if(r.settings !== undefined && (typeof r.settings !== 'object' || Array.isArray(r.settings))) r.settings = {};
   sanitizeKeys(r);
+  repairLigatures(r);
   r.tasks = (r.tasks || []).map(t=>{
     // Lot V1-3 : modèle Things 3 (start/due/bucket/effort/prio…). Les tâches
     // du Lot 1 n'avaient ni date ni catégorie : elles deviennent 'anytime'.
@@ -104,6 +106,7 @@ function migrate(r){
   if(!r.settings.rayonOverrides) r.settings.rayonOverrides = {};
   if(r.lastReview === undefined) r.lastReview = null;
   if(r.lastExport === undefined) r.lastExport = null;
+  if(r.backupNudgeAt === undefined) r.backupNudgeAt = null;
   if(r.seenVersion === undefined) r.seenVersion = null;
   // Lot V1-11 : une base déjà peuplée avant l'existence de la bienvenue ne
   // doit jamais se la voir proposer après coup — seule une base réellement
@@ -156,6 +159,28 @@ function sanitizeKeys(r){
     if(!SAFE_DAY.test(String(m.day)) || (m.slot !== 'midi' && m.slot !== 'soir')) m.deletedAt = m.deletedAt || Date.now();
   });
   r.frequents = (r.frequents || []).filter(f=>f && /^[a-z0-9 -]*$/.test(String(f.norm)));
+}
+
+// Lot V3-5 : normalizeLabel() (js/shopping.js) écrit désormais les ligatures
+// en deux lettres. Un produit fréquent enregistré avant (« Œufs », rangé sous
+// la clé « ufs ») reprend sa vraie clé, fusionné avec celui qui l'aurait
+// déjà ; un article resté au rayon « Autre » pour la même raison retrouve le
+// sien. Idempotent : pour tout autre libellé, rien ne change.
+function repairLigatures(r){
+  if(typeof normalizeLabel !== 'function') return;
+  const byNorm = {}, out = [];
+  (r.frequents || []).forEach(f=>{
+    const norm = normalizeLabel(f.label) || f.norm;
+    if(byNorm[norm]){ byNorm[norm].count = (byNorm[norm].count || 0) + (f.count || 0); return; }
+    byNorm[norm] = Object.assign({}, f, {norm});
+    out.push(byNorm[norm]);
+  });
+  r.frequents = out;
+  (r.shopping || []).forEach(it=>{
+    if(it.rayon !== 'autre' || !/[œæ]/i.test(String(it.label))) return;
+    const g = guessRayon(it.label);
+    if(g){ it.rayon = g; touch(it); }
+  });
 }
 
 // Une plante vivante → un entretien par pièce. Idempotent : la clé plants

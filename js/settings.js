@@ -165,12 +165,44 @@ function lastExportTxt(){
    version arrive en silence — le service worker recharge l'app d'un coup.
    Un toast sobre dit qu'elle est là, une fois. Jamais au tout premier
    lancement (la bienvenue parle déjà), ni sur une base vierge. */
+// Renvoie vrai s'il a parlé : le démarrage n'empile jamais deux messages.
 function announceUpdate(){
   const prev = S.seenVersion;
-  if(prev === APP_VERSION) return;
+  if(prev === APP_VERSION) return false;
   S.seenVersion = APP_VERSION;
   save();
-  if(S.onboarded) toast('MyLife est à jour : '+APP_VERSION+'.');
+  if(!S.onboarded) return false;
+  toast('MyLife est à jour : '+APP_VERSION+'.');
+  return true;
+}
+
+/* Rappel de sauvegarde (Lot V3-5). Tout vit sur ce téléphone : l'export est
+   le seul filet de sécurité, et la date du dernier ne se lisait que dans
+   Réglages, où l'on ne va jamais. Au démarrage, quand la dernière
+   sauvegarde a plus de 30 jours — ou qu'il n'y en a jamais eu, sur une app
+   remplie depuis au moins autant —, un toast le dit, « Exporter » sous le
+   doigt. Au plus une fois par semaine, et jamais par-dessus un autre
+   message (boot.js). */
+const BACKUP_NUDGE_DAYS = 30;
+const BACKUP_NUDGE_EVERY = 7;
+function backupNudgeDue(now){
+  now = now || Date.now();
+  if(!S.onboarded) return false;
+  const items = live(S.tasks).concat(live(S.habits), live(S.meals));
+  if(!items.length) return false;
+  const since = S.lastExport || items.reduce((m, o)=>Math.min(m, o.createdAt || now), now);
+  if(now - since < BACKUP_NUDGE_DAYS * 86400000) return false;
+  return !S.backupNudgeAt || now - S.backupNudgeAt >= BACKUP_NUDGE_EVERY * 86400000;
+}
+function maybeBackupNudge(now){
+  now = now || Date.now();
+  if(!backupNudgeDue(now)) return false;
+  S.backupNudgeAt = now;
+  save();
+  const n = S.lastExport ? daysBetween(dayKey(new Date(S.lastExport)), dayKey(new Date(now))) : 0;
+  toast(S.lastExport ? 'Dernière sauvegarde il y a '+n+' jours.' : 'Tes données n’ont encore jamais été sauvegardées.',
+    {action:{label:'Exporter', fn:exportData}});
+  return true;
 }
 
 // Structure minimale attendue d'un fichier importé — pure, sans DOM, testée
@@ -294,7 +326,8 @@ function welcomeNameHtml(){
     '<p class="sheet-msg">Facultatif — tu peux laisser vide.</p>'+
     '<div class="field-group">'+
       '<input id="w-name" class="field field-full" type="text" placeholder="Prénom" value="'+esc(_welcomeName)+'" '+
-        'autocomplete="off" autocapitalize="sentences" oninput="_welcomeName=this.value">'+
+        'autocomplete="given-name" autocapitalize="sentences" enterkeyhint="next" oninput="_welcomeName=this.value" '+
+        'onkeydown="if(event.key===\'Enter\'){_welcomeName=this.value;advanceWelcome();}">'+
     '</div>'+
     '<button class="btn primary btn-full" onclick="advanceWelcome()">Suivant</button>';
 }
@@ -303,7 +336,8 @@ function welcomeTaskHtml(){
     '<p class="sheet-msg">Ajoute-la tout de suite, ou explore l’app d’abord.</p>'+
     '<div class="field-group">'+
       '<input id="w-task" class="field field-full" type="text" placeholder="Ex. Sortir les poubelles" '+
-        'autocomplete="off" autocapitalize="sentences" oninput="_welcomeTaskTitle=this.value">'+
+        'autocomplete="off" autocapitalize="sentences" enterkeyhint="done" oninput="_welcomeTaskTitle=this.value" '+
+        'onkeydown="if(event.key===\'Enter\'){_welcomeTaskTitle=this.value;finishWelcome();}">'+
     '</div>'+
     '<button class="btn primary btn-full" onclick="finishWelcome()">Ajouter et commencer</button>'+
     '<button class="btn quiet btn-full" onclick="skipWelcomeTask()">Explorer l’app</button>';
@@ -316,19 +350,22 @@ function advanceWelcome(){
   }
   _welcomeStep++;
   openSheet(welcomeStepHtml());
+  // Le champ de l'étape reçoit le clavier tout de suite (Lot V3-5) : il
+  // fallait le toucher avant de pouvoir écrire, et « Entrée » ne menait
+  // nulle part.
+  const el = document.getElementById(_welcomeStep === 1 ? 'w-name' : 'w-task');
+  if(el) el.focus();
 }
 function skipWelcomeTask(){
   _welcomeTaskTitle = '';
   finishWelcome();
 }
 function finishWelcome(){
-  const title = cap(String(_welcomeTaskTitle||'').trim());
-  if(title){
-    S.tasks.push(stamp({
-      title, notes:'', cat:'perso', room:null, bucket:'anytime',
-      start:null, due:null, evening:false, prio:0, effort:2,
-      repeat:null, history:[], doneAt:null, postponed:0, touchedAt:Date.now()
-    }));
+  // Comprise comme dans la barre de saisie (taskFromParse(), js/nlp.js) :
+  // « Sortir les poubelles tous les mercredis » y devient une tâche récurrente.
+  const p = parseQuick(String(_welcomeTaskTitle||'').trim());
+  if(p.title){
+    S.tasks.push(taskFromParse(p));
     save();
   }
   closeSheet(); // déclenche _onSheetClose : onboarded = true, jamais revue

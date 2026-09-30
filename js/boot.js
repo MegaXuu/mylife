@@ -29,13 +29,24 @@ async function boot(){
   _renderedDay = todayKey();
   // État stocké illisible (loadState(), js/state.js) : il a été recopié à part
   // avant de repartir de zéro — le dire tout de suite, jamais en silence.
+  let calm = false;
   if(_corruptKey){ toast('Données illisibles : une copie de secours a été gardée (Réglages → Données).', {danger:true}); save(); }
-  else announceUpdate(); // js/settings.js — un toast quand une nouvelle version vient d'arriver
+  else calm = !announceUpdate(); // js/settings.js — un toast quand une nouvelle version vient d'arriver
   maybeWelcome();      // js/settings.js — uniquement au tout premier lancement
   maybeStartReview();  // js/review.js — le jour venu, si des tâches dorment
+  // Un seul message à la fois au démarrage (Lot V3-5) : le rappel de
+  // sauvegarde se tait devant une annonce de version, la bienvenue, la revue.
+  if(calm && !document.getElementById('sheet-bg').classList.contains('show')) maybeBackupNudge();
 }
 
-try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+/* Une promesse du navigateur qui échoue sans gravité — hors-ligne, pastille
+   refusée — ne doit jamais remonter jusqu'au toast « Un souci inattendu »
+   (onUnexpectedError(), js/ui.js, Lot V3-4). Corrigé au Lot V3-5 : rouverte
+   sans réseau, l'app cherchait sa mise à jour (reg.update()), échouait, et
+   affichait ce toast rouge à chaque retour — pour une app 100 % hors-ligne. */
+function quietly(p){ if(p && typeof p.catch === 'function') p.catch(()=>{}); return p; }
+
+try{ if(navigator.storage && navigator.storage.persist) quietly(navigator.storage.persist()); }catch(e){}
 
 const READY = boot();
 window.__ready = function(){ return READY; };
@@ -63,7 +74,7 @@ if('serviceWorker' in navigator){
 function updateBadge(){
   try{
     if(!navigator.setAppBadge) return;
-    navigator.setAppBadge(todayBadgeCount()); // 0 efface la pastille
+    quietly(navigator.setAppBadge(todayBadgeCount())); // 0 efface la pastille
   }catch(e){}
 }
 
@@ -75,7 +86,7 @@ document.addEventListener('visibilitychange', ()=>{
   } else if(document.visibilityState === 'visible'){
     // Vérifie une nouvelle version à chaque retour au premier plan (iOS ne le
     // fait pas de lui-même) — évite de rester bloqué sur une ancienne Bêta.
-    if(_swReg) try{ _swReg.update(); }catch(e){}
+    if(_swReg) try{ quietly(_swReg.update()); }catch(e){}
     refreshIfNewDay();
   }
 });

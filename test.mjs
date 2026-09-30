@@ -1762,21 +1762,29 @@ mealScenario('Repas — la fiche : plat avec majuscule, suggestions apprises, st
   input.value = 'lasagnes'; input.dispatchEvent(new win.Event('input', {bubbles: true}));
   win.saveMealSheet();
   if(win.mealSlot(lun, 'soir').dish !== 'Lasagnes') throw new Error('le plat s’enregistre avec sa majuscule (cap())');
-  // Appris : proposé au repas suivant, en un tap.
+  // Lot V3-5 : à deux jours près, un plat déjà posé n'est pas proposé — il
+  // revient dès qu'on tape son nom.
   win.mealSheet(win.addDays(lun, 1), 'midi');
+  if(/Lasagnes/.test(win.document.getElementById('m-sugg').textContent)) throw new Error('les lasagnes de lundi soir ne sont pas proposées mardi midi');
+  win.onMealDishInput('las');
+  if(!/Lasagnes/.test(win.document.getElementById('m-sugg').textContent)) throw new Error('… mais reviennent dès qu’on les cherche');
+  win.closeSheet();
+  // Appris : proposé à un repas suivant, en un tap.
+  const jeu = win.addDays(lun, 3);
+  win.mealSheet(jeu, 'midi');
   const sugg = win.document.getElementById('m-sugg').textContent;
   if(!/Lasagnes/.test(sugg)) throw new Error('un plat déjà mangé devrait être proposé en un tap');
   win.pickMealDish(0);
-  if(win.mealSlot(win.addDays(lun, 1), 'midi').dish !== 'Lasagnes') throw new Error('taper une suggestion pose le plat et ferme');
+  if(win.mealSlot(jeu, 'midi').dish !== 'Lasagnes') throw new Error('taper une suggestion pose le plat et ferme');
   if(win.mealDishes()[0].count !== 2) throw new Error('mealDishes() compte les occurrences');
-  // Restes : sur le prochain repas libre (mardi soir), annulables.
-  win.mealSheet(win.addDays(lun, 1), 'midi');
+  // Restes : sur le prochain repas libre (jeudi soir), annulables.
+  win.mealSheet(jeu, 'midi');
   win.mealLeftoverAction();
-  const x = win.mealSlot(win.addDays(lun, 1), 'soir');
+  const x = win.mealSlot(jeu, 'soir');
   if(x.dish !== 'Lasagnes' || !x.leftover) throw new Error('les restes tombent sur le prochain repas à prévoir libre');
   if(win.mealDishes()[0].count !== 2) throw new Error('des restes ne comptent pas comme un plat de plus');
   win._runToastAct();
-  if(win.mealSlot(win.addDays(lun, 1), 'soir').dish) throw new Error('annuler retire les restes posés');
+  if(win.mealSlot(jeu, 'soir').dish) throw new Error('annuler retire les restes posés');
   // Statut : « Cantine » vide le plat et sort le repas du compte.
   win.mealSheet(lun, 'soir');
   win.setMealStatus('cantine');
@@ -2182,6 +2190,298 @@ call('V3-4 — Aujourd’hui se rafraîchit quand l’app revient un autre jour'
   } finally { win.renderToday = orig; }
 });
 
+// 6 septendecies) Lot V3-5 — le quotidien sans accroc. Saisie rapide qui
+// comprend le français de tous les jours, reprogrammer en un geste, dates
+// dites comme on les dit, un chemin visible pour supprimer, habitudes
+// lisibles sans défiler, ligatures, rappel de sauvegarde, erreurs hors-ligne.
+const V35_MER = new Date(2026, 6, 29, 9, 0, 0); // mercredi 29 juillet 2026
+const v35Cases = [
+  // Heures du jour : jamais des durées, elles restent dans le titre.
+  ['« demain 18h » : une heure, pas 18 heures de travail', 'Appeler maman demain 18h', NLP_REF,
+    r => r.title === 'Appeler maman 18h' && r.start === '2026-07-28' && r.mins === null && r.effort === 2],
+  ['« à 15h » garde son « à »', 'Coiffeur le 30 à 15h', NLP_REF,
+    r => r.title === 'Coiffeur à 15h' && r.start === '2026-07-30' && r.mins === null],
+  ['une heure seule reste au titre', 'Réunion 14h', NLP_REF, r => r.title === 'Réunion 14h' && r.mins === null],
+  ['« 8h45 » reste au titre', 'Médecin demain 8h45', NLP_REF, r => r.title === 'Médecin 8h45' && r.start === '2026-07-28'],
+  ['une durée jusqu’à 4 h reste une durée', 'Film 1h30', NLP_REF,
+    r => r.mins === 90 && r.effort === 3 && r.title === 'Film' && r.matched[0].label === '1 h 30'],
+  ['« 2 heures » = 120 min', 'Réviser 2 heures', NLP_REF, r => r.mins === 120 && r.title === 'Réviser'],
+  ['« 20mn » = 20 min', 'Sieste 20mn', NLP_REF, r => r.mins === 20 && r.title === 'Sieste'],
+  // Moments de la journée.
+  ['« samedi soir » : samedi, ce soir-là', 'Dîner chez Paul samedi soir', NLP_REF,
+    r => r.title === 'Dîner chez Paul' && r.start === '2026-08-01' && r.evening],
+  ['« demain matin » : demain, rien qui traîne', 'Courir demain matin', NLP_REF,
+    r => r.title === 'Courir' && r.start === '2026-07-28' && !r.evening && r.matched[0].label === 'Demain matin'],
+  ['« cet après-midi » : aujourd’hui', 'Appeler cet après-midi', NLP_REF, r => r.title === 'Appeler' && r.start === '2026-07-27'],
+  // Un jour qui complète un nom n'est pas une date.
+  ['« la réunion de vendredi » garde son titre', 'Préparer la réunion de vendredi', NLP_REF,
+    r => r.title === 'Préparer la réunion de vendredi' && !r.start && !r.due],
+  ['« le lundi » seul se dit d’une habitude', 'Piscine le lundi', NLP_REF, r => r.title === 'Piscine le lundi' && !r.start],
+  ['« le lundi prochain » est une date', 'Réunion le lundi prochain', NLP_REF, r => r.title === 'Réunion' && r.start === '2026-08-03'],
+  ['« à partir de jeudi »', 'Régime à partir de jeudi', NLP_REF, r => r.title === 'Régime' && r.start === '2026-07-30'],
+  // « Prochain » : la semaine suivante seulement si ce jour est encore à venir cette semaine.
+  ['un mercredi, « mardi prochain » = dans 6 jours', 'Garage mardi prochain', V35_MER, r => r.start === '2026-08-04'],
+  ['un mercredi, « vendredi prochain » = celui de la semaine suivante', 'Pot vendredi prochain', V35_MER, r => r.start === '2026-08-07'],
+  ['un mercredi, « la semaine prochaine » = lundi', 'Bilan la semaine prochaine', V35_MER, r => r.start === '2026-08-03'],
+  // Échéances relatives.
+  ['« pour vendredi » : une échéance', 'Rendre le rapport pour vendredi', NLP_REF,
+    r => r.title === 'Rendre le rapport' && r.due === '2026-07-31' && r.start === null && r.matched[0].label === 'Échéance vendredi'],
+  ['« d’ici vendredi » : une échéance', 'Appeler la banque d’ici vendredi', NLP_REF, r => r.title === 'Appeler la banque' && r.due === '2026-07-31'],
+  ['« cette semaine » : échéance dimanche', 'Envoyer le colis cette semaine', NLP_REF, r => r.title === 'Envoyer le colis' && r.due === '2026-08-02'],
+  ['« avant la fin du mois »', 'Payer la cantine avant la fin du mois', NLP_REF, r => r.title === 'Payer la cantine' && r.due === '2026-07-31'],
+  ['« pour le lundi 3 août »', 'Dossier pour le lundi 3 août', NLP_REF, r => r.title === 'Dossier' && r.due === '2026-08-03'],
+  // Dates.
+  ['« ce week-end » : samedi', 'Bricoler ce week-end', NLP_REF, r => r.title === 'Bricoler' && r.start === '2026-08-01'],
+  ['nombres en lettres', 'Relancer dans deux jours', NLP_REF, r => r.start === '2026-07-29' && r.title === 'Relancer'],
+  ['« dans une semaine »', 'Relancer dans une semaine', NLP_REF, r => r.start === '2026-08-03'],
+  ['« dans quinze jours » = deux semaines', 'Relancer dans quinze jours', NLP_REF, r => r.start === '2026-08-10'],
+  ['jour de la semaine devant la date', 'Anniversaire lundi 12 octobre', NLP_REF, r => r.title === 'Anniversaire' && r.start === '2026-10-12'],
+  ['« le 1er août »', 'Fête le 1er août', NLP_REF, r => r.title === 'Fête' && r.start === '2026-08-01'],
+  ['année écrite', 'Notaire le 2 novembre 2027', NLP_REF, r => r.title === 'Notaire' && r.start === '2027-11-02'],
+  ['« à partir du 20 août »', 'Vacances à partir du 20 août', NLP_REF, r => r.title === 'Vacances' && r.start === '2026-08-20'],
+  // Récurrences.
+  ['« tous les mois »', 'Payer le loyer tous les mois', NLP_REF, r => r.title === 'Payer le loyer' && r.repeat && r.repeat.kind === 'month' && r.repeat.n === 1],
+  ['« chaque mois »', 'Faire le point chaque mois', NLP_REF, r => r.repeat && r.repeat.kind === 'month' && r.title === 'Faire le point'],
+  ['« chaque semaine »', 'Ménage chaque semaine', NLP_REF, r => r.repeat && r.repeat.kind === 'week' && r.repeat.n === 1 && !r.repeat.days.length],
+  ['« chaque lundi » ne laisse pas « chaque »', 'Piscine chaque lundi', NLP_REF,
+    r => r.title === 'Piscine' && r.repeat && JSON.stringify(r.repeat.days) === '[1]' && r.start === '2026-07-27'],
+  ['plusieurs jours fixes', 'Sport tous les mardis et jeudis', NLP_REF,
+    r => r.title === 'Sport' && r.repeat && JSON.stringify(r.repeat.days) === '[2,4]' && r.start === '2026-07-28'],
+  ['plusieurs jours fixes, avec virgule', 'Yoga chaque lundi, mercredi et vendredi', NLP_REF,
+    r => r.title === 'Yoga' && r.repeat && JSON.stringify(r.repeat.days) === '[1,3,5]'],
+  ['« toutes les 2 semaines »', 'Draps toutes les 2 semaines', NLP_REF, r => r.title === 'Draps' && r.repeat && r.repeat.kind === 'week' && r.repeat.n === 2],
+  ['« toutes les deux semaines »', 'Arroser toutes les deux semaines', NLP_REF, r => r.repeat && r.repeat.kind === 'week' && r.repeat.n === 2],
+  ['« tous les deux jours »', 'Poubelle tous les deux jours', NLP_REF, r => r.repeat && r.repeat.kind === 'day' && r.repeat.n === 2],
+  ['« tous les quinze jours après » = 14 jours après réalisation', 'Filtre tous les quinze jours après', NLP_REF,
+    r => r.repeat && r.repeat.kind === 'day' && r.repeat.n === 14 && r.repeat.from === 'done'],
+  ['« chaque trimestre »', 'Bilan chaque trimestre', NLP_REF, r => r.repeat && r.repeat.kind === 'month' && r.repeat.n === 3],
+  ['« le 5 de chaque mois », et il se dit tel quel', 'Payer le loyer le 5 de chaque mois', NLP_REF,
+    r => r.title === 'Payer le loyer' && r.repeat && r.repeat.dom === 5 && r.start === '2026-08-05' && win.repeatShort(r.repeat) === 'Tous les 5 du mois'],
+  ['« à partir du lundi »', 'Régime à partir du lundi', NLP_REF, r => r.title === 'Régime' && r.start === '2026-07-27'],
+];
+v35Cases.forEach(([label, texte, ref, check]) => {
+  call('V3-5 — parseQuick : ' + label, () => {
+    const r = win.parseQuick(texte, ref);
+    if(!check(r)) throw new Error('« ' + texte + ' » → ' + JSON.stringify({title: r.title, start: r.start, due: r.due, evening: r.evening,
+      mins: r.mins, effort: r.effort, repeat: r.repeat, chips: r.matched.map(m => m.label)}));
+  });
+});
+call('V3-5 — parseQuick : une puce retirée rend toujours tout son fragment', () => {
+  const sans = win.parseQuick('Dîner samedi soir', NLP_REF, ['date']);
+  if(sans.title !== 'Dîner samedi soir' || sans.start || sans.evening) throw new Error('ignore(date) rend « samedi soir » au titre, obtenu ' + JSON.stringify(sans));
+  const rep = win.parseQuick('Sport tous les mardis et jeudis', NLP_REF, ['repeat']);
+  if(rep.repeat || !/tous les mardis et jeudis/.test(rep.title)) throw new Error('ignore(repeat) rend toute la liste des jours au titre, obtenu « ' + rep.title + ' »');
+});
+
+call('V3-5 — la phrase de récurrence s’accorde, et se dit en quelques mots sur une ligne', () => {
+  const s = r => win.repeatSummary(r);
+  if(s({kind: 'day', n: 1, from: 'done'}) !== 'Tous les jours après la dernière fois.') throw new Error('« Tous les jours », obtenu ' + s({kind: 'day', n: 1, from: 'done'}));
+  if(s({kind: 'week', n: 1, days: [], from: 'due'}) !== 'Toutes les semaines, à date fixe.') throw new Error('« Toutes les semaines »');
+  if(s({kind: 'week', n: 2, days: [], from: 'due'}) !== 'Toutes les 2 semaines, à date fixe.') throw new Error('« Toutes les 2 semaines »');
+  if(s({kind: 'year', n: 1, from: 'due'}) !== 'Tous les ans, à date fixe.') throw new Error('« Tous les ans »');
+  if(win.repeatShort({kind: 'week', n: 1, days: [3], from: 'due'}) !== 'Chaque mercredi') throw new Error('repeatShort() : « Chaque mercredi »');
+  if(win.repeatShort({kind: 'month', n: 1, days: [], from: 'due'}) !== 'Tous les mois') throw new Error('repeatShort() : « Tous les mois »');
+  if(win.repeatShort(null) !== '') throw new Error('repeatShort(null) : rien');
+});
+
+call('V3-5 — les dates se disent comme on les dit (relDay(), « 1er »)', () => {
+  const t = '2026-07-29'; // mercredi
+  const cas = [['2026-07-29', 'aujourd’hui'], ['2026-07-30', 'demain'], ['2026-07-28', 'hier'], ['2026-07-31', 'vendredi'],
+    ['2026-07-27', 'lundi'], ['2026-08-05', 'le 5 août'], ['2026-08-01', 'samedi'], ['2026-09-01', 'le 1er sept.']];
+  cas.forEach(([k, attendu]) => { if(win.relDay(k, t) !== attendu) throw new Error(k + ' → « ' + attendu + ' », obtenu « ' + win.relDay(k, t) + ' »'); });
+  if(win.fmtDateShort('2026-10-01') !== '1er oct.') throw new Error('« 1er oct. », jamais « 1 oct. »');
+  if(win.longDate(new Date(2026, 9, 1)) !== 'Jeudi 1er octobre') throw new Error('« Jeudi 1er octobre », obtenu ' + win.longDate(new Date(2026, 9, 1)));
+  if(win.longDate(new Date(2026, 9, 11)) !== 'Dimanche 11 octobre') throw new Error('le 11 reste le 11');
+});
+
+scenario('V3-5 — Tâches : méta relative, récurrence lisible, échéance passée comme sur Aujourd’hui', () => {
+  const today = win.todayKey();
+  const meta = t => win.taskMeta(t, today);
+  const passee = mk({title: 'Passée', bucket: 'scheduled', due: win.addDays(today, -2)});
+  const bientot = mk({title: 'Bientôt', bucket: 'scheduled', due: win.addDays(today, 1)});
+  const soir = mk({title: 'Soir', bucket: 'scheduled', start: win.addDays(today, 2), evening: true});
+  const loin = mk({title: 'Loin', bucket: 'scheduled', start: win.addDays(today, 20)});
+  const coince = mk({title: 'Coincée', bucket: 'scheduled', start: win.addDays(today, -1)});
+  const jour = mk({title: 'Du jour', bucket: 'scheduled', start: today, repeat: {kind: 'week', n: 1, days: [win.isoDow(today)], from: 'due'}});
+  if(!/Passée de 2 jours/.test(meta(passee)) || /En retard/.test(meta(passee))) throw new Error('une échéance dépassée : « Passée de 2 jours », obtenu ' + meta(passee));
+  if(!/^Échéance demain/.test(meta(bientot))) throw new Error('« Échéance demain », obtenu ' + meta(bientot));
+  if(meta(soir).indexOf(win.cap(win.relDay(win.addDays(today, 2), today)) + ' soir') !== 0) throw new Error('un début proche le soir : « <jour> soir », obtenu ' + meta(soir));
+  if(meta(loin).indexOf(win.fmtDateShort(win.addDays(today, 20))) !== 0) throw new Error('un début lointain : sa date courte, obtenu ' + meta(loin));
+  if(!/^Depuis hier/.test(meta(coince))) throw new Error('« Depuis hier », obtenu ' + meta(coince));
+  if(/Depuis|À partir/.test(meta(jour)) || !/Chaque /.test(meta(jour))) throw new Error('un début aujourd’hui ne se dit pas, la récurrence si ; obtenu ' + meta(jour));
+});
+
+scenario('V3-5 — fiche tâche : raccourcis de début, « Sans date », « Supprimer » visible', () => {
+  const t = mk({title: 'À reprogrammer', bucket: 'anytime'});
+  win.taskSheet(t.id);
+  const sheet = win.document.getElementById('sheet');
+  const chips = [...sheet.querySelectorAll('.ts-quick .chip')].map(c => c.textContent);
+  if(chips[0] !== 'Aujourd’hui' || chips[1] !== 'Demain' || chips.length < 3) throw new Error('raccourcis attendus, obtenu ' + chips.join(', '));
+  if(/Bucket/.test(sheet.textContent)) throw new Error('« Bucket » n’est pas un mot de l’interface');
+  win.toggleTsMore();
+  if(!/Sans date/.test(sheet.textContent)) throw new Error('sans date : « Sans date », puis Un jour / Peut-être');
+  win.setTsStart(win.addDays(win.todayKey(), 1));
+  if(win.eval('_tSheet').start !== win.addDays(win.todayKey(), 1)) throw new Error('« Demain » pose le début');
+  if(!sheet.querySelector('.ts-quick .chip.on[aria-pressed="true"]')) throw new Error('le raccourci choisi s’allume');
+  win.setTsStart(win.addDays(win.todayKey(), 1));
+  if(win.eval('_tSheet').start !== null) throw new Error('retoucher le raccourci allumé retire le début');
+  win.setTsStart(win.addDays(win.todayKey(), 1));
+  win.saveTaskSheet();
+  if(t.start !== win.addDays(win.todayKey(), 1) || t.bucket !== 'scheduled') throw new Error('enregistrée pour demain, planifiée');
+  // Supprimer : présent sur une tâche existante, absent d'une nouvelle.
+  win.taskSheet(null);
+  if(/Supprimer/.test(sheet.textContent)) throw new Error('une tâche neuve n’a rien à supprimer');
+  win.taskSheet(t.id);
+  const del = [...sheet.querySelectorAll('.btn.danger')].find(b => b.textContent === 'Supprimer');
+  if(!del) throw new Error('la fiche d’une tâche porte « Supprimer » — le balayage n’était pas un chemin visible');
+  del.click(); win._runConfirm();
+  if(!t.deletedAt) throw new Error('supprimée (tombstone) depuis la fiche');
+  win._runToastAct();
+  if(t.deletedAt) throw new Error('… et annulable');
+  // Un entretien aussi.
+  const e = mk({title: 'Détartrer', room: 'sdb', repeat: repD(30), mins: 15, doneAt: dAgo(3)});
+  win.taskSheet(e.id);
+  if(![...sheet.querySelectorAll('.btn.danger')].some(b => b.textContent === 'Supprimer')) throw new Error('la fiche d’un entretien porte « Supprimer »');
+  win.closeSheet();
+});
+
+call('V3-5 — raccourcis de début : le vrai jour, jamais deux fois le même', () => {
+  const q = k => win.tsQuickDates(k).map(x => x.label + ':' + x.k).join(' ');
+  if(q('2026-07-27') !== 'Aujourd’hui:2026-07-27 Demain:2026-07-28 Samedi:2026-08-01 Lundi:2026-08-03') throw new Error('un lundi, obtenu ' + q('2026-07-27'));
+  if(q('2026-07-31') !== 'Aujourd’hui:2026-07-31 Demain:2026-08-01 Lundi:2026-08-03') throw new Error('un vendredi, samedi = demain, obtenu ' + q('2026-07-31'));
+  if(q('2026-08-01') !== 'Aujourd’hui:2026-08-01 Demain:2026-08-02 Lundi:2026-08-03') throw new Error('un samedi, obtenu ' + q('2026-08-01'));
+  if(q('2026-08-02') !== 'Aujourd’hui:2026-08-02 Demain:2026-08-03 Samedi:2026-08-08') throw new Error('un dimanche, lundi = demain, obtenu ' + q('2026-08-02'));
+});
+
+scenario('V3-5 — Aujourd’hui : balayer vers la droite passe une tâche à demain, annulable', () => {
+  const today = win.todayKey();
+  const jour = mk({title: 'Du jour', bucket: 'scheduled', start: today});
+  const soir = mk({title: 'Ce soir-là', bucket: 'scheduled', start: today, evening: true});
+  const retard = mk({title: 'En retard', bucket: 'scheduled', due: win.addDays(today, -1)});
+  const court = mk({title: 'Court', bucket: 'anytime', effort: 1});
+  mk({title: 'Entretien', room: 'wc', repeat: repD(4), mins: 5, doneAt: dAgo(5)});
+  win.go('today');
+  const el = win.document.getElementById('s-today');
+  const swipeOf = t => [...el.querySelectorAll('.row')].find(r => r.textContent.indexOf(t.title) !== -1).getAttribute('data-swipe-right');
+  if(swipeOf(jour) !== "postponeTask('" + jour.id + "')") throw new Error('le bloc du jour se balaie vers demain');
+  if(swipeOf(soir) !== "postponeTask('" + soir.id + "')") throw new Error('« Ce soir » aussi');
+  if(swipeOf(retard) || swipeOf(court)) throw new Error('ni une échéance dépassée, ni « si tu as 10 minutes »');
+  if([...el.querySelectorAll('.card.t-maison .row')].some(r => r.hasAttribute('data-swipe-right'))) throw new Error('jamais un entretien : le budget décide de sa date');
+  win.postponeTask(jour.id);
+  if(jour.start !== win.addDays(today, 1) || jour.postponed !== 1) throw new Error('passée à demain, report compté');
+  if(el.textContent.indexOf('Du jour') !== -1) throw new Error('Aujourd’hui se redessine : la ligne quitte l’écran');
+  win._runToastAct();
+  if(jour.start !== today || jour.postponed !== 0) throw new Error('annuler la rend à aujourd’hui');
+  if(el.textContent.indexOf('Du jour') === -1) throw new Error('… et à l’écran');
+});
+
+call('V3-5 — une app vide ne dit pas « C’est bon » : elle propose le pack maison', () => {
+  const bk = {tasks: S.tasks.slice(), habits: S.habits.slice(), meals: S.meals.slice(), shopping: S.shopping.slice(), set: S.settings.mealWeekSet};
+  try{
+    S.tasks.length = 0; S.habits.length = 0; S.meals.length = 0; S.shopping.length = 0; S.settings.mealWeekSet = false;
+    if(!win.appIsBlank()) throw new Error('rien de suivi : l’app est vide');
+    win.go('today');
+    const el = win.document.getElementById('s-today');
+    if(/C’est bon/.test(el.textContent) || !/Rien n’est encore suivi/.test(el.textContent)) throw new Error('une app vide ne prétend pas que tout est fait');
+    if(![...el.querySelectorAll('.btn.primary')].some(b => /pack maison/.test(b.textContent))) throw new Error('elle propose le pack maison');
+    mk({title: 'Une seule', bucket: 'someday'});
+    win.go('today');
+    if(!/C’est bon/.test(el.textContent)) throw new Error('dès qu’une chose est suivie, l’état vide redevient « C’est bon »');
+  } finally {
+    S.tasks.length = 0; bk.tasks.forEach(x => S.tasks.push(x));
+    bk.habits.forEach(x => S.habits.push(x)); bk.meals.forEach(x => S.meals.push(x)); bk.shopping.forEach(x => S.shopping.push(x));
+    S.settings.mealWeekSet = bk.set;
+  }
+});
+
+habitScenario('V3-5 — Habitudes : la semaine d’emblée, le mois à la demande', () => {
+  const h = win.stamp({name: 'Marche', unit: 'min', target: 30, sched: {kind: 'days', days: [1,2,3,4,5,6,7]}, sort: 0});
+  S.habits.push(h);
+  win.go('habits');
+  const card = () => [...win.document.querySelectorAll('#s-habits .card')].find(c => /Marche/.test(c.textContent));
+  if(card().querySelectorAll('.hab-day').length !== 7 || !/Cette semaine/.test(card().textContent)) throw new Error('la carte montre la semaine en cours, 7 cases');
+  if(card().querySelectorAll('.hab-day.today').length !== 1) throw new Error('aujourd’hui est repéré, une fois');
+  win.toggleHabMonth(h.id);
+  if(card().querySelectorAll('.hab-day').length !== 42) throw new Error('« Voir le mois » déplie les 42 cases');
+  win.toggleHabMonth(h.id);
+  if(card().querySelectorAll('.hab-day').length !== 7) throw new Error('« Réduire » revient à la semaine');
+});
+
+call('V3-5 — ligatures : « Œufs » va au rayon Frais, la migration répare fréquents et articles', () => {
+  if(win.normalizeLabel('Œufs') !== 'oeufs' || win.normalizeLabel('Bœuf') !== 'boeuf') throw new Error('œ s’écrit en deux lettres');
+  if(win.guessRayon('Œufs') !== 'frais') throw new Error('« Œufs » → Frais, obtenu ' + win.guessRayon('Œufs'));
+  if(win.guessRayon('Bœuf haché') !== 'viande-poisson') throw new Error('« Bœuf haché » → Viande et poisson');
+  const r = win.migrate({v: 1, tasks: [], habits: [], habitLog: {}, settings: {},
+    frequents: [{norm: 'ufs', label: 'Œufs', rayon: 'autre', count: 4}, {norm: 'oeufs', label: 'Oeufs', rayon: 'frais', count: 2}],
+    shopping: [{id: 's1', label: 'Œufs', rayon: 'autre', qty: '', done: false, sort: 0}]});
+  if(r.frequents.length !== 1 || r.frequents[0].norm !== 'oeufs' || r.frequents[0].count !== 6) throw new Error('un fréquent « ufs » rejoint « oeufs », comptes additionnés ; obtenu ' + JSON.stringify(r.frequents));
+  if(r.shopping[0].rayon !== 'frais') throw new Error('un article resté en « Autre » retrouve son rayon');
+  const again = win.migrate(JSON.parse(JSON.stringify(r)));
+  if(again.frequents.length !== 1 || again.frequents[0].count !== 6) throw new Error('migrate() reste idempotente');
+});
+
+call('V3-5 — rappel de sauvegarde : après 30 jours, une fois par semaine, jamais sur une app vide', () => {
+  const bk = {lastExport: S.lastExport, nudge: S.backupNudgeAt, on: S.onboarded};
+  const calls = [];
+  const origToast = win.toast;
+  win.toast = (m, o) => calls.push({m, o});
+  try{
+    const now = Date.now(), jour = 86400000;
+    S.onboarded = true; S.backupNudgeAt = null;
+    S.lastExport = now - 5 * jour;
+    if(win.maybeBackupNudge(now)) throw new Error('une sauvegarde de 5 jours ne se rappelle pas');
+    S.lastExport = now - 34 * jour;
+    if(!win.maybeBackupNudge(now) || !/il y a 34 jours/.test(calls[0].m)) throw new Error('34 jours : le rappel le dit, obtenu ' + JSON.stringify(calls));
+    if(!calls[0].o || !calls[0].o.action || calls[0].o.action.label !== 'Exporter') throw new Error('… avec « Exporter » sous le doigt');
+    if(win.maybeBackupNudge(now + 2 * jour)) throw new Error('pas deux fois dans la semaine');
+    if(!win.maybeBackupNudge(now + 8 * jour)) throw new Error('la semaine suivante, de nouveau');
+    S.onboarded = false; S.backupNudgeAt = null;
+    if(win.backupNudgeDue(now)) throw new Error('jamais avant la fin de la bienvenue');
+  } finally {
+    win.toast = origToast;
+    S.lastExport = bk.lastExport; S.backupNudgeAt = bk.nudge; S.onboarded = bk.on;
+  }
+});
+
+call('V3-5 — un toast suit la typographie française (espace insécable avant « : »)', () => {
+  win.toast('Lessive : fait.');
+  const txt = win.document.getElementById('toast').textContent;
+  if(txt.indexOf('Lessive : fait.') !== 0) throw new Error('espace insécable avant les deux-points, obtenu ' + JSON.stringify(txt));
+  win.hideToast();
+});
+
+call('V3-5 — bienvenue : « Entrée » fait avancer, le champ suivant a déjà le clavier', () => {
+  win.startWelcome();
+  try{
+    win.advanceWelcome(); // → prénom
+    const name = win.document.getElementById('w-name');
+    if(win.document.activeElement !== name) throw new Error('le champ prénom reçoit le focus');
+    name.value = 'Florian';
+    name.dispatchEvent(new win.KeyboardEvent('keydown', {key: 'Enter', bubbles: true}));
+    const task = win.document.getElementById('w-task');
+    if(!task) throw new Error('« Entrée » passe à l’étape suivante');
+    if(S.settings.userName !== 'Florian') throw new Error('… en retenant le prénom tapé');
+    if(win.document.activeElement !== task) throw new Error('le champ de la première tâche reçoit le focus');
+    task.value = 'sortir les poubelles tous les mercredis';
+    task.dispatchEvent(new win.KeyboardEvent('keydown', {key: 'Enter', bubbles: true}));
+    const t = S.tasks.find(x => x.title === 'Sortir les poubelles' && !x.deletedAt);
+    if(!t || !t.repeat || JSON.stringify(t.repeat.days) !== '[3]') throw new Error('la première tâche est comprise comme dans la barre de saisie');
+    if(win.document.getElementById('sheet-bg').classList.contains('show')) throw new Error('« Entrée » termine la bienvenue');
+    t.deletedAt = Date.now(); win.touch(t);
+  } finally {
+    S.settings.userName = null;
+    win.closeSheet(); // _onSheetClose : onboarded reste vrai
+  }
+});
+
+// Asynchrone : une promesse du navigateur qui échoue (hors-ligne) ne remonte
+// jamais en « rejet non géré » — Node ferait échouer tout le test, comme
+// l'app affichait son toast d'erreur à chaque retour sans réseau.
+try{
+  win.quietly(win.Promise.reject(new win.Error('hors-ligne')));
+  await new Promise(r => setTimeout(r, 20));
+}catch(e){ onError('V3-5 — quietly() rattrape les rejets sans gravité', e); }
+
 // Asynchrone (IndexedDB) : hors du helper call(). Un état stocké illisible
 // n'est plus jamais remplacé en silence : il est recopié à part d'abord.
 try{
@@ -2253,7 +2553,12 @@ if(fails.length){
               '  cliché d’annulation unique, migrate() réparatrice et assainie, parseur :\n' +
               '  mots-clés en fin de phrase, dates impossibles, première occurrence,\n' +
               '  synonymes de pièce ; revue, habitudes, clic fantôme, bascule de jour,\n' +
-              '  copie de secours d’un état illisible), habitudes (série/quota, jour\n' +
+              '  copie de secours d’un état illisible), quotidien V3-5 (parseur : ' + v35Cases.length + ' tournures\n' +
+              '  de plus — heures du jour, « samedi soir », « pour vendredi », « chaque\n' +
+              '  lundi », nombres en lettres ; dates dites comme on les dit, fiche avec\n' +
+              '  raccourcis de début et « Supprimer », balayage « Demain » sur\n' +
+              '  Aujourd’hui, app vide, semaine d’habitude, repas sans répétition,\n' +
+              '  ligatures, rappel de sauvegarde, rejets hors-ligne), habitudes (série/quota, jour\n' +
               '  sauté neutre, progression partielle, mode quota hebdomadaire, pas adapté\n' +
               '  à l’objectif et « Fait » en un geste, intégration Aujourd’hui, fiche),\n' +
               '  courses (guessRayon, fréquents, correction mémorisée,\n' +

@@ -59,7 +59,21 @@ const TASK_DONE_DAYS = 7;
 
 function fmtDateShort(k){
   const d = new Date(k+'T00:00');
-  return d.getDate()+' '+MOIS_ABBR[d.getMonth()];
+  return (d.getDate() === 1 ? '1er' : d.getDate())+' '+MOIS_ABBR[d.getMonth()]; // « 1er oct. », jamais « 1 oct. »
+}
+
+// Un jour dit comme on le dit (Lot V3-5) : « aujourd'hui », « demain »,
+// « hier », le nom du jour dans la semaine qui vient ou qui vient de passer
+// (« vendredi », « depuis lundi »), sinon « le 15 oct. ». En minuscules :
+// c'est toujours un morceau de phrase (« Échéance vendredi »).
+function relDay(k, today){
+  today = today || todayKey();
+  const n = daysBetween(today, k);
+  if(n === 0) return 'aujourd’hui';
+  if(n === 1) return 'demain';
+  if(n === -1) return 'hier';
+  if(n > -7 && n < 7) return DOW_NAMES[isoDow(k)];
+  return 'le '+fmtDateShort(k);
 }
 
 // Phrase en clair sous les champs de récurrence (ex. « Tous les 7 jours
@@ -67,7 +81,6 @@ function fmtDateShort(k){
 function repeatSummary(r){
   if(!r) return '';
   const n = r.n || 1;
-  const unitSing = {day:'jour', week:'semaine', month:'mois', year:'an'}[r.kind] || 'jour';
   const unitPlur = {day:'jours', week:'semaines', month:'mois', year:'ans'}[r.kind] || 'jours';
   // Jours fixes (Lot V3-1) : « Chaque samedi. » — qu'il s'ancre sur
   // l'échéance ou sur la dernière réalisation, un jour fixe revient toujours
@@ -78,8 +91,19 @@ function repeatSummary(r){
     const liste = noms.length > 1 ? noms.slice(0, -1).join(', ')+' et '+noms[noms.length-1] : noms[0];
     return 'Chaque '+liste+'.';
   }
-  const base = n === 1 ? 'Tous les '+unitSing : 'Tous les '+n+' '+unitPlur;
+  // « Tous les jours », « Toutes les 2 semaines », « Tous les ans » : le
+  // pluriel et l'accord de la semaine (Lot V3-5 — la phrase disait « Tous
+  // les jour », « Tous les semaine », « Tous les an »).
+  const tous = r.kind === 'week' ? 'Toutes les ' : 'Tous les ';
+  // Un jour du mois retenu (« tous les 5 du mois », Lot V3-4) se dit tel quel.
+  const base = (r.kind === 'month' && r.dom && n === 1) ? 'Tous les '+(r.dom === 1 ? '1er' : r.dom)+' du mois'
+    : tous + (n === 1 ? '' : n+' ') + unitPlur;
   return base + (r.from === 'done' ? ' après la dernière fois.' : ', à date fixe.');
+}
+// La même, en quelques mots, pour la ligne d'une tâche (Lot V3-5) : « Chaque
+// mercredi », « Tous les mois » — on sait d'un coup d'œil qu'elle reviendra.
+function repeatShort(r){
+  return r ? repeatSummary(r).replace(/(?:, à date fixe| après la dernière fois)?\.$/, '') : '';
 }
 
 /* ---------- Tri : échéance dépassée d'abord (la plus ancienne), puis priorité, puis ancienneté ---------- */
@@ -113,14 +137,27 @@ function getTaskItems(){
   return items.sort(taskCompare);
 }
 
+// Méta d'une ligne de Tâches. Depuis le Lot V3-5, les dates se disent comme
+// on les dit (relDay()) — « Échéance vendredi », « Demain soir », « Depuis
+// lundi » plutôt que « À partir du 2 oct. » — et une échéance dépassée
+// porte le libellé de la maquette et d'Aujourd'hui (« Passée de 2 jours »,
+// overdueLabel(), js/today.js). Un début qui tombe aujourd'hui ne se dit
+// pas : la ligne est déjà dans « Aujourd'hui et avant ». La récurrence se
+// lit enfin sur la ligne (« Chaque mercredi ») : on sait qu'elle reviendra.
 function taskMeta(t, today){
   const bits = [];
   if(t.due){
-    const overdue = t.due < today;
-    bits.push('<span class="'+(overdue?'due':'')+'">'+(overdue?'En retard depuis le ':'Échéance le ')+fmtDateShort(t.due)+'</span>');
+    bits.push(t.due < today ? '<span class="due">'+esc(overdueLabel(t, today))+'</span>' : 'Échéance '+relDay(t.due, today));
   }
-  if(t.start) bits.push((t.start<=today?'Depuis le ':'À partir du ')+fmtDateShort(t.start));
-  if(t.evening) bits.push('Ce soir');
+  if(t.start && t.start > today){
+    const near = daysBetween(today, t.start) < 7;
+    const d = near ? cap(relDay(t.start, today)) : fmtDateShort(t.start);
+    bits.push(t.evening ? (near ? d+' soir' : d+' · Le soir') : d);
+  } else {
+    if(t.start && t.start < today) bits.push('Depuis '+relDay(t.start, today));
+    if(t.evening) bits.push('Ce soir');
+  }
+  if(t.repeat) bits.push(repeatShort(t.repeat));
   if(CAT_LABELS[t.cat]) bits.push(CAT_LABELS[t.cat]);
   if(t.room && ROOM_LABELS[t.room]) bits.push(ROOM_LABELS[t.room]);
   if((t.postponed||0) >= 3) bits.push('Reportée '+t.postponed+' fois');
@@ -137,13 +174,16 @@ function taskRowHtml(t, opts){
   opts = opts || {};
   const done = !!opts.done;
   const today = todayKey();
-  const meta = done ? fmtDateShort(dayKey(new Date(t.doneAt))) : taskMeta(t, today);
+  // Groupe « Fait » : le jour de la réalisation, sauf aujourd'hui — le
+  // sous-titre « Fait aujourd'hui » le dit déjà.
+  const doneDay = done ? dayKey(new Date(t.doneAt)) : null;
+  const meta = done ? (doneDay === today ? '' : cap(relDay(doneDay, today))) : taskMeta(t, today);
   const noteIcon = t.notes ? '<span class="row-note-ic" aria-hidden="true">'+icon(IC_NOTE, 14)+'</span>' : '';
   const checkBtn = done
     ? '<button class="check on" role="checkbox" aria-checked="true" aria-label="Marquer non fait" onclick="unDoneTask(\''+t.id+'\')"></button>'
     : '<button class="check" role="checkbox" aria-checked="false" aria-label="Marquer fait" onclick="doneTask(\''+t.id+'\', this)"></button>';
   const swipe = ' data-swipe-left="delTask(\''+t.id+'\')"'+
-    (!done && opts.postpone ? ' data-swipe-right="postponeTask(\''+t.id+'\')" data-swipe-right-label="Reporter"' : '');
+    (!done && opts.postpone ? ' data-swipe-right="postponeTask(\''+t.id+'\')" data-swipe-right-label="Demain"' : ''); // même mot que sur Aujourd'hui (Lot V3-5) : il dit où va la tâche
   return '<li class="row'+(opts.soft ? ' row-low' : '')+(done ? ' done' : '')+'"'+swipe+'>'+
     checkBtn+
     '<div class="row-main"'+rowAttrs("taskSheet('"+t.id+"')")+'>'+
@@ -325,24 +365,28 @@ function delTask(id){
 // Reporter : pousse le début à demain, jamais l'échéance (la vraie deadline ne bouge pas
 // sans décision explicite dans la fiche). Annulable depuis le Lot V2-4 (point 1) :
 // le balayage droit double désormais ce geste, il doit se rattraper comme les autres.
+// Depuis le Lot V3-5, le même balayage vit aussi sur Aujourd'hui : le rendu
+// suit l'écran d'où l'on vient (Tâches ne redessine que ses groupes, pour ne
+// pas toucher au champ de recherche).
 function postponeTask(id){
   const t = S.tasks.find(x=>x.id === id);
   if(!t) return;
   const snap = {start:t.start, bucket:t.bucket, postponed:t.postponed||0};
+  const refresh = ()=>{ if(CURRENT_SCREEN === 'tasks') refreshTaskGroups(); else rerender(); };
   t.start = addDays(todayKey(), 1);
   t.bucket = 'scheduled';
   t.postponed = (t.postponed||0) + 1;
   t.touchedAt = Date.now();
   touch(t);
   save();
-  refreshTaskGroups();
-  undoable('Reportée à demain.', ()=>{
+  refresh();
+  undoable(t.title+' : demain.', ()=>{
     const x = S.tasks.find(y=>y.id === id);
     if(!x) return;
     x.start = snap.start; x.bucket = snap.bucket; x.postponed = snap.postponed;
     touch(x);
     save();
-    refreshTaskGroups();
+    refresh();
   });
 }
 
@@ -401,6 +445,27 @@ function setTsBucket(b){ _tSheet.bucket = b; refreshTaskSheet(); }
 function setTsDate(field, val){ _tSheet[field] = val || null; refreshTaskSheet(); }
 function toggleTsEvening(){ _tSheet.evening = !_tSheet.evening; refreshTaskSheet(); }
 
+/* Raccourcis de début (Lot V3-5). Reprogrammer une tâche passait par le
+   sélecteur de date d'iOS — trois gestes au moins, et le plus fréquent de
+   tous depuis Aujourd'hui. Un tap désormais pour les quatre cas qui
+   reviennent (aujourd'hui, demain, samedi, lundi) ; le champ date reste là
+   pour tout le reste. Chaque raccourci dit le vrai jour qu'il pose, et
+   aucun jour n'est proposé deux fois (un vendredi, « Samedi » est déjà
+   « Demain »). Toucher le raccourci déjà allumé retire le début. */
+function tsQuickDates(today){
+  today = today || todayKey();
+  const dow = isoDow(today);
+  const list = [
+    {label:'Aujourd’hui', k:today},
+    {label:'Demain', k:addDays(today, 1)},
+    {label:'Samedi', k:addDays(today, dow <= 6 ? 6 - dow : 6)},
+    {label:'Lundi', k:addDays(today, 8 - dow)}
+  ];
+  const seen = new Set();
+  return list.filter(x=>{ if(seen.has(x.k)) return false; seen.add(x.k); return true; });
+}
+function setTsStart(k){ _tSheet.start = _tSheet.start === k ? null : k; refreshTaskSheet(); }
+
 // Récurrence (Lot V1-4) : à date fixe (from:'due') ou après réalisation (from:'done').
 function toggleTsRepeat(){
   _tSheet.repeat = _tSheet.repeat ? null : {kind:'day', n:7, days:[], from:'done'};
@@ -448,22 +513,34 @@ function taskSheetHtml(){
   const repeatDayChips = DOW_ORDER.map(dw=>
     '<button class="chip'+(rep && (rep.days||[]).indexOf(dw)!==-1 ? ' on' : '')+'" aria-pressed="'+!!(rep && (rep.days||[]).indexOf(dw)!==-1)+'" onclick="toggleTsRepeatDay('+dw+')">'+DOW_LABELS[dw]+'</button>'
   ).join('');
+  const repUnit = rep ? ({day:['jour','jours'], week:['semaine','semaines'], month:['mois','mois'], year:['an','ans']}[rep.kind] || ['','']) : null;
   const repeatBlock = !rep ? '' :
     '<div class="field-group"><span class="overline">Fréquence</span><div class="chips">'+repeatKindChips+'</div></div>'+
-    '<div class="field-group"><span class="overline">Tous les</span><div class="repeat-n">'+
+    '<div class="field-group"><span class="overline">'+(rep.kind === 'week' ? 'Toutes les' : 'Tous les')+'</span><div class="repeat-n">'+
       '<input class="field" type="number" min="1" inputmode="numeric" value="'+(rep.n||1)+'" onchange="setTsRepeatN(this.value)">'+
-      '<span>'+esc({day:'jour(s)', week:'semaine(s)', month:'mois', year:'an(s)'}[rep.kind]||'')+'</span>'+
+      '<span>'+esc(repUnit[(rep.n||1) > 1 ? 1 : 0])+'</span>'+
     '</div></div>'+
     (rep.kind === 'week' ? '<div class="field-group"><span class="overline">Jours fixes (facultatif)</span><div class="chips">'+repeatDayChips+'</div></div>' : '')+
     '<div class="field-group"><span class="overline">Depuis</span><div class="chips">'+repeatFromChips+'</div></div>'+
     '<p class="sheet-msg">'+esc(repeatSummary(rep))+'</p>';
   const hasDate = !!(d.start || d.due);
+  // Sans date, une tâche se range dans « Un jour » ou « Peut-être » (les
+  // groupes de Tâches). La section s'appelait « Bucket » à l'écran — le nom
+  // du champ dans le code, pas un mot de l'interface (Lot V3-5).
   const bucketBlock = hasDate
     ? '<p class="sheet-msg">Planifiée automatiquement, grâce à sa date.</p>'
-    : '<div class="chips">'+
+    : '<span class="overline">Sans date</span><div class="chips">'+
         '<button class="chip'+(d.bucket!=='someday' ? ' on' : '')+'" aria-pressed="'+!!(d.bucket!=='someday')+'" onclick="setTsBucket(\'anytime\')">Un jour</button>'+
         '<button class="chip'+(d.bucket==='someday' ? ' on' : '')+'" aria-pressed="'+!!(d.bucket==='someday')+'" onclick="setTsBucket(\'someday\')">Peut-être</button>'+
       '</div>';
+  const quickDates = '<div class="chips ts-quick">'+tsQuickDates().map(x=>
+      '<button class="chip'+(d.start === x.k ? ' on' : '')+'" aria-pressed="'+(d.start === x.k)+'" onclick="setTsStart(\''+x.k+'\')">'+esc(x.label)+'</button>'
+    ).join('')+'</div>';
+  // Supprimer depuis la fiche (Lot V3-5) : c'était jusqu'ici le seul
+  // balayage — aucun chemin visible, et aucun chemin du tout sous « Réduire
+  // les animations », qui coupe les balayages (js/gestures.js). Le balayage
+  // double la fiche, jamais l'inverse (ROADMAP-V2 §3.3).
+  const del = d.id ? '<button class="btn danger btn-full" onclick="delTask(\''+d.id+'\')">Supprimer</button>' : '';
   // Visible d'emblée : titre + les deux dates. Tout le reste vit derrière
   // « Plus d'options » (point 2, audit A5 — 1 285 px, 11 sections toujours
   // dépliées pour des tâches qui n'ont besoin que d'un titre et d'une date).
@@ -485,7 +562,7 @@ function taskSheetHtml(){
       switchHtml(!!rep, 'Récurrente', 'toggleTsRepeat()')+
     '</li></ul></div>'+
     repeatBlock+
-    '<div class="field-group"><span class="overline">Bucket</span>'+bucketBlock+'</div>';
+    '<div class="field-group">'+bucketBlock+'</div>';
   const titleField = '<div class="field-group">'+
       '<input id="ts-title" class="field field-full" type="text" placeholder="Titre" value="'+esc(d.title)+'" '+
         'autocomplete="off" autocapitalize="sentences" oninput="_tSheet.title=this.value">'+
@@ -515,17 +592,20 @@ function taskSheetHtml(){
       repeatBlock+
       notesField+
       '<button class="btn primary btn-full" onclick="saveTaskSheet()">Enregistrer</button>'+
+      del+
       '<button class="btn quiet btn-full" onclick="closeSheet()">Annuler</button>';
   }
   return '<p class="sheet-title">'+(d.id ? 'Modifier la tâche' : 'Nouvelle tâche')+'</p>'+
     titleField+
     '<div class="field-group"><span class="overline">Début</span>'+
-      '<input class="field field-full" type="date" value="'+(d.start||'')+'" onchange="setTsDate(\'start\', this.value)"></div>'+
+      '<input class="field field-full" type="date" value="'+(d.start||'')+'" onchange="setTsDate(\'start\', this.value)">'+
+      quickDates+'</div>'+
     '<div class="field-group"><span class="overline">Échéance</span>'+
       '<input class="field field-full" type="date" value="'+(d.due||'')+'" onchange="setTsDate(\'due\', this.value)"></div>'+
     '<button class="btn quiet btn-full more-toggle" onclick="toggleTsMore()">'+(d._more?'Moins d’options':'Plus d’options')+'</button>'+
     more+
     '<button class="btn primary btn-full" onclick="saveTaskSheet()">Enregistrer</button>'+
+    del+
     '<button class="btn quiet btn-full" onclick="closeSheet()">Annuler</button>';
 }
 

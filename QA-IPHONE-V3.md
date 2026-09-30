@@ -5,8 +5,9 @@
 > navigateur de bureau ne savent vérifier : retour haptique, feuille de partage iOS, icône
 > d'écran d'accueil, « Réduire les animations » du système, VoiceOver.
 >
-> Avant de commencer : Réglages de l'app → la version affichée doit être **Bêta 3.3**. Au premier
-> lancement de cette version, un toast « MyLife est à jour : Bêta 3.3. » l'annonce.
+> Avant de commencer : Réglages de l'app → la version affichée doit être **Bêta 3.5**. Au premier
+> lancement de cette version, un toast « MyLife est à jour : Bêta 3.5. » l'annonce.
+> Le §9 (ajouté au Lot V3-5) couvre ce que ce lot a changé.
 
 ## 0. ⚠️ Avant toute réinstallation : exporter
 
@@ -78,3 +79,55 @@ nouvelle icône (§1) est de la réinstaller : exporter d'abord (§6), importer 
 - [ ] Cocher une tâche : le toast « … : fait. » est lu sans avoir à aller le chercher.
 - [ ] Ouvrir une fiche : elle est annoncée comme un dialogue portant son titre.
 - [ ] Toucher n'importe où sur la hauteur d'une ligne (pas seulement sur le texte) ouvre sa fiche.
+
+## 9. Le quotidien sans accroc (Lot V3-5)
+
+Ce que le test de fumée ne peut pas vérifier : le vrai clavier iOS, le vrai balayage au doigt, le
+vrai mode avion.
+
+**Hors-ligne**
+- [ ] Mode avion activé, quitter l'app (retour à l'écran d'accueil), attendre quelques secondes, la
+      rouvrir : **aucun toast rouge** « Un souci inattendu est survenu ». Recommencer deux ou trois
+      fois. (Avant ce lot, il s'affichait à chaque retour sans réseau.) Désactiver le mode avion.
+
+**Saisie rapide** — taper dans la barre d'Aujourd'hui, regarder les puces avant de valider :
+- [ ] « Appeler maman demain 18h » : une seule puce « Demain » ; la tâche s'appelle
+      « Appeler maman 18h » (plus de puce « Long »).
+- [ ] « Dîner chez Paul samedi soir » : puce « Samedi soir », la tâche arrive dans « Ce soir » samedi.
+- [ ] « Rendre le rapport pour vendredi » : puce « Échéance vendredi ».
+- [ ] « Piscine chaque lundi » : puce « Chaque lundi », le titre est « Piscine » (sans « chaque »).
+- [ ] « Changer les draps toutes les deux semaines » : puce « Toutes les 2 semaines… ».
+- [ ] « Préparer la réunion de vendredi » : **aucune** puce, le titre reste entier.
+- [ ] Dictée vocale (micro du clavier) : « acheter du pain demain matin » → puce « Demain matin ».
+
+**Reprogrammer**
+- [ ] Aujourd'hui : balayer une tâche du bloc du jour **vers la droite** → fond vert « Demain », la
+      ligne s'en va, toast « … : demain. » avec « Annuler », qui la ramène.
+- [ ] Balayer une ligne d'« Entretien du jour » ou une échéance dépassée : **rien ne bouge** (voulu).
+- [ ] Ouvrir une tâche : sous « Début », quatre puces sur **une seule ligne** (Aujourd'hui, Demain,
+      Samedi, Lundi — un vendredi, « Samedi » n'apparaît pas, c'est déjà « Demain »). Toucher
+      « Demain » l'allume ; le retoucher l'éteint et efface le début.
+
+**Supprimer sans balayer**
+- [ ] Réglages iOS → Accessibilité → Mouvement → **Réduire les animations** activé : ouvrir une tâche,
+      puis un entretien (Maison) — chacun a un bouton **« Supprimer »**, qui demande confirmation puis
+      propose « Annuler ». Désactiver ensuite.
+
+**Lecture**
+- [ ] Tâches : « Échéance vendredi », « Demain soir », « Depuis lundi », « Chaque mercredi » sur les
+      lignes ; une échéance passée dit « Passée de N jours » en rouge ; le 1er du mois s'écrit « 1er ».
+- [ ] Un toast long passé sur deux lignes ne commence jamais la seconde par « : ».
+- [ ] Habitudes : chaque carte montre « Cette semaine » (sept cases, aujourd'hui souligné) ;
+      « Voir le mois » déplie le mois, « Réduire » le replie.
+- [ ] Fiche d'un repas : le plat prévu ce soir n'est pas proposé pour ce midi ; en tapant ses
+      premières lettres, il revient.
+
+**Courses**
+- [ ] Taper « Oeufs » (le clavier iOS le transforme souvent en « Œufs ») : l'article va au rayon
+      **Frais**, pas « Autre ». Un « Œufs » déjà présent dans la liste avant la mise à jour a été
+      rangé à la bonne place au démarrage.
+
+**Sauvegarde**
+- [ ] Si le dernier export a plus de 30 jours : au démarrage, un toast « Dernière sauvegarde il y a
+      N jours. » avec **« Exporter »**, qui ouvre la feuille de partage. Il ne revient pas avant une
+      semaine, et jamais en même temps que « MyLife est à jour ».

@@ -84,11 +84,11 @@ Version affichée **Bêta 3.N**, `CACHE = 'mylife-b3-N'`, `APP_VERSION = 'Bêta 
 | **V3-1** | Bêta 3.1 | **Maison prête à l'emploi** | Pack maison + étalement, budget d'entretien quotidien, entretien à jour fixe, durée en minutes, fiche d'entretien dédiée, retrait des plantes (+ migration), pièces du logement |
 | **V3-2** | Bêta 3.2 | **Repas** | Onglet Repas (Menus \| Courses), `js/meals.js`, semaine type, exceptions, compte des repas, plats appris, restes, reprendre la semaine dernière, me proposer, ligne du soir sur Aujourd'hui |
 | **V3-3** | Bêta 3.3 | **Mouvement, finition, QA** | L'ancien V2-8 (transitions, animation de complétion, oiseaux en mode sombre, haptique des interrupteurs, audit d'accessibilité), étendu aux écrans V3, `QA-IPHONE-V3.md`, synchronisation de `CLAUDE.md`/`CONVENTIONS.md` — **plus**, carte blanche de Florian, les correctifs d'un audit mesuré (Maison replié, cibles pleine ligne, entretien hors de Tâches…), les icônes Canopée, l'export par la feuille de partage iOS et l'annonce des mises à jour |
-
 | **V3-4** | Bêta 3.4 | **Qualité du code** | Carte blanche de Florian (30/09/2026) : revue intégrale du code. Récurrence (tâches « après réalisation » sans pièce qui disparaissaient, début qui ne suivait pas l'échéance, mois qui débordaient), parseur (mots-clés au milieu d'une phrase, dates impossibles, première occurrence), migration réparatrice et assainie, copie de secours d'un état illisible, service worker (cache HTTP contourné), revue, bascule de jour, `habits.js` scindé, `removeWithUndo()`, serveur de dev sans cache |
+| **V3-5** | Bêta 3.5 | **Le quotidien sans accroc** | Carte blanche de Florian (30/09/2026, « rendre l'app la meilleure possible vis-à-vis de mes besoins »), après un audit en usage réel : saisie rapide qui comprend le français courant (heures du jour jamais prises pour des durées, « samedi soir », « pour vendredi », « chaque lundi », « toutes les 2 semaines », nombres en lettres, « mardi prochain » corrigé), reprogrammer en un geste (raccourcis de début dans la fiche, balayage « Demain » sur Aujourd'hui), « Supprimer » dans les fiches (le balayage était le seul chemin, coupé par « Réduire les animations »), dates relatives et récurrence lisibles sur les lignes, habitudes à la semaine avec le mois à la demande, suggestions de repas sans répétition, app vide qui propose le pack, « Œufs » au bon rayon, rappel de sauvegarde, plus de toast d'erreur en rouvrant l'app hors-ligne |
 
-**État au 30/09/2026 : les quatre lots sont faits.** V3-1 et V3-2 en Bêta 3.2, V3-3 en Bêta 3.3,
-V3-4 en Bêta 3.4.
+**État au 30/09/2026 : les cinq lots sont faits.** V3-1 et V3-2 en Bêta 3.2, V3-3 en Bêta 3.3,
+V3-4 en Bêta 3.4, V3-5 en Bêta 3.5.
 
 Le V2-8 n'a pas été fait avant la V3 : il finit des écrans que la V3 change (tab bar, Maison,
 Aujourd'hui). Le faire avant aurait été le refaire après.

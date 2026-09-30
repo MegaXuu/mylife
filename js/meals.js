@@ -25,6 +25,7 @@ const MEAL_STATUS_LABELS = {plan:'À prévoir', cantine:'Cantine', ailleurs:'Ail
 const MEAL_PEOPLE = [1,2,3,4];
 const MEAL_RECENT_DAYS = 10; // « Me proposer » évite un plat mangé il y a moins de 10 jours
 const MEAL_SUGG_MAX = 8;     // plats proposés en un tap dans la fiche d'un repas
+const MEAL_NEAR_DAYS = 2;    // … sauf ceux déjà posés ou mangés à deux jours près (Lot V3-5)
 const MEAL_MIDI_UNTIL = 14;  // avant 14 h, Aujourd'hui parle du midi ; ensuite, du soir
 // Couverts : la fourchette et le couteau, même trait que les autres icônes.
 const IC_MEAL = '<path d="M6 3v6a3 3 0 0 0 6 0V3"></path><path d="M9 3v18"></path>'+
@@ -99,9 +100,18 @@ function mealDishes(){
   return Object.keys(map).map(k=>map[k])
     .sort((a, b)=>(b.count - a.count) || (a.last < b.last ? 1 : (a.last > b.last ? -1 : 0)));
 }
-function mealSuggestions(q){
+// `day` (Lot V3-5) : sans rien de tapé, un plat déjà posé ou mangé à deux
+// jours près n'est pas proposé — le curry de ce soir n'a rien à faire en
+// tête des idées pour ce midi. Dès qu'on tape, tout ce qui correspond revient.
+function mealSuggestions(q, day){
   const n = normalizeLabel(q);
-  return mealDishes().filter(d=>!n || (d.key.indexOf(n) !== -1 && d.key !== n)).slice(0, MEAL_SUGG_MAX);
+  const near = new Set();
+  if(!n && day){
+    live(S.meals).forEach(m=>{
+      if(m.dish && Math.abs(daysBetween(day, m.day)) <= MEAL_NEAR_DAYS) near.add(normalizeLabel(m.dish));
+    });
+  }
+  return mealDishes().filter(d=>n ? (d.key.indexOf(n) !== -1 && d.key !== n) : !near.has(d.key)).slice(0, MEAL_SUGG_MAX);
 }
 
 // Le créneau à prévoir qui suit (day, slot), sur 7 jours au plus : là où
@@ -351,7 +361,7 @@ function onMealDishInput(v){
   if(el) el.innerHTML = mealSuggHtml();
 }
 function pickMealDish(i){
-  const d = mealSuggestions(_mSheet.dish)[i];
+  const d = mealSuggestions(_mSheet.dish, _mSheet.day)[i];
   if(!d) return;
   _mSheet.dish = d.label;
   _mSheet.leftover = false;
@@ -359,7 +369,7 @@ function pickMealDish(i){
 }
 
 function mealSuggHtml(){
-  return mealSuggestions(_mSheet.dish).map((d, i)=>
+  return mealSuggestions(_mSheet.dish, _mSheet.day).map((d, i)=>
     '<button type="button" class="chip" onclick="pickMealDish('+i+')">'+esc(d.label)+'</button>'
   ).join('');
 }

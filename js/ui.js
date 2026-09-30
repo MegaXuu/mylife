@@ -271,11 +271,17 @@ function switchHtml(on, label, fn){
 
 /* ---------- Toast : carte posée, une seule action facultative ---------- */
 let _toastTimer, _toastAct = null;
+// Espaces insécables de la typographie française (Lot V3-5) : un toast qui
+// passe sur deux lignes ne commence plus la seconde par « : fait. », et les
+// guillemets ne se séparent plus de ce qu'ils citent.
+function frenchSpaces(s){
+  return String(s).replace(/ ([:;!?»])/g, ' $1').replace(/« /g, '« ');
+}
 function toast(msg, opts){
   const t = document.getElementById('toast');
   if(!t) return;
   _toastAct = (opts && opts.action) || null;
-  t.innerHTML = '<span>'+esc(msg)+'</span>'+
+  t.innerHTML = '<span>'+esc(frenchSpaces(msg))+'</span>'+
     (_toastAct ? '<button class="toast-act" onclick="_runToastAct()">'+esc(_toastAct.label)+'</button>' : '');
   t.classList.toggle('danger', !!(opts && opts.danger));
   t.classList.add('show');

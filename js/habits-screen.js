@@ -65,7 +65,7 @@ function habitCalendarHtml(h){
   for(let i=0;i<leadBlank;i++) cells += '<div class="hab-day blank" aria-hidden="true"></div>';
   for(let day=1; day<=daysInMonth; day++){
     const k = dayKey(new Date(y, m, day));
-    cells += '<div class="hab-day '+habitDayState(h, k, today)+'" aria-hidden="true">'+day+'</div>';
+    cells += '<div class="hab-day '+habitDayState(h, k, today)+(k === today ? ' today' : '')+'" aria-hidden="true">'+day+'</div>';
   }
   for(let i=leadBlank+daysInMonth; i<HAB_CAL_CELLS; i++) cells += '<div class="hab-day blank" aria-hidden="true"></div>';
   const head = HAB_DOW_LETTERS.map(l=>'<div class="hab-cal-dow" aria-hidden="true">'+l+'</div>').join('');
@@ -75,6 +75,31 @@ function habitCalendarHtml(h){
     '<div class="hab-cal">'+cells+'</div>'+
   '</div>';
 }
+
+/* La semaine en cours (Lot V3-5) — une rangée du même calendrier, mêmes
+   cases et mêmes quatre états, du lundi au dimanche. C'est ce que montre
+   désormais chaque carte d'emblée ; le mois entier se déplie à la demande
+   (toggleHabMonth()). Avec le mois toujours ouvert, quatre habitudes
+   faisaient 2 600 px — plus de trois écrans pour lire trois chiffres
+   chacune. La maquette Canopée ne posait déjà que la semaine. */
+function habitWeekHtml(h){
+  const today = todayKey();
+  const monday = addDays(today, 1 - isoDow(today));
+  let cells = '';
+  for(let i = 0; i < 7; i++){
+    const k = addDays(monday, i);
+    cells += '<div class="hab-day '+habitDayState(h, k, today)+(k === today ? ' today' : '')+'" aria-hidden="true">'+
+      new Date(k+'T00:00').getDate()+'</div>';
+  }
+  const head = HAB_DOW_LETTERS.map(l=>'<div class="hab-cal-dow" aria-hidden="true">'+l+'</div>').join('');
+  return '<div class="hab-cal-wrap">'+
+    '<p class="hab-cal-month">Cette semaine</p>'+
+    '<div class="hab-cal-head">'+head+'</div>'+
+    '<div class="hab-cal">'+cells+'</div>'+
+  '</div>';
+}
+let _habMonthOpen = {}; // mois déplié, par habitude, pour la session
+function toggleHabMonth(id){ _habMonthOpen[id] = !_habMonthOpen[id]; renderHabits(); }
 
 /* Lot V2-7 (audit B5) : « Lun, Mar, Mer, Jeu, Ven, Sam, Dim · 2 L / jour ·
    Série 4 j · Record 0 j · 0 % sur 30 jours » sur trois lignes, illisible.
@@ -108,7 +133,9 @@ function habitCardHtml(h, i, n){
     '<ul class="list">'+habitRowHtml(h, {title:false})+'</ul>'+
     '<p class="hab-plan">'+habitPlanTxt(h)+'</p>'+
     habitStatsHtml(h)+
-    habitCalendarHtml(h)+
+    (_habMonthOpen[h.id] ? habitCalendarHtml(h) : habitWeekHtml(h))+
+    '<button class="more hab-month-toggle" aria-expanded="'+!!_habMonthOpen[h.id]+'" onclick="toggleHabMonth(\''+h.id+'\')">'+
+      (_habMonthOpen[h.id] ? 'Réduire' : 'Voir le mois')+'</button>'+
   '</div>';
 }
 

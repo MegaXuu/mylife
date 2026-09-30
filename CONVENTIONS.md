@@ -152,6 +152,19 @@ Toute lecture de collection passe par `live()`. Toute mutation passe par `touch(
   onConfirm)` avec bouton danger + Annuler.
 - États vides : `emptyState(texte, icone)` — jamais un écran blanc, jamais un texte seul et sec.
 - Messages transitoires : `toast(message)` / `toast(message, {danger:true})`.
+- Balayage (`data-swipe-left/right`, `js/gestures.js`) : il **double** toujours un chemin visible —
+  bouton ou fiche —, jamais l'inverse. « Réduire les animations » (`prefers-reduced-motion`) le coupe
+  entièrement : une action qui n'existerait qu'en balayage deviendrait impossible. C'est pourquoi
+  les fiches tâche et entretien portent « Supprimer » depuis le Lot V3-5.
+- Dates à l'écran : `relDay(k)` (« demain », « vendredi », « le 15 oct. ») et `fmtDateShort()`
+  (« 1er oct. ») — jamais une date ISO, jamais « 1 oct. ». Une date du jour même ne se dit pas quand
+  le contexte la porte déjà (Lot V3-5).
+- Une tâche tapée se crée par `parseQuick()` puis `taskFromParse()` (`js/nlp.js`) — un seul chemin,
+  qu'elle vienne de la barre de saisie ou de la bienvenue (Lot V3-5).
+- Promesse d'une API du navigateur (mise à jour du service worker, pastille, stockage persistant,
+  partage…) : toujours `quietly()` (`js/boot.js`) ou un `.catch()`. Un rejet non géré déclenche le
+  toast d'erreur d'`onUnexpectedError()` — c'est ainsi que l'app affichait une erreur à chaque
+  retour hors-ligne jusqu'au Lot V3-5.
 
 ### Styles
 - **Tout le CSS vit dans le `<style>` de `index.html`.** Pas de fichier `.css` séparé.

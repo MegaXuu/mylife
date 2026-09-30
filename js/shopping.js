@@ -31,8 +31,12 @@ const FREQUENT_MAX = 8;    // proposés sous le champ d'ajout, les plus utilisé
 
 // Minuscules, accents retirés, ponctuation réduite à une espace — la clé de
 // comparaison pour le dictionnaire ET pour les corrections mémorisées.
+// Les ligatures s'écrivent en deux lettres (Lot V3-5) : NFD ne décompose pas
+// « œ », qui tombait avec la ponctuation — « Œufs », que le clavier iOS
+// écrit de lui-même, devenait « ufs » et partait au rayon « Autre ».
 function normalizeLabel(s){
   return String(s == null ? '' : s).toLowerCase()
+    .replace(/œ/g, 'oe').replace(/æ/g, 'ae')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9\s-]/g, ' ')
     .replace(/\s+/g, ' ')

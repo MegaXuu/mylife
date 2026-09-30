@@ -831,6 +831,24 @@ html[data-mode="dark"] .step{background:var(--sunken); box-shadow:inset 0 0 0 1.
    l'en-tête de la carte) : « Sauter » se retrouvait seul, calé à gauche. */
 .row-head .skip{margin-left:auto;}
 
+/* ==========================================================================
+   Lot V3-5 — le quotidien sans accroc. Presque tout ce lot est du contenu
+   et du calcul (saisie rapide, dates dites comme on les dit, reprogrammer en
+   un geste) : trois petites règles seulement, aucune couleur nouvelle.
+   ========================================================================== */
+
+/* Raccourcis de début dans la fiche tâche (Aujourd'hui, Demain, Samedi,
+   Lundi) : une seule rangée à 375 px, qui occupe toute la largeur du champ
+   au-dessus d'elle. Les .chip gardent leurs 44 px de haut ; seuls leur
+   padding et l'écart se resserrent, et elles s'étirent pour finir la ligne. */
+.ts-quick{margin-top:var(--s2); gap:6px;}
+.ts-quick .chip{flex:1 0 auto; padding:0 10px;}
+
+/* Le jour même dans le calendrier d'habitude, semaine ou mois : souligné,
+   comme dans la grille des repas (.meal-day.today) — un repère, pas un état. */
+.hab-day.today{text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:3px;}
+.hab-month-toggle{margin-top:var(--s1);}
+
 /* ---------- Au-delà de 900 px : colonne centrée plafonnée (desktop en V2) ---------- */
 @media (min-width:900px){
   .app{max-width:560px; margin:0 auto;}

@@ -194,6 +194,9 @@ uniquement des déclarations.
   `.meal-cell(.todo/.off/.past)`/`.meal-dish`/`.meal-meta`, `.meal-type-save`, `.meal-left` et
   `.meal-nav + .card` (30 px pour que l'oiseau ne couvre pas la flèche). Aucune couleur nouvelle :
   un repas cantine/ailleurs perd son fond pour un filet pointillé, comme `.hab-day.skip`.
+  Puis le bloc **Lot V3-5**, trois règles et aucune couleur : `.ts-quick` (raccourcis de début de
+  la fiche tâche, une rangée à 375 px — `.chip` à padding resserré, étirées pour finir la ligne),
+  `.hab-day.today` (le jour même souligné, comme `.meal-day.today`) et `.hab-month-toggle`.
   Au-delà de **900 px** : colonne centrée plafonnée à 560 px (desktop V2).
 - `js/state.js` — **socle**, aucun rendu DOM : `APP_VERSION`, IndexedDB (`openDb`/`idbGet`/`idbSet`,
   + `idbClearPhotos()` — seul survivant des helpers de photos au Lot V3-1, pour purger à la
@@ -207,7 +210,9 @@ uniquement des déclarations.
   `onboarded = true` d'office sur une base déjà peuplée qui ne l'avait jamais vu (une tâche, une
   plante, une habitude ou un article existant) : elle ne doit jamais se voir proposer la bienvenue
   après coup, seule une base réellement vierge reste à onboarder (`js/settings.js`,
-  `maybeWelcome()`).
+  `maybeWelcome()`). Depuis le Lot V3-5, `migrate()` appelle `repairLigatures()` (clés de fréquents
+  et rayons d'articles abîmés par la ligature « œ », voir `js/shopping.js`) et pose
+  `backupNudgeAt: null`.
 - `js/ui.js` — `go(name)` (écrans `today,tasks,maison,meals,shopping,habits,settings` — `meals` et
   `shopping` partagent l'onglet Repas depuis le Lot V3-2 : `TAB_OF`, `goRepas()` ramène au dernier des
   deux quitté), `openSheet()`/
@@ -218,6 +223,8 @@ uniquement des déclarations.
   `emptyState(titre, sousTitre)`, `gaugeColor(f)`, `CURRENT_SCREEN` (posé par `go()`), et les
   oiseaux : `pickBirds()` (appelé une fois au boot), `birdsOn()`, `birdSvg(nom, w, pos)`,
   `birdOnCard(i, n)`, `birdOnPerch()` (en mode sombre aussi depuis le Lot V3-3, `OISEAUX_SOMBRE`).
+  Depuis le **Lot V3-5** : `toast()` passe son texte par `frenchSpaces()` (espace insécable avant
+  `: ; ! ? »` et après `«` — un toast sur deux lignes ne commence plus par « : fait. »).
   Depuis le **Lot V3-3** : `markPop()`/`popClass()`/`popThen()` (animation de coche),
   `switchNative()`/`switchHtml()` (interrupteur natif à retour haptique, repli `.switch`), fondu
   `.enter` et `aria-current` posés par `go()`, Échap ferme la feuille, `openSheet()` nomme le
@@ -289,6 +296,16 @@ uniquement des déclarations.
   entretien (pièce + `from:'done'`) : titre, « Prochaine fois : … », pièce, **durée** (`setTsMins()`,
   l'effort en est déduit), rythme, notes — ni début, ni échéance, ni priorité, ni « ce soir », qui
   n'avaient aucun effet sur un entretien.
+  **Depuis le Lot V3-5** : `relDay(k, today)` (« aujourd'hui », « demain », « hier », le nom du jour
+  à moins d'une semaine, sinon « le 15 oct. » — minuscule, c'est un morceau de phrase) et
+  `repeatShort(r)` nourrissent `taskMeta()` (« Échéance vendredi », « Demain soir », « Depuis lundi »,
+  « Chaque mercredi » ; échéance dépassée = `overdueLabel()` d'Aujourd'hui ; un début qui tombe
+  aujourd'hui ne se dit pas) ; `fmtDateShort()` écrit « 1er » ; `repeatSummary()` s'accorde
+  (« Tous les jours », « Toutes les 2 semaines », « Tous les 5 du mois ») ; la fiche porte les
+  raccourcis de début `tsQuickDates()`/`setTsStart()` (`.ts-quick`), « Supprimer » pour toute tâche
+  ou entretien existant (`delTask()`), et « Sans date » à la place de « Bucket » ; `postponeTask()`
+  re-rend l'écran d'où l'on vient (Tâches : ses groupes seuls ; ailleurs : `rerender()`), libellé
+  de balayage « Demain ».
 - `js/today.js` — écran **« Aujourd'hui », posé au Lot 5**. `todayBuckets()` est le seul endroit où
   se décide ce qui compte : une passe unique qui répartit en `overdue` (échéance réelle dépassée) /
   `evening` / `scheduled` (le bloc du jour) / `quick` (anytime à effort 1) / `chores` (l'entretien du
@@ -323,6 +340,12 @@ uniquement des déclarations.
   modèle de données), toujours affiché si la liste n'est pas vide et rendu **hors** du `if(vide)`,
   comme « Ce soir » : un rappel ambiant qui ne bloque jamais l'état vide et n'entre pas dans
   `todayBadgeCount()` (même traitement que le bloc 7, « si tu as 10 minutes »).
+  **Depuis le Lot V3-5** : `todayRow(t, meta, cls, later)` pose le balayage à droite « Demain »
+  (`postponeTask()`) sur le bloc du jour et « Ce soir » — jamais sur une échéance dépassée (repousser
+  le début n'y change rien), ni « si tu as 10 minutes », ni un entretien (le budget décide de sa
+  date) ; il double le raccourci « Demain » de la fiche. `appIsBlank()` (rien de suivi nulle part,
+  semaine type jamais réglée) remplace l'état vide par « Rien n'est encore suivi » et le bouton du
+  pack maison : « C'est bon pour aujourd'hui » y mentait. `longDate()` écrit « 1er ».
 - `js/habits.js` — **rempli au Lot 8**. Domaine Habitudes : moteur de **série et quota**, jamais une
   jauge de fraîcheur (frontière posée par `CONVENTIONS.md` §6 — ne réutilise donc pas `js/recur.js`).
   Deux modes de planification traités séparément : `sched:{kind:'days', days:[1..7]}` (jours fixes)
@@ -369,7 +392,11 @@ uniquement des déclarations.
   présent dans `habitLog` (`habitEarliestLogDay()`) : un import de données peut porter des jours
   antérieurs à la création de l'habitude, que `habitStreak()` (non bornée par `createdAt`) prenait
   déjà en compte sans que le record ne les voie jamais — cas rare, corrigé en quelques lignes plutôt
-  que noté en dette.
+  que noté en dette. **Depuis le Lot V3-5** (`js/habits-screen.js`) : chaque carte montre d'emblée
+  la **semaine en cours** (`habitWeekHtml()`, une rangée des mêmes cases `.hab-day` et des mêmes
+  quatre états) et ne déplie le mois (`habitCalendarHtml()`, inchangé, 42 cases) qu'à la demande
+  (`toggleHabMonth()`, `_habMonthOpen`, état de session, bouton `.more.hab-month-toggle`
+  « Voir le mois »/« Réduire ») ; aujourd'hui est souligné dans les deux (`.hab-day.today`).
 - `js/shopping.js` — écran Courses, **rempli au Lot 9**. Classement automatique par rayon
   (`guessRayon()`, fonction pure testée isolément comme `parseQuick()` : normalise le libellé
   (`normalizeLabel()`), cherche par groupes de mots consécutifs — du plus long au plus court, pour
@@ -399,7 +426,10 @@ uniquement des déclarations.
   doublent des chemins déjà là (case, fiche), aucun chemin exclusif. Plus de carte = plus de bird
   sur cet écran, comme `js/tasks.js`. `data/rayons.js` corrigé (audit D5) : « pâtes » seul retombe
   sur `epicerie-salee` (sens courant, pâtes sèches) et non plus `frais` ; le sens frais exige
-  désormais les deux mots, `pates fraiches`.
+  désormais les deux mots, `pates fraiches`. **Depuis le Lot V3-5**, `normalizeLabel()` écrit les
+  ligatures en deux lettres (`œ` → `oe`, `æ` → `ae`) : NFD ne les décompose pas, et « Œufs » — que
+  le clavier iOS écrit de lui-même — devenait « ufs », rayon « Autre ». `repairLigatures()`
+  (`migrate()`, `js/state.js`) répare fréquents et articles enregistrés avant.
 - `js/meals.js` — **nouveau au Lot V3-2**, écran **Menus** (`#s-meals`, `go('meals')`), première
   moitié de l'onglet **Repas** — l'autre est Courses, les deux portent `repasSegHtml()` (contrôle
   segmenté) sous le même titre « Repas ». Une **semaine type** (`settings.mealWeek`, 14 repas :
@@ -419,7 +449,9 @@ uniquement des déclarations.
   tous deux annulables d'un bloc (`mealSnapshot()`/`restoreMealSnapshot()`). Pour Aujourd'hui :
   `mealTodayLine(hour)` (le midi avant 14 h s'il est à prévoir, sinon le soir ; **rien tant que
   Menus n'a jamais servi**) et `mealTodayHtml()` (bouton `.shop`, comme les courses — ni pastille,
-  ni frein à l'état vide).
+  ni frein à l'état vide). **Depuis le Lot V3-5**, `mealSuggestions(q, day)` : sans rien de tapé,
+  un plat déjà posé ou mangé à `MEAL_NEAR_DAYS` (2) jours du repas n'est pas proposé ; dès qu'on
+  tape, tout ce qui correspond revient (`pickMealDish()` relit la même liste).
 - `js/maison.js` — domaine **Entretien** : écran Maison (vue par pièce, Lot 4, refondue au Lot V2-5 puis
   au **Lot V3-1**) + le moteur du **budget d'entretien quotidien** + le **pack maison**. `isChore(t)`
   (pièce + `repeat.from:'done'`, glossaire) et `getMaisonItems()` sont la seule définition de
@@ -467,7 +499,13 @@ uniquement des déclarations.
   trois écrans courts (présentation, prénom, première tâche ou « explorer »),
   `_onSheetClose` pose `S.onboarded = true` quel que soit le chemin de fermeture — jamais revue une
   fois fermée. Seul écran en `screenHead(..., {noGear:true})` : l'engrenage y mène, il n'y apparaît
-  pas.
+  pas. **Depuis le Lot V3-5** : la bienvenue avance à « Entrée » et donne le clavier au champ de
+  l'étape ; sa première tâche passe par `parseQuick()`/`taskFromParse()` comme la barre de saisie.
+  `announceUpdate()` renvoie vrai s'il a parlé ; `maybeBackupNudge()`/`backupNudgeDue()` : au
+  démarrage, un toast « Dernière sauvegarde il y a N jours » avec « Exporter » quand l'export a plus
+  de `BACKUP_NUDGE_DAYS` (30) jours (ou n'a jamais eu lieu sur une app remplie depuis autant), au
+  plus tous les `BACKUP_NUDGE_EVERY` (7) jours (`S.backupNudgeAt`), jamais avant la fin de la
+  bienvenue.
 - `js/recur.js` — **depuis le Lot V3-4** : `nextOccurrence(r, anchor)` (le calcul pur, mois/années
   bornés, `repeat.dom`), `firstOccurrence(r, ref)`, `completeTask()` à trois cas (entretien → `doneAt` ;
   récurrente ouverte → avance, début compris ; ponctuelle → `doneAt`), `completionSnapshot()`/
@@ -498,7 +536,16 @@ uniquement des déclarations.
   `removeCaptureChip()`), `commitCapture()` crée la tâche directement, `openCaptureDetails()` ouvre
   la fiche du Lot 3 préremplie pour ce que le langage naturel n'a pas couvert. Testé isolément dans
   `test.mjs` (plus de 50 cas sur `parseQuick()`, plus le mécanisme d'ignorance) : c'est le seul
-  module de l'app qui mérite de vrais tests unitaires.
+  module de l'app qui mérite de vrais tests unitaires. **Depuis le Lot V3-5** : la récurrence est lue
+  **avant** les dates (`applyRepeat()` puis `applyDate()`, sinon « chaque lundi » perdait son
+  « lundi » au profit d'une date) ; `applyDate()` est numérotée en dix règles, de l'échéance datée
+  au « le 15 » seul (échéances relatives `pour/avant/d'ici` + jour, fin de semaine/de mois, moments
+  `matin/midi/après-midi/soir` via `at()`, date précise avec jour de semaine et année facultatifs,
+  jour de semaine protégé après `de`/`du`/`le`) ; `nextWeekday(dow, prochain)` ne saute une semaine
+  que si le jour est encore à venir ; `NLP_NUM`/`nlpNum()` pour les nombres en lettres (« huit
+  jours » = 7, « quinze jours » = 14) ; une **heure du jour** n'est jamais une durée (`applyEffort()`
+  : durée ≤ 4 h et jamais après « à », sinon laissée au titre) ; `taskFromParse(p)` est le seul
+  chemin de création d'une tâche tapée (barre de capture et bienvenue). `NLP_DOW_PLUR` retiré.
 - `js/review.js` — **rempli au Lot 10**. La revue hebdomadaire, le « système immunitaire » de
   l'app (ROADMAP §3 point ⑨) : toujours une feuille modale (`startReview()`/`openSheet()`), jamais
   un écran propre — pas de `#s-review`, jamais appelée par `go()`. `reviewCandidates()` (pure) :
@@ -538,7 +585,11 @@ uniquement des déclarations.
   `go('today')` → `maybeWelcome()` (Lot 11, uniquement au tout premier lancement) →
   `maybeStartReview()`), `READY` + `window.__ready`, `navigator.storage.persist()`, enregistrement
   du service worker, `saveNow()` sur `pagehide` et `visibilitychange→hidden`, `reg.update()` +
-  rechargement sur `controllerchange` au retour au premier plan.
+  rechargement sur `controllerchange` au retour au premier plan. **Depuis le Lot V3-5** :
+  `quietly(p)` rattrape les promesses du navigateur qui échouent sans gravité (`reg.update()`
+  hors-ligne, `setAppBadge()`, `storage.persist()`) — sans lui, rouvrir l'app sans réseau
+  affichait le toast rouge d'`onUnexpectedError()` ; et un seul message au démarrage : le rappel
+  de sauvegarde se tait devant l'annonce de version, la bienvenue et la revue.
 - `sw.js` — cache-first avec mise à jour en arrière-plan (stale-while-revalidate) ; **incrémenter
   `CACHE`** (`mylife-b3-N` en V3) à chaque release.
 - `manifest.webmanifest`, `icon-180/192/512.png` — depuis le **Lot V3-3**, le cacatoès rosalbin de
@@ -654,7 +705,13 @@ uniquement des déclarations.
   (déterministe via `rnd` injecté : ni doublon, ni plat récent, ni repas cantine, ni plat déjà posé
   écrasé, annulable), « Reprendre la semaine dernière », la grille (14 cellules, un oiseau), la ligne
   d'Aujourd'hui (silencieuse tant que Menus n'a jamais servi, midi/soir selon l'heure, hors pastille)
-  et l'onglet Repas partagé par Menus et Courses.
+  et l'onglet Repas partagé par Menus et Courses. **Depuis le Lot V3-5** : `v35Cases` (43 tournures
+  du français courant passées à `parseQuick()`, deux dates de référence — le lundi `NLP_REF` et un
+  mercredi pour « prochain »), `relDay()`/`repeatShort()`/« 1er », la méta de Tâches, la fiche
+  (raccourcis, « Sans date », « Supprimer » d'une tâche et d'un entretien), le balayage « Demain »
+  d'Aujourd'hui (et où il n'est pas), l'app vide, la semaine d'habitude, les ligatures et leur
+  migration, le rappel de sauvegarde, les espaces insécables, la bienvenue au clavier ; et, en
+  asynchrone, `quietly()` — sans lui, le rejet non géré ferait tomber le processus Node du test.
 - **Serveur de développement (Lot V3-4)** : `node tools/serve.mjs [port]` (configuration
   `mylife-dev` de `.claude/launch.json`, port 8641) sert le projet en `Cache-Control: no-store` —
   plus besoin de changer de port pour échapper au cache. Le service worker, lui, reste actif : après
@@ -672,7 +729,7 @@ uniquement des déclarations.
 S = { v:1, tasks:[], habits:[], habitLog:{}, meals:[], shopping:[], frequents:[],
       settings:{userName,weekStart,rayonOrder,rayonOverrides,choreBudget,mealWeek,mealWeekSet,
                 todayCap,reviewDay,hideDone,birds,theme},
-      lastReview:null, onboarded:false }
+      lastReview:null, lastExport:null, backupNudgeAt:null, seenVersion:null, onboarded:false }
 ```
 Depuis le Lot 4, `tasks[]` porte `{id,createdAt,updatedAt,deletedAt,title,doneAt,notes,cat,room,
 bucket,start,due,evening,prio,effort,postponed,touchedAt,repeat,history}` — `repeat` est `null` ou
@@ -790,7 +847,7 @@ réglée au moins une fois. La bibliothèque de plats n'est pas stockée : elle 
 | **12 — Polish, QA, dettes** | Bêta 1.12 | ✅ Fait. Dernier lot du cycle V1, aucune fonctionnalité nouvelle. Audit accessibilité/tactile : une seule cible sous 44 px trouvée (`.chip`, 40 px) et corrigée à 44 ; `:focus-visible`, `prefers-reduced-motion` et zone sûre iOS déjà conformes depuis le premier écran, rien à corriger ; contrastes recalculés par calcul (WCAG) sur toutes les paires ink/ink2 × bg/card/teintes de domaine, clair et sombre : toutes ≥ 4,5:1, aucune régression. `role="checkbox"`/`aria-checked` ajoutés aux 5 boutons `.check` (tasks.js, today.js ×2, shopping.js, maison.js), qui n'exposaient jusque-là qu'un `aria-label` sans état. Audit textuel : aucun emoji, aucune casse fautive, aucun « en retard »/« manqué » hors du seul emploi légitime (échéance réelle d'une tâche, `js/tasks.js`) ; point laissé ouvert au Lot 5 tranché — l'état vide d'Aujourd'hui a désormais deux variantes selon `b.evening.length` (« Rien ne demande ton attention avant ce soir. » s'il reste quelque chose ce soir, « Il ne reste rien à faire aujourd'hui. » sinon). Audit des chemins redondants : une seule vraie redondance trouvée (`rayonOrderSheet()` accessible à l'identique depuis Réglages ET depuis Courses) ; soumise à Florian, qui a choisi de garder les deux (centralisation vs. contexte d'usage) — aucune suppression faite. Dettes techniques : purge des tombstones >90 j déjà en place (rien à faire) ; deux classes CSS orphelines retirées (`.card.t-plantes`, `.card.t-courses` — jamais posées en HTML depuis que Lot 5/7/9 ont gardé Maison et Courses en cartes blanches ; les variables `--t-plantes`/`--t-courses` restent définies, la première est désormais un token dormant) ; aucun `style="..."` non calculé trouvé (les 6 existants sont tous des jauges/oiseaux calculés, légitimes) ; aucune fonction morte détectée (recherche automatisée sur toutes les déclarations `function` de `js/`+`data/`) ; aucun fichier au-dessus de 600 lignes (le plus long est `js/habits.js`, 447 lignes). Les 3 listes miroir revérifiées fichier par fichier : toujours les 17 mêmes, dans le même ordre. `QA-IPHONE.md` créé (checklist à dérouler sur l'iPhone réel : installation, mode avion, pastille, persistance 48 h, photo de plante, mode magasin/Wake Lock, glisser-fermer, zone sûre, mise à jour du service worker, export/import). |
 
 ## Cycle V3 « Le vrai usage » — en cours
-Plan complet dans `ROADMAP-V3.md` (constat et décisions du 29/09/2026, amendements §3, trois lots).
+Plan complet dans `ROADMAP-V3.md` (constat et décisions du 29/09/2026, amendements §3, cinq lots).
 Florian n'utilisait pas l'app : la remplir coûtait trop cher. Il a donné **carte blanche** pour
 préparer et coder la suite ; les deux premiers lots ont été faits dans la même session (entorse
 assumée à « un lot = une session »), chacun avec son commit et sa version.
@@ -871,6 +928,49 @@ assumée à « un lot = une session »), chacun avec son commit et sa version.
   iOS** (`navigator.share` + fichier, repli sur le téléchargement) et « Dernière sauvegarde : … »
   (`S.lastExport`) ; toast « MyLife est à jour » à l'arrivée d'une version (`announceUpdate()`,
   `S.seenVersion`) ; code mort retiré (`freshness()`, champ `duo`). `QA-IPHONE-V3.md` écrit.
+- **V3-5 — Le quotidien sans accroc** (Bêta 3.5) : ✅ Fait, carte blanche de Florian (30/09/2026)
+  pour « rendre l'app la meilleure possible vis-à-vis de ses besoins ». Précédé d'un **audit en
+  usage réel** (bienvenue, pack installé, 14 tâches, 4 habitudes et 24 jours de journal, 16 jours de
+  repas, 12 articles), dont tout le lot est sorti. **Saisie rapide** (`js/nlp.js`), l'entrée n° 1 de
+  l'app, qui ratait le français courant : « Appeler maman demain 18h » devenait une tâche « longue »
+  de **18 heures** (une heure du jour reste désormais dans le titre ; une durée s'arrête à 4 h,
+  « 1h30 » compris, jamais après « à ») ; « samedi soir » laissait « soir » au titre (moments de la
+  journée, seul « soir » pose `evening`) ; « chaque mois », « chaque lundi » (qui laissait
+  « chaque »), « toutes les 2 semaines », « tous les mardis et jeudis », « le 5 de chaque mois »,
+  nombres en lettres (« dans deux jours », « quinze jours » = 14) ; échéances relatives (« pour
+  vendredi », « d'ici lundi », « cette semaine », « avant la fin du mois ») ; « lundi 12 octobre »,
+  « le 1er mai 2027 », « à partir du 20 », « ce week-end » ; « la réunion de vendredi » et « le
+  lundi » ne sont plus pris pour des dates ; **« mardi prochain » dit un mercredi tombait 13 jours
+  plus tard** (`nextWeekday()` : « prochain » ne saute une semaine que si le jour est encore à venir).
+  La récurrence est lue **avant** les dates. `taskFromParse()` : la première tâche de la bienvenue
+  passe aussi par le parseur. **Reprogrammer en un geste** : raccourcis de début dans la fiche tâche
+  (`tsQuickDates()`/`setTsStart()` — Aujourd'hui, Demain, Samedi, Lundi, jamais deux fois le même
+  jour, retoucher éteint) ; **balayage à droite « Demain » sur Aujourd'hui** (bloc du jour et « Ce
+  soir », jamais une échéance dépassée ni un entretien — `todayRow(…, later)`, `postponeTask()` rend
+  désormais l'écran d'où l'on vient), même libellé « Demain » sur Tâches. **Un chemin visible pour
+  supprimer** : « Supprimer » dans la fiche tâche et la fiche d'entretien — c'était un balayage seul,
+  donc **aucun chemin du tout sous « Réduire les animations »**, qui coupe les balayages. « Bucket »
+  (mot du code) devient « Sans date » à l'écran. **Dates dites comme on les dit** : `relDay()`
+  (« Échéance vendredi », « Depuis lundi », « Demain soir »), échéance dépassée « Passée de 2 jours »
+  comme la maquette et Aujourd'hui (plus « En retard depuis le… »), un début qui tombe aujourd'hui ne
+  se dit plus, la **récurrence se lit sur la ligne** (`repeatShort()`, « Chaque mercredi »),
+  `repeatSummary()` accordé (« Tous les jours », « Toutes les 2 semaines », « Tous les ans » —
+  c'était « Tous les jour/semaine/an »), « 1er » partout (`fmtDateShort()`, `longDate()`).
+  **Habitudes** : chaque carte montre **la semaine en cours** (`habitWeekHtml()`, mêmes cases que le
+  calendrier), le mois se déplie à la demande (`toggleHabMonth()`) — 2 603 → 1 885 px pour 4
+  habitudes, et la maquette ne posait que la semaine ; aujourd'hui souligné (`.hab-day.today`).
+  **Repas** : les suggestions de la fiche écartent un plat posé ou mangé à deux jours près
+  (`mealSuggestions(q, day)`, `MEAL_NEAR_DAYS`), il revient dès qu'on le tape. **App vide** : plus de
+  « C'est bon pour aujourd'hui » mensonger sur une installation neuve (`appIsBlank()`) — elle
+  propose le pack maison. **Robustesse** : **rouverte hors-ligne, l'app affichait le toast rouge
+  « Un souci inattendu »** — `reg.update()` rejetait sans être rattrapé (`quietly()`, `js/boot.js`,
+  aussi sur la pastille et `storage.persist()`) ; « Œufs » (que le clavier iOS écrit avec la
+  ligature) partait au rayon « Autre » (`normalizeLabel()` écrit œ/æ en deux lettres,
+  `repairLigatures()` répare fréquents et articles) ; **rappel de sauvegarde** au démarrage après
+  30 jours sans export, une fois par semaine au plus, jamais par-dessus un autre message
+  (`maybeBackupNudge()`, `S.backupNudgeAt`) ; espaces insécables dans les toasts (`frenchSpaces()`) ;
+  bienvenue : « Entrée » avance, le champ a le clavier. 43 cas de parseur et 13 scénarios
+  nouveaux ; `QA-IPHONE-V3.md` §9.
 
 ## Cycle V2 « L'usage » — clos à Bêta 2.7
 Plan complet dans `ROADMAP-V2.md` (audit du 14/08/2026, arbitrages §3, huit lots) ; `CONVENTIONS.md`

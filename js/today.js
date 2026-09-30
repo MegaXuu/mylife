@@ -34,7 +34,8 @@ const TODAY_QUICK_MAX = 3;     // « si tu as 10 minutes » : 1 à 3 tâches (§
 // Sur-titre de l'écran : « Dimanche 26 juillet ». La casse de phrase impose
 // la majuscule initiale que toLocaleDateString ne met pas en français.
 function longDate(d){
-  const s = (d || new Date()).toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
+  const s = (d || new Date()).toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'})
+    .replace(/^(\S+) 1 /, '$1 1er '); // « Jeudi 1er octobre » : Intl écrit « 1 octobre »
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
@@ -173,8 +174,15 @@ function todayMeta(t){
 
 // Ligne de tâche : la case coche, le corps ouvre la fiche. Pas de bouton
 // supprimer ni reporter ici — Aujourd'hui décide, il n'administre pas.
-function todayRow(t, meta, cls){
-  return '<li class="row'+(cls ? ' '+cls : '')+'">'+
+// `later` (Lot V3-5) : la ligne se balaie vers la droite pour passer à
+// demain (postponeTask(), js/tasks.js) — le geste quotidien d'une liste du
+// jour, qui obligeait à passer par Tâches ou par le sélecteur de date. Il
+// double le raccourci « Demain » de la fiche, jamais l'inverse. Jamais sur
+// une échéance dépassée (repousser le début n'y changerait rien) ni sur un
+// entretien (c'est le budget du jour qui décide de sa date).
+function todayRow(t, meta, cls, later){
+  const swipe = later ? ' data-swipe-right="postponeTask(\''+t.id+'\')" data-swipe-right-label="Demain"' : '';
+  return '<li class="row'+(cls ? ' '+cls : '')+'"'+swipe+'>'+
     '<button class="check" role="checkbox" aria-checked="false" aria-label="Marquer fait" onclick="todayDone(\''+t.id+'\')"></button>'+
     '<div class="row-main"'+rowAttrs("taskSheet('"+t.id+"')")+'>'+
       '<div class="row-title">'+esc(t.title)+'</div>'+
@@ -217,7 +225,7 @@ function todaySection(b){
   return '<div class="sec"><h2 class="sec-title">Aujourd’hui</h2>'+
       '<span class="sec-count">'+b.scheduled.length+'</span></div>'+
     '<ul class="list list-page">'+
-      shown.map(t=>todayRow(t, todayMeta(t))).join('')+
+      shown.map(t=>todayRow(t, todayMeta(t), '', true)).join('')+
       b.done.map(todayDoneRow).join('')+
     '</ul>'+
     (hidden > 0 ? '<button class="more" onclick="toggleTodayMore()">+ '+hidden+' autre'+(hidden>1?'s':'')+'</button>'
@@ -256,9 +264,16 @@ function shoppingButtonHtml(n){
   '</button>';
 }
 
-function softSection(titre, list){
+function softSection(titre, list, later){
   return '<div class="sec soft"><h2 class="sec-title">'+esc(titre)+'</h2></div>'+
-    '<ul class="list list-page">'+list.map(t=>todayRow(t, '', 'row-low')).join('')+'</ul>';
+    '<ul class="list list-page">'+list.map(t=>todayRow(t, '', 'row-low', later)).join('')+'</ul>';
+}
+
+// Rien de suivi nulle part : ni tâche (faite ou non), ni entretien, ni
+// habitude, ni repas, ni course, et la semaine type jamais réglée.
+function appIsBlank(){
+  return !live(S.tasks).length && !live(S.habits).length && !live(S.meals).length &&
+    !live(S.shopping).length && !S.settings.mealWeekSet;
 }
 
 function renderToday(){
@@ -272,7 +287,15 @@ function renderToday(){
                !b.chores.length && !b.choresDone.length && !b.quick.length && !habitsPendingCount(b.habits);
 
   let html;
-  if(vide){
+  if(vide && appIsBlank()){
+    // Une app qui ne suit encore rien (Lot V3-5) : « C'est bon pour
+    // aujourd'hui » y mentait — rien n'était fait, rien n'était installé.
+    // Elle propose alors ce qui la remplit d'un coup (ROADMAP-V3 §2.1) ; la
+    // barre de saisie, dessous, dit déjà comment ajouter une tâche.
+    html = emptyState('Rien n’est encore suivi.',
+      'Commence par ta maison : le pack installe d’un coup les entretiens courants, déjà réglés. Une tâche s’écrit simplement ci‑dessous.')+
+      '<button class="btn primary btn-full" onclick="packSheet()">Installer le pack maison</button>';
+  } else if(vide){
     // Principe 6 (CONVENTIONS.md §3) : quand c'est bon, l'app le dit et ne
     // propose RIEN d'autre — pas d'entretien encore vert, pas de « 10 minutes »,
     // pas de récapitulatif. Un écran qui remplit son propre silence n'est
@@ -306,7 +329,7 @@ function renderToday(){
       (b.shopping ? shoppingButtonHtml(b.shopping) : '')+
     '</div>';
   }
-  if(b.evening.length) html += softSection('Ce soir', b.evening);
+  if(b.evening.length) html += softSection('Ce soir', b.evening, true);
   if(!vide && b.quick.length) html += softSection('Si tu as 10 minutes', b.quick);
 
   document.getElementById('s-today').innerHTML =
