@@ -39,14 +39,16 @@ let _themeMql = null;
 function watchSystemTheme(){
   if(_themeMql || !window.matchMedia) return;
   _themeMql = matchMedia('(prefers-color-scheme: dark)');
-  const onChange = ()=>{ if((S.settings.theme||'auto') === 'auto') applyTheme(); };
+  // …et re-rendre : les oiseaux prennent leurs couleurs au rendu (OISEAUX_SOMBRE)
+  // et resteraient sinon dans celles de l'ancien thème (Lot V3-4).
+  const onChange = ()=>{ if((S.settings.theme||'auto') === 'auto'){ applyTheme(); rerender(); } };
   if(_themeMql.addEventListener) _themeMql.addEventListener('change', onChange);
 }
 function setTheme(t){
   S.settings.theme = t;
   save();
   applyTheme();
-  renderSettings();
+  rerender();
 }
 
 function setUserName(v){
@@ -93,8 +95,12 @@ function setChoreBudget(v){
    téléchargement classique prend le relais. */
 function exportData(){
   saveNow();
-  const json = JSON.stringify(S, null, 2);
-  const name = 'mylife-'+todayKey()+'.json';
+  shareOrDownload(JSON.stringify(S, null, 2), 'mylife-'+todayKey()+'.json', markExported);
+}
+// Le chemin commun à tout fichier que l'app donne (sauvegarde, copie de
+// secours) : la feuille de partage si elle sait prendre un fichier, sinon un
+// téléchargement. `done` n'est appelé que si le fichier est vraiment parti.
+function shareOrDownload(json, name, done){
   let file = null;
   try{ file = new File([json], name, {type:'application/json'}); }catch(e){}
   if(file && navigator.canShare && navigator.share){
@@ -102,14 +108,14 @@ function exportData(){
     try{ ok = navigator.canShare({files:[file]}); }catch(e){}
     if(ok){
       navigator.share({files:[file], title:'Sauvegarde MyLife'})
-        .then(markExported)
-        .catch(err=>{ if(!err || err.name !== 'AbortError') downloadExport(json, name); });
+        .then(()=>{ if(done) done(); })
+        .catch(err=>{ if(!err || err.name !== 'AbortError') downloadExport(json, name, done); });
       return;
     }
   }
-  downloadExport(json, name);
+  downloadExport(json, name, done);
 }
-function downloadExport(json, name){
+function downloadExport(json, name, done){
   const url = URL.createObjectURL(new Blob([json], {type:'application/json'}));
   const a = document.createElement('a');
   a.href = url;
@@ -118,7 +124,29 @@ function downloadExport(json, name){
   a.click();
   a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 1500); // tout de suite, Safari peut annuler le téléchargement
-  markExported();
+  if(done) done();
+}
+
+/* Copie de secours d'un état illisible (Lot V3-4, loadState(), js/state.js) :
+   tant qu'elle existe, Réglages → Données propose de l'exporter telle quelle
+   — c'est la seule trace des données d'avant — puis de l'oublier. */
+async function corruptExportAction(){
+  const key = S.corruptBackup;
+  if(!key) return;
+  let raw = await idbGet(key);
+  if(!raw){ try{ raw = localStorage.getItem(LS_KEY + '-illisible'); }catch(e){} }
+  if(!raw){ toast('Copie de secours introuvable', {danger:true}); return; }
+  shareOrDownload(String(raw), 'mylife-copie-illisible-'+todayKey()+'.json', ()=>toast('Copie de secours exportée'));
+}
+function corruptForgetAction(){
+  confirmSheet('Oublier la copie de secours ? Exporte-la d’abord si elle peut encore servir.', 'Oublier', ()=>{
+    const key = S.corruptBackup;
+    delete S.corruptBackup;
+    save();
+    if(_db && key){ try{ _db.transaction('state','readwrite').objectStore('state').delete(key); }catch(e){} }
+    try{ localStorage.removeItem(LS_KEY + '-illisible'); }catch(e){}
+    renderSettings();
+  });
 }
 function markExported(){
   S.lastExport = Date.now();
@@ -370,6 +398,11 @@ function renderSettings(){
   const donnees = '<div class="card">'+birdOnCard(4, N)+
     '<h2 class="card-title">Données</h2>'+
     '<p class="row-meta">Export et import complets au format JSON. '+esc(lastExportTxt())+'</p>'+
+    (S.corruptBackup
+      ? '<p class="row-meta">Des données illisibles ont été mises de côté au démarrage : exporte-les, elles peuvent encore se réparer à la main.</p>'+
+        '<button class="btn secondary btn-full" onclick="corruptExportAction()">Exporter la copie de secours</button>'+
+        '<button class="btn quiet btn-full" onclick="corruptForgetAction()">Oublier la copie</button>'
+      : '')+
     '<button class="btn secondary btn-full" onclick="exportData()">Exporter mes données</button>'+
     '<button class="btn secondary btn-full" onclick="importDataPrompt()">Importer des données</button>'+
     '<input id="import-input" class="file-input" type="file" accept="application/json" onchange="onImportFile(this)">'+

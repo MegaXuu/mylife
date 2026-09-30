@@ -125,11 +125,22 @@ document.addEventListener('pointermove', e=>{
   e.preventDefault();
 });
 
+/* Un balayage engagé ne doit jamais finir en tap (Lot V3-4) : à la souris,
+   le navigateur envoie un click au relâchement, qui ouvrait la fiche de la
+   ligne juste avant que la confirmation de suppression ne la remplace. Le
+   click qui suit un balayage est avalé en phase de capture, avant tout
+   onclick=. */
+let _swipeClickGuard = 0;
+document.addEventListener('click', e=>{
+  if(Date.now() < _swipeClickGuard){ e.stopPropagation(); e.preventDefault(); _swipeClickGuard = 0; }
+}, true);
+
 function swipeEnd(e){
   if(!_swipe || (e && e.pointerId !== _swipe.pid)) return;
   const s = _swipe;
   _swipe = null;
   if(s.locked !== 'h') return; // rien engagé (tap simple, ou laissé au défilement)
+  _swipeClickGuard = Date.now() + 400;
   const commit = Math.abs(s.x) > s.w * SWIPE_COMMIT_RATIO ||
     (Math.abs(s.x) > 24 && Math.abs(s.vx) > SWIPE_COMMIT_VELOCITY);
   const dir = s.x < 0 ? 'left' : 'right';

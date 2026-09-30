@@ -5,7 +5,7 @@
    AUCUN RENDU DOM ICI — voir js/ui.js et les js/<ecran>.js pour l'affichage.
    ========================================================================== */
 
-const APP_VERSION = 'Bêta 3.3'; // à synchroniser avec CACHE (sw.js) à chaque release
+const APP_VERSION = 'Bêta 3.4'; // à synchroniser avec CACHE (sw.js) à chaque release
 
 const IDB_NAME = 'mylife';
 const IDB_VERSION = 1;
@@ -52,7 +52,14 @@ function defaults(){
   };
 }
 function migrate(r){
+  if(!r || typeof r !== 'object') throw new Error('état illisible');
   r.v = r.v || 1;
+  // Une collection qui n'est pas un tableau (fichier abîmé, import approximatif)
+  // redevient un tableau vide plutôt que de faire échouer tout le démarrage.
+  ['tasks','habits','meals','shopping','frequents'].forEach(k=>{ if(r[k] !== undefined && !Array.isArray(r[k])) r[k] = []; });
+  if(r.habitLog !== undefined && (typeof r.habitLog !== 'object' || Array.isArray(r.habitLog))) r.habitLog = {};
+  if(r.settings !== undefined && (typeof r.settings !== 'object' || Array.isArray(r.settings))) r.settings = {};
+  sanitizeKeys(r);
   r.tasks = (r.tasks || []).map(t=>{
     // Lot V1-3 : modèle Things 3 (start/due/bucket/effort/prio…). Les tâches
     // du Lot 1 n'avaient ni date ni catégorie : elles deviennent 'anytime'.
@@ -70,6 +77,7 @@ function migrate(r){
     // Lot V1-4 : moteur de récurrence (js/recur.js).
     if(t.repeat === undefined) t.repeat = null;
     if(t.history === undefined) t.history = [];
+    repairRecurring(t);
     return t;
   });
   // Lot V3-1 : les plantes ne sont plus un domaine à part. Une base qui en
@@ -105,6 +113,49 @@ function migrate(r){
     r.onboarded = !!hasData;
   }
   return r;
+}
+
+/* Lot V3-4 — deux réparations de tâches récurrentes, idempotentes, pour les
+   données écrites avant la correction de completeTask() (js/recur.js) :
+    · une tâche « après réalisation » SANS pièce avait reçu un doneAt comme un
+      entretien : elle avait disparu de Tâches sans jamais entrer dans
+      Maison. Elle redevient ouverte, due à sa prochaine occurrence ;
+    · un début resté dans le passé alors que l'échéance a avancé d'au moins
+      un cycle : c'est lui qui gardait la tâche dans « Aujourd'hui » tous les
+      jours. Il est effacé, l'échéance suffit. */
+function repairRecurring(t){
+  const r = t.repeat;
+  if(!r || t.deletedAt) return;
+  if(r.from === 'done' && !t.room && t.doneAt){
+    t.start = t.due || nextOccurrence(r, dayKey(new Date(t.doneAt)));
+    t.due = null;
+    t.doneAt = null;
+    t.bucket = 'scheduled';
+    return;
+  }
+  const iv = intervalDays(r);
+  if(!(r.from === 'done' && t.room) && t.start && t.due && iv && daysBetween(t.start, t.due) >= iv) t.start = null;
+}
+
+/* Défense en profondeur (Lot V3-4) : les identifiants et les clés de pièce
+   finissent dans des attributs onclick="fn('…')" ; esc() ne suffit pas dans
+   ce contexte (le navigateur décode &#39; avant d'exécuter le JS). Un fichier
+   importé — seule source possible de valeurs arbitraires — ne doit donc
+   jamais y faire entrer autre chose que des caractères sûrs. Un objet dont
+   l'identifiant ne l'est pas en reçoit un neuf ; une pièce inconnue devient
+   « partout » ; un repas mal daté est écarté. */
+const SAFE_KEY = /^[A-Za-z0-9_-]{1,64}$/;
+const SAFE_DAY = /^\d{4}-\d{2}-\d{2}$/;
+function sanitizeKeys(r){
+  ['tasks','habits','meals','shopping'].forEach(k=>{
+    if(Array.isArray(r[k])) r[k] = r[k].filter(o=>o && typeof o === 'object');
+    (r[k] || []).forEach(o=>{ if(typeof o.id !== 'string' || !SAFE_KEY.test(o.id)) o.id = crypto.randomUUID(); });
+  });
+  (r.tasks || []).forEach(t=>{ if(t.room != null && !SAFE_KEY.test(String(t.room))) t.room = 'partout'; });
+  (r.meals || []).forEach(m=>{
+    if(!SAFE_DAY.test(String(m.day)) || (m.slot !== 'midi' && m.slot !== 'soir')) m.deletedAt = m.deletedAt || Date.now();
+  });
+  r.frequents = (r.frequents || []).filter(f=>f && /^[a-z0-9 -]*$/.test(String(f.norm)));
 }
 
 // Une plante vivante → un entretien par pièce. Idempotent : la clé plants
@@ -183,18 +234,29 @@ function idbClearPhotos(){
   });
 }
 
+/* Jamais de perte silencieuse (Lot V3-4). Jusqu'ici, un état stocké qu'on
+   ne savait plus relire (JSON abîmé, migration qui échoue sur une donnée
+   imprévue) était remplacé sans un mot par defaults() — puis écrasé au
+   premier save(). Il est désormais recopié tel quel sous une clé à part
+   AVANT de repartir de zéro ; boot() le signale, et Réglages → Données
+   permet de l'exporter (corruptExportAction(), js/settings.js). */
+let _corruptKey = null;
 async function loadState(){
   _db = await openDb();
-  if(_db){
-    const raw = await idbGet('S');
-    if(raw){ try{ return migrate(JSON.parse(raw)); }catch(e){} }
-    return defaults();
+  let raw = null;
+  if(_db) raw = await idbGet('S');
+  else { try{ raw = localStorage.getItem(LS_KEY); }catch(e){} } // IndexedDB indisponible : repli sur localStorage
+  if(!raw) return defaults();
+  try{ return migrate(JSON.parse(raw)); }
+  catch(e){
+    _corruptKey = 'S-illisible-' + todayKey();
+    if(_db) await idbSet(_corruptKey, raw);
+    else { try{ localStorage.setItem(LS_KEY + '-illisible', raw); }catch(err){} }
+    const s = defaults();
+    s.corruptBackup = _corruptKey;
+    s.onboarded = true; // une base qui avait des données n'est pas une première ouverture
+    return s;
   }
-  // IndexedDB indisponible (mode privé, quota…) : repli silencieux sur localStorage seul.
-  let lsRaw = null;
-  try{ lsRaw = localStorage.getItem(LS_KEY); }catch(e){}
-  if(lsRaw){ try{ return migrate(JSON.parse(lsRaw)); }catch(e){} }
-  return defaults();
 }
 
 let _dirty = false, _writing = false, _saveTimer = null;
@@ -264,4 +326,11 @@ function addDays(k, n){
 }
 function daysBetween(a, b){
   return Math.round((new Date(b+'T00:00') - new Date(a+'T00:00')) / 86400000);
+}
+// Jour ISO 1..7 (lundi..dimanche) — la convention de repeat.days, des
+// habitudes et de la semaine type des repas. Ici depuis le Lot V3-4 : le
+// moteur de récurrence en a besoin, il ne doit pas dépendre de js/habits.js.
+function isoDow(k){
+  const d = new Date(k+'T00:00').getDay();
+  return d === 0 ? 7 : d;
 }

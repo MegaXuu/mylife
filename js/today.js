@@ -327,10 +327,7 @@ function toggleTodayMore(){ _todayMore = !_todayMore; renderToday(); }
 function todayDone(id){
   const t = S.tasks.find(x=>x.id === id);
   if(!t) return;
-  tickToday(id, {       // la ligne reste posée, barrée, jusqu'au prochain démarrage
-    doneAt: t.doneAt, due: t.due, postponed: t.postponed || 0,
-    history: (t.history || []).slice()
-  });
+  tickToday(id, completionSnapshot(t)); // la ligne reste posée, barrée, jusqu'au prochain démarrage
   completeTask(t);    // recalcule l'échéance si récurrente (js/recur.js)
   save();
   markPop(id);        // la case de la ligne barrée joue sa petite animation (Lot V3-3)
@@ -342,13 +339,8 @@ function todayUndone(id){
   const t = S.tasks.find(x=>x.id === id);
   if(!t) return;
   const snap = tickSnapshot(id);
-  if(snap){
-    t.doneAt = snap.doneAt; t.due = snap.due;
-    t.postponed = snap.postponed; t.history = snap.history;
-  } else {
-    t.doneAt = null;  // cliché perdu : on relâche au moins la tâche
-  }
-  touch(t);
+  if(snap) restoreCompletion(t, snap);
+  else { t.doneAt = null; touch(t); } // cliché perdu : on relâche au moins la tâche
   untickToday(id);
   save();
   hideToast();

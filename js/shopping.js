@@ -342,16 +342,7 @@ function deleteShopItem(id){
   const it = S.shopping.find(x => x.id === id);
   if(!it) return;
   confirmSheet('Supprimer « '+it.label+' » ?', 'Supprimer', () => {
-    it.deletedAt = Date.now();
-    touch(it);
-    save();
-    renderShopping();
-    undoable('Article supprimé', ()=>{
-      it.deletedAt = null;
-      touch(it);
-      save();
-      renderShopping();
-    });
+    removeWithUndo(it, 'Article supprimé', renderShopping);
   });
 }
 

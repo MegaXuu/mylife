@@ -10,16 +10,20 @@
 const REVIEW_STALE_DAYS = 30;   // touchedAt plus vieux que ça → candidate
 const REVIEW_POSTPONE_MAX = 3;  // postponed au-delà de ça → candidate aussi
 
-// Candidates : tâches ouvertes. Jamais l'entretien (repeat.from:'done') : ces
-// tâches gardent toujours un doneAt (glossaire CONVENTIONS.md §6) et sont
-// donc déjà exclues par le filtre !t.doneAt — comme dans getTaskItems()
-// (js/tasks.js). Triées de la plus dormante à la plus récente.
+/* Candidates : tâches ouvertes qui dorment — rien d'autre. Jamais :
+    · un entretien (isChore(), Lot V3-3), piloté par sa jauge dans Maison ;
+    · une tâche récurrente (Lot V3-4) : elle revient d'elle-même à son
+      rythme, un loyer mensuel pas retouché depuis 30 jours n'est pas
+      « dormant », et « Abandonner » le supprimait pour de bon ;
+    · une tâche datée dans le futur (Lot V3-4) : une échéance le mois
+      prochain attend son heure, elle ne dort pas.
+   Triées de la plus dormante à la plus récente. */
 function reviewCandidates(ref){
   ref = ref || Date.now();
   const cutoff = ref - REVIEW_STALE_DAYS*24*60*60*1000;
-  // Jamais un entretien, même jamais fait (isChore(), Lot V3-3) : il se
-  // pilote par sa jauge dans Maison, pas par une revue de dormance.
-  return live(S.tasks).filter(t=>!t.doneAt && !isChore(t) &&
+  const today = dayKey(new Date(ref));
+  const future = t=>(t.start && t.start > today) || (!t.start && t.due && t.due > today);
+  return live(S.tasks).filter(t=>!t.doneAt && !isChore(t) && !t.repeat && !future(t) &&
       ((t.touchedAt || t.createdAt || 0) < cutoff || (t.postponed||0) > REVIEW_POSTPONE_MAX))
     .sort((a,b)=>(a.touchedAt||a.createdAt||0) - (b.touchedAt||b.createdAt||0));
 }
@@ -141,15 +145,7 @@ function reviewSomeday(){
 function reviewDrop(){
   const t = S.tasks.find(x=>x.id === _reviewQueue[_reviewIndex]);
   if(t){
-    t.deletedAt = Date.now();
-    touch(t);
-    save();
-    toast('Tâche abandonnée', {action:{label:'Annuler', fn:()=>{
-      t.deletedAt = null;
-      touch(t);
-      save();
-      rerender();
-    }}});
+    removeWithUndo(t, 'Tâche abandonnée', rerender, {render:false});
   }
   _reviewSorted++;
   advanceReview();

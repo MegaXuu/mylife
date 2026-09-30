@@ -109,12 +109,13 @@ sombre — audit D2) : le bandeau système de la PWA installée suit désormais 
 
 ## Fichiers et ordre de chargement
 Ordre impératif (CONVENTIONS.md §1), déclaré dans `index.html`, miroir dans `sw.js` (`ASSETS`) et
-`test.mjs` (`FILES`) — **17 fichiers** au total depuis le Lot V3-2 (V3-1 : `js/plants.js` et
-`data/plantes.js` retirés ; V3-2 : `js/meals.js` ajouté après `js/shopping.js`) :
+`test.mjs` (`FILES`) — **18 fichiers** au total depuis le Lot V3-4 (V3-1 : `js/plants.js` et
+`data/plantes.js` retirés ; V3-2 : `js/meals.js` ajouté après `js/shopping.js` ; V3-4 :
+`js/habits-screen.js` scindé de `js/habits.js`) :
 ```
 data/rayons.js · data/entretien.js · data/oiseaux.js
 → js/state.js → js/ui.js → js/gestures.js → js/recur.js → js/nlp.js → js/today.js → js/tasks.js
-→ js/maison.js → js/habits.js → js/shopping.js → js/meals.js → js/review.js
+→ js/maison.js → js/habits.js → js/habits-screen.js → js/shopping.js → js/meals.js → js/review.js
 → js/settings.js → js/boot.js (toujours en dernier)
 ```
 Deux seules règles dures : `state.js` en premier (socle `S`, aucun rendu DOM), `boot.js` en dernier
@@ -467,7 +468,11 @@ uniquement des déclarations.
   `_onSheetClose` pose `S.onboarded = true` quel que soit le chemin de fermeture — jamais revue une
   fois fermée. Seul écran en `screenHead(..., {noGear:true})` : l'engrenage y mène, il n'y apparaît
   pas.
-- `js/recur.js` — moteur de récurrence, **rempli au Lot 4**, fonctions pures sans DOM, testées
+- `js/recur.js` — **depuis le Lot V3-4** : `nextOccurrence(r, anchor)` (le calcul pur, mois/années
+  bornés, `repeat.dom`), `firstOccurrence(r, ref)`, `completeTask()` à trois cas (entretien → `doneAt` ;
+  récurrente ouverte → avance, début compris ; ponctuelle → `doneAt`), `completionSnapshot()`/
+  `restoreCompletion()`. L'historique ci-dessous décrit le moteur d'origine.
+- `js/recur.js` (historique) — moteur de récurrence, **rempli au Lot 4**, fonctions pures sans DOM, testées
   isolément dans `test.mjs` : `intervalDays(repeat)` (intervalle en jours tous kinds confondus,
   approximation pour la jauge), `nextDue(task, ref)` (distinction `repeat.from:'due'` — depuis
   l'échéance précédente, calendaire exact via `setMonth`/`setFullYear` — / `'done'` — depuis
@@ -650,6 +655,10 @@ uniquement des déclarations.
   écrasé, annulable), « Reprendre la semaine dernière », la grille (14 cellules, un oiseau), la ligne
   d'Aujourd'hui (silencieuse tant que Menus n'a jamais servi, midi/soir selon l'heure, hors pastille)
   et l'onglet Repas partagé par Menus et Courses.
+- **Serveur de développement (Lot V3-4)** : `node tools/serve.mjs [port]` (configuration
+  `mylife-dev` de `.claude/launch.json`, port 8641) sert le projet en `Cache-Control: no-store` —
+  plus besoin de changer de port pour échapper au cache. Le service worker, lui, reste actif : après
+  une modification, recharger une fois suffit (installation en `cache:'reload'` depuis le V3-4).
 - **Piège de prévisualisation, reconfirmé au Lot V3-2** : même après `unregister()` du service worker
   et vidage des caches, le nouveau service worker remplit son cache avec `cache.addAll()` — qui passe
   par le cache HTTP du navigateur, donc peut y reprendre l'ancienne version d'un fichier servi sans
@@ -715,10 +724,10 @@ réglée au moins une fois. La bibliothèque de plats n'est pas stockée : elle 
   Lots 3 et 4 ont dérivé sans le savoir (écarts listés dans « Identité visuelle »). En cas de
   désaccord entre le code livré et la maquette, **c'est la maquette qui gagne** (arbitrage 27/07).
 - **Les trois listes miroir** (`<script>` de `index.html`, `ASSETS` de `sw.js`, `FILES` de
-  `test.mjs`) doivent toujours lister les **17 mêmes fichiers** dans le même ordre. Piège classique :
+  `test.mjs`) doivent toujours lister les **18 mêmes fichiers** dans le même ordre. Piège classique :
   ajouter un fichier sans mettre à jour les trois — l'app marche en local et casse une fois installée.
-  (Décompte : 3 `data/` + 14 `js/` = 17 depuis le Lot V3-2 : le V3-1 a retiré `js/plants.js` et
-  `data/plantes.js`, le V3-2 ajouté `js/meals.js`. Avant : le Lot 2 avait ajouté `data/oiseaux.js`, le Lot V2-1
+  (Décompte : 3 `data/` + 15 `js/` = 18 depuis le Lot V3-4 : le V3-1 a retiré `js/plants.js` et
+  `data/plantes.js`, le V3-2 ajouté `js/meals.js`, le V3-4 `js/habits-screen.js`. Avant : le Lot 2 avait ajouté `data/oiseaux.js`, le Lot V2-1
   `js/gestures.js` — à chaque fois le même risque, et les trois listes ont bien été mises à jour
   ensemble.)
 - **Incrémenter `CACHE` (sw.js) à chaque release**, synchroniser `APP_VERSION` (`js/state.js`) sur le
@@ -797,6 +806,41 @@ assumée à « un lot = une session »), chacun avec son commit et sa version.
   exceptions seules stockées, compte (repas, portions, à choisir), plats appris, restes, « Me
   proposer », « Reprendre la semaine dernière », quelques courses depuis un repas ; onglet **Repas**
   (Menus | Courses) à la place de Courses ; « Ce soir : … » sur Aujourd'hui.
+- **V3-4 — Qualité du code** (Bêta 3.4) : ✅ Fait, carte blanche de Florian pour « améliorer tout le
+  code ». Revue intégrale fichier par fichier ; les bugs trouvés d'abord, la maintenabilité ensuite.
+  **Récurrence** (`js/recur.js`) : une tâche « après réalisation » **sans pièce** recevait un `doneAt`
+  comme un entretien, quittait Tâches sans jamais entrer dans Maison — elle **disparaissait** après
+  sa première réalisation ; et le `start` d'une tâche récurrente ne bougeait pas, qui la gardait dans
+  « Aujourd'hui » tous les jours. `completeTask()` distingue désormais l'entretien (pièce +
+  `from:'done'`, `doneAt`) de la tâche récurrente **ouverte** (reste active, avance à sa prochaine
+  occurrence, le début suit l'échéance en gardant son avance), et pose `touchedAt`. Cœur pur extrait :
+  `nextOccurrence(r, anchor)` (mois/années **bornés** au dernier jour — le 31 janvier + 1 mois faisait
+  le 3 mars — et `repeat.dom` pour « tous les 31 du mois »), `firstOccurrence()`. Annulation : un seul
+  cliché `completionSnapshot()`/`restoreCompletion()` (trois copies avant, aucune ne gardait `start`).
+  `migrate()` **répare** l'existant (`repairRecurring()` : les tâches disparues reviennent, les débuts
+  coincés s'effacent), **assainit** ce qui finit dans un `onclick=` (`sanitizeKeys()` : id, pièce,
+  jour de repas, clé de fréquent — un fichier importé piégé ne peut plus injecter de JS) et tolère les
+  structures abîmées. **Jamais de perte silencieuse** : un état stocké illisible est recopié sous
+  `S-illisible-<jour>` avant de repartir de zéro (`loadState()`), signalé au démarrage, exportable
+  depuis Réglages (`corruptExportAction()`). **Parseur** (`js/nlp.js`) : « court », « long »,
+  « urgent », « important » ne sont plus des consignes qu'en fin de phrase (« Réserver le court de
+  tennis » perdait son « court ») ; une date impossible (« 31/02 », « le 45 ») reste dans le titre au
+  lieu de produire `NaN undefined` ; « le 31 » un mois de 30 jours vise le mois suivant ; une
+  récurrence sans date reçoit sa première occurrence (« Sport tous les lundis » tombe lundi, « tous les
+  5 du mois » le 5) ; dièses accentués et synonymes (`#toilettes`, `#extérieur`, `#maison`).
+  **Revue** : plus jamais une tâche récurrente ni datée dans le futur (« Abandonner » supprimait un
+  loyer mensuel). **Service worker** : installation en `cache:'reload'` (après un push, il pouvait
+  remplir son cache neuf avec l'ancienne version, encore fraîche dans le cache HTTP de Pages),
+  revalidation au serveur (`no-cache`), navigation avec paramètres servie hors-ligne, adresse inconnue
+  renvoyée à la racine, rien d'externe. **Robustesse** : bascule de jour (`refreshIfNewDay()`, rouverte
+  le lendemain l'app montrait la veille), erreur inattendue signalée par un toast
+  (`onUnexpectedError()`), clic fantôme après un balayage avalé, oiseaux re-rendus au changement de
+  thème système, habitude à jours fixes sans jour refusée. **Maintenabilité** : `removeWithUndo()`
+  (quatre suppressions écrites à la main — celle d'une habitude n'était pas annulable), `isoDow()`
+  dans `state.js`, `habits.js` scindé en `habits.js` (moteur + bloc du jour) et `habits-screen.js`
+  (écran, fiche, calendrier), `tools/serve.mjs` (serveur de dev sans cache). **Tests** : harnais
+  réparé (`String.replace` avec une chaîne interprétait le `$'` d'une regex de l'app), fin de
+  processus explicite, une trentaine d'assertions nouvelles.
 - **V3-3 — Mouvement, finition, QA** (Bêta 3.3) : ✅ Fait, carte blanche de Florian pour « tout
   améliorer ». Précédé d'un **audit mesuré** de l'app réelle (pack installé, jeu de données complet,
   clair et sombre), dont sont sortis la plupart des correctifs. **Mouvement** : fondu d'écran dans
@@ -969,10 +1013,8 @@ reporté délibérément, hors périmètre d'un lot « polish sans nouvelle fonc
   prudence (risque de régression disproportionné pour une amélioration purement sémantique, sans
   impact visuel). Les contrastes et tailles de cible, eux, sont conformes (voir tableau Lot 12).
 - ~~`--t-plantes` (variable CSS) dormante~~ — **retirée au Lot V3-1**, avec les plantes.
-- **`js/habits.js` à 628 lignes** (Lot V3-3), juste au-dessus du seuil indicatif de ~600
-  (`CONVENTIONS.md` §1) : pas scindé pour 28 lignes. Au prochain ajout dans ce domaine, séparer le
-  moteur (série, quota, journal) de l'écran et du bloc d'Aujourd'hui — un 18ᵉ fichier, donc les trois
-  listes miroir à tenir ensemble.
+- ~~`js/habits.js` à 628 lignes~~ — **scindé au Lot V3-4** (`habits.js` 403 lignes, moteur et bloc
+  du jour ; `habits-screen.js` 228 lignes, écran, fiche et calendrier).
 - **`rayonOrderSheet()` dupliqué** (Réglages → Courses, et l'écran Courses lui-même) : audité au
   Lot 12, Florian a choisi de garder les deux. Ce n'est donc pas une dette, mais une décision à ne
   pas re-questionner sans raison nouvelle.

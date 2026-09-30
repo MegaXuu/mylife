@@ -286,15 +286,14 @@ function renderTasks(){
 function doneTask(id, btn){
   const t = S.tasks.find(x=>x.id === id);
   if(!t) return;
-  const snap = {doneAt:t.doneAt, due:t.due, postponed:t.postponed||0, history:(t.history||[]).slice()};
+  const snap = completionSnapshot(t);
   completeTask(t); // recalcule l'échéance et la fraîcheur si récurrente (js/recur.js)
   save();
   popThen(btn, rerender);
   undoable(t.title + ' : fait.', ()=>{
     const x = S.tasks.find(y=>y.id === id);
     if(!x) return;
-    x.doneAt = snap.doneAt; x.due = snap.due; x.postponed = snap.postponed; x.history = snap.history;
-    touch(x);
+    restoreCompletion(x, snap);
     save();
     rerender();
   });
@@ -319,17 +318,7 @@ function delTask(id){
   const t = S.tasks.find(x=>x.id === id);
   if(!t) return;
   confirmSheet('Supprimer « '+t.title+' » ?', 'Supprimer', ()=>{
-    t.deletedAt = Date.now();
-    touch(t);
-    save();
-    rerender();
-    // Tombstone, donc annulable tant que le toast est là : on remet deletedAt à null.
-    toast('Tâche supprimée', {action:{label:'Annuler', fn:()=>{
-      t.deletedAt = null;
-      touch(t);
-      save();
-      rerender();
-    }}});
+    removeWithUndo(t, isChore(t) ? 'Entretien supprimé' : 'Tâche supprimée', rerender);
   });
 }
 
@@ -385,7 +374,8 @@ function taskSheet(id){
     room: t.room || null, bucket: t.bucket || 'anytime', start: t.start || null,
     due: t.due || null, evening: !!t.evening, prio: t.prio || 0, effort: t.effort || 2,
     mins: t.mins || EFFORT_MINS[t.effort || 2],
-    repeat: t.repeat ? {kind:t.repeat.kind, n:t.repeat.n||1, days:(t.repeat.days||[]).slice(), from:t.repeat.from||'done'} : null
+    repeat: t.repeat ? {kind:t.repeat.kind, n:t.repeat.n||1, days:(t.repeat.days||[]).slice(), from:t.repeat.from||'done',
+      dom:t.repeat.dom || undefined} : null
   } : {
     id: null, title:'', notes:'', cat:'perso', room:null, bucket:'anytime',
     start:null, due:null, evening:false, prio:0, effort:2, mins:EFFORT_MINS[2], repeat:null

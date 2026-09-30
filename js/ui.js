@@ -293,11 +293,43 @@ function _runToastAct(){
   if(a && a.fn) a.fn();
 }
 
+// Une erreur inattendue ne passe plus inaperçue (Lot V3-4) : jusqu'ici, un
+// onclick= qui échouait ne faisait simplement rien, et rien ne disait qu'il
+// fallait se méfier. Un toast sobre, au plus un toutes les dix secondes.
+let _errToastAt = 0;
+function onUnexpectedError(){
+  const now = Date.now();
+  if(now - _errToastAt < 10000) return;
+  _errToastAt = now;
+  toast('Un souci inattendu est survenu. Si ça se répète, exporte tes données.', {danger:true});
+}
+window.addEventListener('error', onUnexpectedError);
+window.addEventListener('unhandledrejection', onUnexpectedError);
+
 // Enveloppe toast() avec une action « Annuler » déjà câblée (Lot V2-1) : le
 // motif qui revient partout où la V2 rend une action annulable (ROADMAP-V2.md
 // §1, checklist §6). Réutilise toast(msg, {action:{...}}) tel quel.
 function undoable(msg, undoFn){
   toast(msg, {action:{label:'Annuler', fn:undoFn}});
+}
+
+// Suppression d'un objet persisté (Lot V3-4) : tombstone — jamais un splice(),
+// CONVENTIONS.md §2 — puis un toast « Annuler » qui le ressuscite. Le motif
+// de delTask(), deleteShopItem(), deleteHabit() et de la revue, écrit quatre
+// fois à la main avant ce lot (et oublié pour les habitudes, supprimées sans
+// retour possible). `after` re-rend l'écran ; opts.render:false le réserve à
+// l'annulation (la revue enchaîne sur sa feuille suivante).
+function removeWithUndo(o, msg, after, opts){
+  o.deletedAt = Date.now();
+  touch(o);
+  save();
+  if(after && !(opts && opts.render === false)) after();
+  undoable(msg, ()=>{
+    o.deletedAt = null;
+    touch(o);
+    save();
+    if(after) after();
+  });
 }
 
 // Attributs communs d'une ligne cliquable (Lot V2-1, audit D3) : role="button",

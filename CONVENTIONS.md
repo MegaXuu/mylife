@@ -38,10 +38,11 @@ maintenant ? »** — tâches, entretien de la maison, habitudes, repas, courses
 ```
 data/rayons.js · data/entretien.js · data/oiseaux.js
 state.js → ui.js → gestures.js → recur.js → nlp.js → today.js → tasks.js → maison.js
-→ habits.js → shopping.js → meals.js → review.js → settings.js → boot.js
+→ habits.js → habits-screen.js → shopping.js → meals.js → review.js → settings.js → boot.js
 ```
-(État au Lot V3-2 : 17 fichiers. Les plantes — `plants.js`, `data/plantes.js` — ont été retirées au
-Lot V3-1, `meals.js` ajouté au Lot V3-2 ; voir `ROADMAP-V3.md`.)
+(État au Lot V3-4 : 18 fichiers. Les plantes — `plants.js`, `data/plantes.js` — ont été retirées au
+Lot V3-1, `meals.js` ajouté au Lot V3-2, `habits-screen.js` scindé de `habits.js` au Lot V3-4 ;
+voir `ROADMAP-V3.md`.)
 Deux seules règles dures : **`state.js` en premier** (socle, `S`, aucun rendu DOM) et
 **`boot.js` en dernier** (il touche presque tout au démarrage). Entre les deux, l'ordre est libre
 car ces fichiers ne contiennent que des déclarations, aucun code exécuté au chargement.
@@ -141,6 +142,10 @@ Toute lecture de collection passe par `live()`. Toute mutation passe par `touch(
 - Lignes cliquables : `rowAttrs()` sur `.row-main`, qui s'étire sur toute la hauteur de la ligne
   (CSS du Lot V3-3) — une cible, c'est la ligne entière, pas son texte.
 - Puces à état (`.chip` avec `on`) : toujours `aria-pressed` (Lot V3-3).
+- Suppression : `removeWithUndo(obj, message, rerender)` (Lot V3-4) — tombstone + « Annuler », jamais
+  réécrit à la main.
+- Tout identifiant ou clé qui finit dans un `onclick="fn('…')"` doit être sûr (`[A-Za-z0-9_-]`) :
+  `esc()` ne protège pas ce contexte. `migrate()` y veille pour les données importées (`sanitizeKeys()`).
 - Feuilles modales : `openSheet(html)` / `closeSheet()`. Fermeture par bouton, par tap en dehors et
   par glisser vers le bas depuis la poignée.
 - Confirmations destructives : **jamais `confirm()` natif** — feuille `confirmSheet(message, label,
@@ -218,6 +223,7 @@ Vocabulaire à employer dans le code **et** dans l'interface, sans synonyme flot
 | **Sauté** | Jour explicitement neutralisé sur une habitude. Ni réussite ni échec |
 | **Bucket** | `scheduled` (a une date) · `anytime` (faisable dès qu'il y a un trou) · `someday` (pas mûr, n'apparaît nulle part) |
 | **Début** (`start`) | Le jour où je veux **m'en occuper**. Fait apparaître la tâche dans « Aujourd'hui » |
+| **Tâche récurrente ouverte** | Une tâche récurrente qui n'est pas un entretien (`from:'due'`, ou `from:'done'` sans pièce). Faite, elle reste active et avance à sa prochaine occurrence — depuis l'occurrence honorée (à date fixe) ou depuis le jour de réalisation (après réalisation) ; son début suit son échéance (Lot V3-4) |
 | **Échéance** (`due`) | La **vraie** deadline. Seule elle peut produire un « en retard » |
 | **Effort** | 1 court (~5 min) · 2 moyen (~20 min) · 3 long (~1 h). Alimente « si tu as 10 minutes » |
 | **Revue** | Le tri hebdomadaire des tâches dormantes : faire · reporter · abandonner |

@@ -4,6 +4,21 @@
    mise en arrière-plan, vérification de mise à jour au retour au premier
    plan. Ne rien charger après ce fichier.
    ========================================================================== */
+// Jour du dernier rendu (Lot V3-4). Une PWA reste en mémoire des jours
+// entiers : rouverte le lendemain matin, elle montrait encore « Aujourd'hui »
+// de la veille — sa date, ses cochages, son entretien — jusqu'au premier tap.
+let _renderedDay = null;
+function refreshIfNewDay(){
+  const k = todayKey();
+  if(_renderedDay === k) return;
+  _renderedDay = k;
+  // Jamais sous une feuille ouverte ou pendant une saisie : on rafraîchira
+  // au prochain passage, rien ne presse au point d'effacer ce qu'on tape.
+  const typing = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+  if(document.getElementById('sheet-bg').classList.contains('show') || typing){ _renderedDay = null; return; }
+  rerender();
+}
+
 async function boot(){
   S = await loadState();
   purgeTombstones();
@@ -11,7 +26,11 @@ async function boot(){
   applyTheme(); // js/settings.js — avant le premier rendu, pour éviter tout flash
   watchSystemTheme();
   go('today');
-  announceUpdate();    // js/settings.js — un toast quand une nouvelle version vient d'arriver
+  _renderedDay = todayKey();
+  // État stocké illisible (loadState(), js/state.js) : il a été recopié à part
+  // avant de repartir de zéro — le dire tout de suite, jamais en silence.
+  if(_corruptKey){ toast('Données illisibles : une copie de secours a été gardée (Réglages → Données).', {danger:true}); save(); }
+  else announceUpdate(); // js/settings.js — un toast quand une nouvelle version vient d'arriver
   maybeWelcome();      // js/settings.js — uniquement au tout premier lancement
   maybeStartReview();  // js/review.js — le jour venu, si des tâches dorment
 }
@@ -57,6 +76,10 @@ document.addEventListener('visibilitychange', ()=>{
     // Vérifie une nouvelle version à chaque retour au premier plan (iOS ne le
     // fait pas de lui-même) — évite de rester bloqué sur une ancienne Bêta.
     if(_swReg) try{ _swReg.update(); }catch(e){}
+    refreshIfNewDay();
   }
 });
+// Laissée ouverte au premier plan, l'app passe minuit elle aussi : un coup
+// d'œil par minute suffit, le rendu ne coûte rien s'il n'a pas lieu d'être.
+setInterval(()=>{ if(document.visibilityState !== 'hidden') refreshIfNewDay(); }, 60000);
 window.addEventListener('pagehide', ()=>{ saveNow(); updateBadge(); });

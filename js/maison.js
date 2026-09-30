@@ -188,7 +188,7 @@ function tapMaisonItem(id){
   // Motivation légère (Lot 10) : la toute première réalisation d'un entretien
   // annuel mérite un mot sobre — après ça, history n'est plus vide.
   const firstAnnual = t.repeat && t.repeat.kind === 'year' && !(t.history && t.history.length);
-  const snap = {doneAt:t.doneAt, due:t.due, postponed:t.postponed||0, history:(t.history||[]).slice()};
+  const snap = completionSnapshot(t);
   completeTask(t);
   save();
   setTimeout(renderMaison, reduceMotion() ? 0 : 260);
@@ -198,8 +198,7 @@ function tapMaisonItem(id){
   undoable(msg, ()=>{
     const x = S.tasks.find(y=>y.id === id);
     if(!x) return;
-    x.doneAt = snap.doneAt; x.due = snap.due; x.postponed = snap.postponed; x.history = snap.history;
-    touch(x);
+    restoreCompletion(x, snap);
     save();
     renderMaison();
   });

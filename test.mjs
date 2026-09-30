@@ -20,13 +20,17 @@ const read = f => readFileSync(root + f, 'utf8');
 const FILES = [
   'data/rayons.js', 'data/entretien.js', 'data/oiseaux.js',
   'js/state.js', 'js/ui.js', 'js/gestures.js', 'js/recur.js', 'js/nlp.js', 'js/today.js',
-  'js/tasks.js', 'js/maison.js', 'js/habits.js',
+  'js/tasks.js', 'js/maison.js', 'js/habits.js', 'js/habits-screen.js',
   'js/shopping.js', 'js/meals.js', 'js/review.js', 'js/settings.js', 'js/boot.js',
 ];
 const bundle = FILES.map(read).join('\n');
 const html = read('index.html')
   .replace(/<script src="[^"]+"><\/script>\s*/g, '') // retire les 17 balises externes
-  .replace('</body>', `<script>${bundle}</script>\n<script>window.__S=function(){return S;};</script>\n</body>`);
+  // Remplaçant en fonction, jamais en chaîne : une chaîne de remplacement
+  // interprète « $' », « $& »… — or le code de l'app en contient (une regex de
+  // js/nlp.js finit par « $' »), ce qui injectait le reste du document au
+  // milieu du script (repéré au Lot V3-4).
+  .replace('</body>', () => `<script>${bundle}</script>\n<script>window.__S=function(){return S;};</script>\n</body>`);
 
 const fails = [];
 const onError = (label, e) => fails.push(`${label} → ${e && e.message ? e.message : e}`);
@@ -304,7 +308,7 @@ call('nextDue jours fixes de semaine', () => {
 });
 
 call('completeTask from:done — doneAt se pose sur l’instant, la tâche reste visible en Maison', () => {
-  const t = {doneAt: null, due: null, repeat: {kind: 'day', n: 7, from: 'done'}, history: [], postponed: 2};
+  const t = {doneAt: null, due: null, room: 'salon', repeat: {kind: 'day', n: 7, from: 'done'}, history: [], postponed: 2};
   win.completeTask(t);
   if(!t.doneAt) throw new Error('completeTask from:done devrait poser doneAt');
   if(t.postponed !== 0) throw new Error('completeTask devrait remettre postponed à 0');
@@ -2020,6 +2024,179 @@ call('V3-3 — sauvegarde : la date du dernier export se dit, une mise à jour s
   }
 });
 
+// 6 sedecies) Lot V3-4 — qualité du code. Récurrence : une tâche « après
+// réalisation » sans pièce ne disparaît plus, un début avance avec son
+// échéance, les mois courts ne débordent plus.
+call('V3-4 — récurrence sans pièce « après réalisation » : reste ouverte et revient', () => {
+  const k = '2026-07-27';
+  const t = {title: 'Appeler maman', room: null, start: k, due: null, bucket: 'scheduled',
+    repeat: {kind: 'day', n: 7, days: [], from: 'done'}, history: [], postponed: 1, doneAt: null};
+  win.completeTask(t, new Date(k + 'T18:00').getTime());
+  if(t.doneAt !== null) throw new Error('une tâche récurrente sans pièce ne reçoit jamais de doneAt (elle disparaissait)');
+  if(t.start !== '2026-08-03') throw new Error('elle revient 7 jours après sa réalisation, obtenu ' + t.start);
+  if(t.bucket !== 'scheduled' || t.postponed !== 0 || t.history.join() !== k) throw new Error('planifiée, reports remis à 0, réalisation historisée');
+});
+call('V3-4 — récurrence à date fixe : le début avance avec l’échéance, en gardant son avance', () => {
+  const t = {title: 'Loyer', room: null, start: '2026-08-03', due: '2026-08-05', bucket: 'scheduled',
+    repeat: {kind: 'month', n: 1, days: [], from: 'due'}, history: [], postponed: 0, doneAt: null};
+  win.completeTask(t, new Date('2026-08-04T10:00').getTime());
+  if(t.due !== '2026-09-05' || t.start !== '2026-09-03')
+    throw new Error('échéance au mois suivant, début 2 jours avant comme avant ; obtenu ' + t.start + ' → ' + t.due);
+  const u = {title: 'Relevé', room: null, start: '2026-08-05', due: null, bucket: 'scheduled',
+    repeat: {kind: 'month', n: 1, days: [], from: 'due'}, history: [], postponed: 0, doneAt: null};
+  win.completeTask(u, new Date('2026-08-06T10:00').getTime());
+  if(u.start !== '2026-09-05') throw new Error('sans échéance, c’est le début qui avance d’un cycle, obtenu ' + u.start);
+  if(u.due !== null) throw new Error('une tâche sans échéance n’en reçoit pas');
+});
+call('V3-4 — mois et années : bornés au dernier jour, sans dériver', () => {
+  const m = {kind: 'month', n: 1};
+  if(win.nextOccurrence(m, '2026-01-31') !== '2026-02-28') throw new Error('31 janvier + 1 mois = 28 février, pas le 3 mars');
+  if(win.nextOccurrence({kind: 'month', n: 1, dom: 31}, '2026-02-28') !== '2026-03-31') throw new Error('avec son jour voulu (dom), le 31 revient le 31');
+  if(win.nextOccurrence({kind: 'year', n: 1}, '2028-02-29') !== '2029-02-28') throw new Error('29 février + 1 an = 28 février');
+  if(win.nextOccurrence({kind: 'week', n: 1, days: [1, 4]}, '2026-07-27') !== '2026-07-30') throw new Error('jours fixes : du lundi au jeudi suivant');
+  if(win.firstOccurrence({kind: 'week', n: 1, days: [1]}, '2026-07-27') !== '2026-07-27') throw new Error('« tous les lundis » tapé un lundi : aujourd’hui');
+  if(win.firstOccurrence({kind: 'week', n: 1, days: [3]}, '2026-07-27') !== '2026-07-29') throw new Error('« tous les mercredis » tapé un lundi : mercredi');
+});
+scenario('V3-4 — « Annuler » restitue aussi le début (cliché unique completionSnapshot())', () => {
+  const today = win.todayKey();
+  const t = mk({title: 'Relevé mensuel', bucket: 'scheduled', start: today, repeat: {kind: 'month', n: 1, days: [], from: 'due'}});
+  win.go('today');
+  const histAvant = (t.history || []).length; // DEFAUT_TACHE.history est partagé entre les mk() : longueur relative
+  win.todayDone(t.id);
+  if(t.start === today) throw new Error('faite, une tâche mensuelle quitte aujourd’hui');
+  win._runToastAct();
+  if(t.start !== today || t.bucket !== 'scheduled' || (t.history || []).length !== histAvant) throw new Error('annuler restitue début, bucket et historique');
+  win.doneTask(t.id);
+  win.untickToday(t.id);
+  if(win.todayBuckets().scheduled.some(x => x.id === t.id)) throw new Error('le lendemain d’une réalisation, elle n’encombre plus « Aujourd’hui »');
+});
+
+call('V3-4 — migrate() : tâches récurrentes réparées, clés dangereuses neutralisées', () => {
+  const r = win.migrate({v: 1, habits: [], habitLog: {}, shopping: [], frequents: [{norm: "x'); alert(1); ('", label: 'x', count: 5}], settings: {},
+    meals: [{id: 'm1', day: "2026-01-01'", slot: 'soir', dish: 'X'}],
+    tasks: [
+      {id: 'a1', title: 'Disparue', room: null, doneAt: new Date('2026-07-20T12:00').getTime(), due: '2026-07-27',
+        repeat: {kind: 'day', n: 7, days: [], from: 'done'}},
+      {id: 'a2', title: 'Coincée', room: null, start: '2026-05-05', due: '2026-08-05', doneAt: null,
+        repeat: {kind: 'month', n: 1, days: [], from: 'due'}},
+      {id: "a3'); alert(1); ('", title: 'Piégée', room: "cuisine'); alert(1); ('", doneAt: null, repeat: null}
+    ]});
+  const [a1, a2, a3] = r.tasks;
+  if(a1.doneAt !== null || a1.start !== '2026-07-27' || a1.due !== null || a1.bucket !== 'scheduled')
+    throw new Error('une tâche « après réalisation » sans pièce, disparue, redevient ouverte à sa prochaine occurrence');
+  if(a2.start !== null || a2.due !== '2026-08-05') throw new Error('un début resté un cycle derrière l’échéance est effacé');
+  if(!/^[A-Za-z0-9_-]+$/.test(a3.id) || a3.room !== 'partout') throw new Error('un id ou une pièce qui finiraient dans un onclick sont neutralisés');
+  if(!r.meals[0].deletedAt) throw new Error('un repas mal daté est écarté');
+  if(r.frequents.length) throw new Error('un fréquent à la clé dangereuse est écarté');
+  const again = win.migrate(JSON.parse(JSON.stringify(r)));
+  if(again.tasks[0].start !== '2026-07-27' || again.tasks[2].id !== a3.id) throw new Error('migrate() reste idempotente');
+  const bad = win.migrate({v: 1, tasks: {not: 'an array'}, habits: 'x', settings: []});
+  if(!Array.isArray(bad.tasks) || !Array.isArray(bad.habits) || typeof bad.settings !== 'object') throw new Error('une structure abîmée redevient des collections vides, sans planter');
+});
+
+call('V3-4 — parseQuick : mots-clés en fin de phrase seulement, dates impossibles laissées au titre', () => {
+  const p = t => win.parseQuick(t, NLP_REF);
+  const court = p('Réserver le court de tennis');
+  if(court.effort !== 2 || court.title !== 'Réserver le court de tennis') throw new Error('« court » au milieu d’une phrase reste un mot');
+  if(p('Ranger le long couloir').title !== 'Ranger le long couloir') throw new Error('« long » au milieu d’une phrase reste un mot');
+  if(p('Envoyer le document important au notaire').prio !== 0) throw new Error('« important » au milieu reste un adjectif');
+  const u = p('Réunion urgent #cuisine');
+  if(u.prio !== 2 || u.room !== 'cuisine' || u.title !== 'Réunion') throw new Error('« urgent » suivi d’un dièse reste une consigne');
+  const f = p('Payer 31/02');
+  if(f.start || f.title !== 'Payer 31/02') throw new Error('une date qui n’existe pas n’est jamais fabriquée');
+  if(p('Rendez-vous le 45').start) throw new Error('« le 45 » n’est pas une date');
+  if(win.parseQuick('Payer le 31', new Date(2026, 8, 12)).start !== '2026-10-31') throw new Error('« le 31 » en septembre : le 31 octobre');
+  if(p('Impôts le 29 février').start !== '2028-02-29') throw new Error('29 février : la prochaine année bissextile');
+});
+call('V3-4 — parseQuick : une tâche récurrente reçoit sa première date, les dièses comprennent les synonymes', () => {
+  const p = t => win.parseQuick(t, NLP_REF); // lundi 27 juillet 2026
+  const l = p('Sport tous les lundis');
+  if(l.start !== '2026-07-27') throw new Error('« tous les lundis » tapé un lundi : aujourd’hui, obtenu ' + l.start);
+  const m = p('Loyer tous les 5 du mois');
+  if(m.start !== '2026-08-05' || m.repeat.dom !== 5) throw new Error('« tous les 5 du mois » : le prochain 5, jour retenu ; obtenu ' + JSON.stringify([m.start, m.repeat]));
+  if(p('Vérifier tous les 3 jours').start !== '2026-07-27') throw new Error('une récurrence sans date commence aujourd’hui');
+  if(p('Aspirer #salon tous les 7 jours après').start !== null) throw new Error('un entretien (pièce + après) n’a pas de date : sa jauge suffit');
+  if(p('Nettoyer #toilettes').room !== 'wc') throw new Error('#toilettes = WC');
+  if(p('Ranger #extérieur').room !== 'exterieur') throw new Error('#extérieur, accent compris');
+  if(p('Tout ranger #maison').room !== 'partout') throw new Error('#maison = toute la maison');
+});
+
+call('V3-4 — revue : jamais une tâche récurrente ni une tâche datée dans le futur', () => {
+  const backup = S.tasks.slice();
+  S.tasks.length = 0;
+  try{
+    const old = Date.now() - 60 * 86400000, today = win.todayKey();
+    const base = {notes: '', cat: 'perso', room: null, evening: false, prio: 0, effort: 2, history: [], doneAt: null, postponed: 0, touchedAt: old};
+    const dort = win.stamp(Object.assign({}, base, {title: 'Dort', bucket: 'anytime', start: null, due: null, repeat: null}));
+    const rec = win.stamp(Object.assign({}, base, {title: 'Loyer', bucket: 'scheduled', start: null, due: win.addDays(today, 10), repeat: {kind: 'month', n: 1, days: [], from: 'due'}}));
+    const fut = win.stamp(Object.assign({}, base, {title: 'Plus tard', bucket: 'scheduled', start: win.addDays(today, 20), due: null, repeat: null}));
+    S.tasks.push(dort, rec, fut);
+    const ids = win.reviewCandidates().map(t => t.title).join();
+    if(ids !== 'Dort') throw new Error('seule la tâche qui dort est candidate, obtenu ' + ids);
+  } finally { S.tasks.length = 0; backup.forEach(t => S.tasks.push(t)); }
+});
+
+habitScenario('V3-4 — habitudes : jours fixes sans jour refusés, suppression annulable', () => {
+  win.go('habits');
+  win.habitSheet(null);
+  const el = win.document.getElementById('h-name');
+  el.value = 'Méditer'; el.dispatchEvent(new win.Event('input', {bubbles: true}));
+  [1, 2, 3, 4, 5].forEach(d => win.toggleHDay(d)); // décoche les 5 jours par défaut
+  win.saveHabitSheet();
+  if(S.habits.some(h => h.name === 'Méditer')) throw new Error('des jours fixes sans aucun jour ne font pas une habitude');
+  win.toggleHDay(3);
+  win.saveHabitSheet();
+  const h = S.habits.find(x => x.name === 'Méditer');
+  if(!h) throw new Error('avec un jour, elle s’enregistre');
+  win.deleteHabit(h.id); win._runConfirm();
+  if(!h.deletedAt) throw new Error('supprimée (tombstone)');
+  win._runToastAct();
+  if(h.deletedAt) throw new Error('la suppression d’une habitude s’annule');
+});
+
+call('V3-4 — un balayage ne finit jamais en tap (clic fantôme avalé)', () => {
+  let n = 0;
+  const b = win.document.createElement('button');
+  b.onclick = () => { n++; };
+  win.document.body.appendChild(b);
+  try{
+    win.eval('_swipeClickGuard = Date.now() + 400');
+    b.click();
+    if(n !== 0) throw new Error('le clic qui suit un balayage est avalé');
+    b.click();
+    if(n !== 1) throw new Error('… un seul : le suivant passe');
+  } finally { b.remove(); }
+});
+
+call('V3-4 — Aujourd’hui se rafraîchit quand l’app revient un autre jour', () => {
+  const orig = win.renderToday;
+  let n = 0;
+  win.renderToday = () => { n++; orig(); };
+  try{
+    win.go('today');
+    win.eval('_renderedDay = "2000-01-01"');
+    win.refreshIfNewDay();
+    if(n !== 2) throw new Error('changement de jour : l’écran courant est re-rendu (obtenu ' + n + ' rendus)');
+    win.refreshIfNewDay();
+    if(n !== 2) throw new Error('même jour : aucun rendu inutile');
+  } finally { win.renderToday = orig; }
+});
+
+// Asynchrone (IndexedDB) : hors du helper call(). Un état stocké illisible
+// n'est plus jamais remplacé en silence : il est recopié à part d'abord.
+try{
+  await win.saveNow(); // vide l'écriture différée : sinon elle réécrirait l'état valide pendant le test
+  const good = await win.idbGet('S');
+  await win.idbSet('S', '{ceci n’est pas du JSON');
+  const s2 = await win.loadState();
+  const key = win.eval('_corruptKey');
+  const backup = await win.idbGet(key);
+  if(backup !== '{ceci n’est pas du JSON') throw new Error('l’état illisible doit être recopié tel quel avant de repartir de zéro');
+  if(!s2.corruptBackup || !s2.onboarded) throw new Error('l’état neuf garde la trace de la copie, et ne rejoue pas la bienvenue');
+  await win.idbSet('S', good || JSON.stringify(S)); // rend l'état réel aux tests suivants
+  win.eval('_corruptKey = null');
+}catch(e){ onError('V3-4 — loadState() garde une copie d’un état illisible', e); }
+
 // 7) Écriture immédiate puis relecture directe dans IndexedDB — équivalent, pour ce
 //    test de fumée, à vérifier la persistance après un rechargement de l'app.
 if(typeof win.saveNow === 'function'){
@@ -2071,7 +2248,12 @@ if(fails.length){
               '  d’Aujourd’hui, onglet Repas), finition V3-3 (fondu d’écran, animation de\n' +
               '  coche, interrupteur natif, aria-current/aria-pressed/aria-live, Échap,\n' +
               '  Maison repliée, entretien tapé en barre, durées, habitudes sans « Série\n' +
-              '  0 j », bloc Repas, dernier export, annonce de mise à jour), habitudes (série/quota, jour\n' +
+              '  0 j », bloc Repas, dernier export, annonce de mise à jour), qualité V3-4\n' +
+              '  (récurrence ouverte sans pièce, début qui suit l’échéance, mois bornés,\n' +
+              '  cliché d’annulation unique, migrate() réparatrice et assainie, parseur :\n' +
+              '  mots-clés en fin de phrase, dates impossibles, première occurrence,\n' +
+              '  synonymes de pièce ; revue, habitudes, clic fantôme, bascule de jour,\n' +
+              '  copie de secours d’un état illisible), habitudes (série/quota, jour\n' +
               '  sauté neutre, progression partielle, mode quota hebdomadaire, pas adapté\n' +
               '  à l’objectif et « Fait » en un geste, intégration Aujourd’hui, fiche),\n' +
               '  courses (guessRayon, fréquents, correction mémorisée,\n' +
@@ -2085,4 +2267,8 @@ if(fails.length){
               '  célébrations sobres (record de série, entretien annuel), Réglages (bienvenue\n' +
               '  au premier lancement, thème, export/import validé avant écriture,\n' +
               '  réinitialisation, ordre des six groupes) et persistance.');
+  // boot.js pose un setInterval (bascule de jour, Lot V3-4) : sans fermeture
+  // explicite, la fenêtre jsdom garderait le processus en vie.
+  win.close();
+  process.exit(0);
 }

@@ -13,6 +13,11 @@
 const NLP_MOIS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 const NLP_DOW = {lundi:1, mardi:2, mercredi:3, jeudi:4, vendredi:5, samedi:6, dimanche:7};
 const NLP_DOW_PLUR = {lundis:1, mardis:2, mercredis:3, jeudis:4, vendredis:5, samedis:6, dimanches:7};
+// Synonymes de pièce reconnus après un dièse (Lot V3-4), accents retirés :
+// « #toilettes », « #salledebain », « #maison »… en plus des clés elles-mêmes.
+const NLP_ROOM_ALIASES = {toilettes:'wc', toilette:'wc', salledebain:'sdb', salledebains:'sdb', bain:'sdb',
+  douche:'sdb', maison:'partout', tout:'partout', jardin:'exterieur', dehors:'exterieur', terrasse:'balcon'};
+function nlpBare(w){ return String(w).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
 
 function normYear(y){ return y < 100 ? 2000 + y : y; }
 
@@ -44,16 +49,33 @@ function parseQuick(texte, ref, ignore){
     matched.push({key, label, raw: m[0].trim()});
   }
   function fmtKey(y, mIdx, day){ return y + '-' + String(mIdx + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0'); }
-  function dateFromDM(day, mIdx, year){
-    let y = year != null ? year : ref.getFullYear();
-    let k = fmtKey(y, mIdx, day);
-    if(year == null && k < refKey){ y = ref.getFullYear() + 1; k = fmtKey(y, mIdx, day); }
-    return k;
+  // Une date qui n'existe pas (« 31/02 », « 13/13 », « le 45 ») n'est jamais
+  // fabriquée (Lot V3-4) : ces fonctions renvoient null, la règle ne consomme
+  // rien et le fragment reste dans le titre. Avant, « 2026-02-31 » partait
+  // tel quel en start et s'affichait « NaN undefined ».
+  function realDate(y, mIdx, day){
+    const d = new Date(y, mIdx, day);
+    return (d.getFullYear() === y && d.getMonth() === mIdx && d.getDate() === day) ? fmtKey(y, mIdx, day) : null;
   }
+  function dateFromDM(day, mIdx, year){
+    if(year != null) return realDate(year, mIdx, day);
+    const k = realDate(ref.getFullYear(), mIdx, day);
+    if(k && k >= refKey) return k;
+    // Déjà passé cette année (ou 29 février d'une année non bissextile) : la
+    // prochaine année où ce jour existe.
+    for(let y = ref.getFullYear() + 1; y <= ref.getFullYear() + 8; y++){ const k2 = realDate(y, mIdx, day); if(k2) return k2; }
+    return null;
+  }
+  // « Le 31 » un 12 septembre : le 31 n'existe pas en septembre, c'est le 31
+  // octobre — le prochain mois qui porte ce jour, aujourd'hui compris.
   function dateFromDayOnly(day){
-    let k = fmtKey(ref.getFullYear(), ref.getMonth(), day);
-    if(k < refKey) k = dayKey(new Date(ref.getFullYear(), ref.getMonth() + 1, day));
-    return k;
+    if(day < 1 || day > 31) return null;
+    for(let i = 0; i < 13; i++){
+      const y = ref.getFullYear() + Math.floor((ref.getMonth() + i) / 12), mIdx = (ref.getMonth() + i) % 12;
+      const k = realDate(y, mIdx, day);
+      if(k && k >= refKey) return k;
+    }
+    return null;
   }
   function addDaysKey(n){ return addDays(refKey, n); }
   function addMonthsKey(n){ const d = new Date(refKey + 'T00:00'); d.setMonth(d.getMonth() + n); return dayKey(d); }
@@ -71,6 +93,13 @@ function parseQuick(texte, ref, ignore){
   if(!ignore.has('prio')) applyPrio();
   if(!ignore.has('effort')) applyEffort();
   applyHash();
+  // Une tâche récurrente sans date reçoit sa première occurrence (Lot V3-4) :
+  // « Sport tous les lundis » tombe lundi, « Arroser tous les jours »
+  // aujourd'hui. Jamais pour un entretien (pièce + « après ») : lui se
+  // pilote par sa jauge, jamais fait = à faire aujourd'hui.
+  if(result.repeat && !result.start && !result.due && !(result.repeat.from === 'done' && result.room)){
+    result.start = firstOccurrence(result.repeat, refKey);
+  }
 
   let leftover = text.trim().replace(/\s+/g, ' ').replace(/\s+([,;.])/g, '$1');
   // Une virgule orpheline (son mot voisin vient d'être avalé par une règle)
@@ -89,14 +118,24 @@ function parseQuick(texte, ref, ignore){
     const DUE_PREFIX = '(?:avant le|pour le|deadline(?: le)?)';
     let m;
 
+    // Pose une date trouvée — ou rien du tout si elle n'existe pas.
+    const put = (field, k, mm, label)=>{
+      if(!k) return false;
+      result[field] = k;
+      if(field === 'due') result.start = null;
+      consume(mm, 'date', label(k));
+      return true;
+    };
+    const dueLabel = k=>'Échéance le ' + fmtDateShort(k);
+
     m = text.match(new RegExp(' ' + DUE_PREFIX + ' (\\d{1,2})\\/(\\d{1,2})(?:\\/(\\d{2,4}))? ', 'i'));
-    if(m){ result.due = dateFromDM(+m[1], +m[2] - 1, m[3] ? normYear(+m[3]) : null); result.start = null; consume(m, 'date', 'Échéance le ' + fmtDateShort(result.due)); return; }
+    if(m && put('due', dateFromDM(+m[1], +m[2] - 1, m[3] ? normYear(+m[3]) : null), m, dueLabel)) return;
 
     m = text.match(new RegExp(' ' + DUE_PREFIX + ' (\\d{1,2}) (' + MOIS_RE + ') ', 'i'));
-    if(m){ result.due = dateFromDM(+m[1], NLP_MOIS.indexOf(m[2].toLowerCase()), null); result.start = null; consume(m, 'date', 'Échéance le ' + fmtDateShort(result.due)); return; }
+    if(m && put('due', dateFromDM(+m[1], NLP_MOIS.indexOf(m[2].toLowerCase()), null), m, dueLabel)) return;
 
     m = text.match(new RegExp(' ' + DUE_PREFIX + ' (\\d{1,2}) ', 'i'));
-    if(m){ result.due = dateFromDayOnly(+m[1]); result.start = null; consume(m, 'date', 'Échéance le ' + fmtDateShort(result.due)); return; }
+    if(m && put('due', dateFromDayOnly(+m[1]), m, dueLabel)) return;
 
     m = text.match(/ ce soir /i);
     if(m){ result.start = refKey; result.evening = true; consume(m, 'date', 'Ce soir'); return; }
@@ -133,13 +172,13 @@ function parseQuick(texte, ref, ignore){
     }
 
     m = text.match(/ (\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))? /);
-    if(m){ result.start = dateFromDM(+m[1], +m[2] - 1, m[3] ? normYear(+m[3]) : null); consume(m, 'date', fmtDateShort(result.start)); return; }
+    if(m && put('start', dateFromDM(+m[1], +m[2] - 1, m[3] ? normYear(+m[3]) : null), m, fmtDateShort)) return;
 
     m = text.match(new RegExp(' le (\\d{1,2}) (' + MOIS_RE + ') ', 'i'));
-    if(m){ result.start = dateFromDM(+m[1], NLP_MOIS.indexOf(m[2].toLowerCase()), null); consume(m, 'date', fmtDateShort(result.start)); return; }
+    if(m && put('start', dateFromDM(+m[1], NLP_MOIS.indexOf(m[2].toLowerCase()), null), m, fmtDateShort)) return;
 
     m = text.match(/ le (\d{1,2}) /i);
-    if(m){ result.start = dateFromDayOnly(+m[1]); consume(m, 'date', fmtDateShort(result.start)); return; }
+    if(m && put('start', dateFromDayOnly(+m[1]), m, fmtDateShort)) return;
   }
 
   /* ---------- récurrence : à date fixe (from:'due') ou après réalisation (from:'done') ---------- */
@@ -156,8 +195,15 @@ function parseQuick(texte, ref, ignore){
     m = text.match(new RegExp(' (?:tous les jours|chaque jour)' + AP + ' ', 'i'));
     if(m){ setRepeat({kind:'day', n:1}, m); return; }
 
+    // « tous les 15 du mois » : le 15 devient la première occurrence (Lot
+    // V3-4) — sans elle, le chiffre se perdait et la tâche tombait n'importe
+    // quel jour du mois.
     m = text.match(new RegExp(' tous les (\\d+) du mois' + AP + ' ', 'i'));
-    if(m){ setRepeat({kind:'month', n:1}, m); return; }
+    if(m){
+      const dom = parseInt(m[1], 10);
+      const first = dateFromDayOnly(dom);
+      if(first){ setRepeat({kind:'month', n:1, dom}, m); if(!result.start && !result.due) result.start = first; return; }
+    }
 
     m = text.match(new RegExp(' tous les (\\d+) mois' + AP + ' ', 'i'));
     if(m){ setRepeat({kind:'month', n:parseInt(m[1], 10)}, m); return; }
@@ -176,20 +222,33 @@ function parseQuick(texte, ref, ignore){
 
     function setRepeat(base, mm){
       const r = {kind:base.kind, n:base.n || 1, days:base.days || [], from: /après/i.test(mm[0]) ? 'done' : 'due'};
+      if(base.dom) r.dom = base.dom;
       result.repeat = r;
       consume(mm, 'repeat', repeatSummary(r).replace(/\.$/, ''));
     }
   }
 
   /* ---------- priorité : !! / urgent → 2, ! / important → 1 ---------- */
+  /* Les mots-clés (« urgent », « important », « court », « long ») ne sont
+     reconnus qu'en fin de phrase, dièses éventuels mis à part (Lot V3-4) :
+     au milieu, ce sont des mots comme les autres. « Réserver le court de
+     tennis » perdait son « court » (effort 1), « Ranger le long couloir » son
+     « long ». En queue — « Relire le contrat important », « Sortir les
+     poubelles court » — ils restent des consignes. */
+  function tailWord(re){
+    const m = text.match(new RegExp(' (' + re + ')((?: #[\\p{L}\\d_-]+)*) $', 'iu'));
+    if(!m) return null;
+    // Ne consommer que le mot, pas les dièses qui le suivent (applyHash()).
+    return {0: ' ' + m[1] + ' ', index: m.index, length: 1};
+  }
   function applyPrio(){
     let m = text.match(/!!+/);
     if(m){ result.prio = 2; consume(m, 'prio', 'Urgent'); return; }
-    m = text.match(/ urgent /i);
+    m = tailWord('urgent');
     if(m){ result.prio = 2; consume(m, 'prio', 'Urgent'); return; }
     m = text.match(/!/);
     if(m){ result.prio = 1; consume(m, 'prio', 'Important'); return; }
-    m = text.match(/ important /i);
+    m = tailWord('important');
     if(m){ result.prio = 1; consume(m, 'prio', 'Important'); }
   }
 
@@ -209,18 +268,19 @@ function parseQuick(texte, ref, ignore){
     }
     m = text.match(/ (\d{1,2})\s*h(?:eures?)? /i);
     if(m){ result.mins = parseInt(m[1], 10) * 60; result.effort = 3; consume(m, 'effort', 'Long'); return; }
-    m = text.match(/ court /i);
+    m = tailWord('court');
     if(m){ result.effort = 1; consume(m, 'effort', 'Court'); return; }
-    m = text.match(/ long /i);
+    m = tailWord('long');
     if(m){ result.effort = 3; consume(m, 'effort', 'Long'); }
   }
 
   /* ---------- #catégorie / #pièce — seuls les mots connus (CAT_ORDER/ROOM_ORDER, js/tasks.js) sont interprétés ---------- */
   function applyHash(){
-    const re = /#(\w+)/g;
+    const re = /#([\p{L}\d_-]+)/gu;
     let m;
     while((m = re.exec(text))){
-      const mot = m[1].toLowerCase();
+      const bare = nlpBare(m[1]);
+      const mot = ROOM_ORDER.indexOf(bare) !== -1 ? bare : (NLP_ROOM_ALIASES[bare] || bare);
       if(!result.room && !ignore.has('room') && ROOM_ORDER.indexOf(mot) !== -1){
         result.room = mot;
         matched.push({key:'room', label:ROOM_LABELS[mot], raw:m[0]});
@@ -228,7 +288,8 @@ function parseQuick(texte, ref, ignore){
         re.lastIndex = 0;
         continue;
       }
-      if(!result.cat && !ignore.has('cat') && CAT_ORDER.indexOf(mot) !== -1){
+      if(!result.cat && !ignore.has('cat') && CAT_ORDER.indexOf(bare) !== -1){
+        const mot = bare;
         result.cat = mot;
         matched.push({key:'cat', label:CAT_LABELS[mot], raw:m[0]});
         text = text.slice(0, m.index) + ' ' + text.slice(m.index + m[0].length);
@@ -322,8 +383,10 @@ function openCaptureDetails(){
   Object.assign(_tSheet, {
     title:p.title, cat:p.cat || 'perso', room:p.room || null,
     start:p.start, due:p.due, evening:p.evening, prio:p.prio, effort:p.effort,
+    mins:p.mins || EFFORT_MINS[p.effort] || 15, // la durée tapée ne se perd plus en passant à la fiche (Lot V3-4)
     bucket:(p.start || p.due) ? 'scheduled' : 'anytime', repeat:p.repeat
   });
+  _tSheet._more = tsHasExtras(_tSheet);
   refreshTaskSheet();
   _capText = ''; _capIgnore = new Set();
   refreshCapturePreview();
